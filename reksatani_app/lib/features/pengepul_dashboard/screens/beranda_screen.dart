@@ -6,7 +6,8 @@ import '../../../../../shared/widgets/app_theme.dart';
 import '../../../../../core/routing/app_router.dart';
 import '../controllers/beranda_controller.dart';
 import 'main_shell.dart';
-import 'transaksi_screen.dart';
+import '../../transaksi_luring/screens/transaksi_screen.dart';
+
 
 class BerandaScreen extends StatefulWidget {
   const BerandaScreen({super.key});
