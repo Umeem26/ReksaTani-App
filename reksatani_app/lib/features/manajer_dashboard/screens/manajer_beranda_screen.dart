@@ -1,0 +1,524 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../shared/widgets/app_theme.dart';
+import '../../../models/hive/transaksi_hive_model.dart';
+import '../../../models/hive/user_hive_model.dart';
+import '../../../features/auth/controllers/auth_controller.dart';
+import '../../../core/routing/app_router.dart';
+import '../controllers/manajer_beranda_controller.dart';
+
+class BerandaManajerScreen extends StatefulWidget {
+  const BerandaManajerScreen({super.key});
+
+  @override
+  State<BerandaManajerScreen> createState() => _BerandaManajerScreenState();
+}
+
+class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
+  late final ManajerBerandaController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = ManajerBerandaController();
+    _ctrl.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _logout() async {
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Keluar Aplikasi',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        content: const Text('Kamu yakin ingin logout?',
+            style: TextStyle(fontSize: 13, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal',
+                style: TextStyle(color: AppTheme.textSecond)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.merah,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Logout',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (konfirmasi == true && mounted) {
+      await AuthController().logout();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => AppRouter.getGatekeeper()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final transaksiTampil = _ctrl.semuaTransaksi.take(5).toList();
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: AppTheme.bgPage,
+        body: RefreshIndicator(
+          color: AppTheme.hijauMuda,
+          onRefresh: _ctrl.refresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: _ManajerHeader(
+                  user: _ctrl.user,
+                  syncing: _ctrl.syncing,
+                  onSync: _ctrl.refresh,
+                  onLogout: _logout,
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _StatCard(
+                            label: 'Total Stok Masuk',
+                            value: '${_ctrl.totalStokKg.toStringAsFixed(0)} kg',
+                            icon: Icons.inventory_2_outlined,
+                            color: AppTheme.hijauMuda,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _StatCard(
+                            label: 'Total Nilai',
+                            value: _fmtRupiah(_ctrl.totalNilai),
+                            icon: Icons.payments_outlined,
+                            color: const Color(0xFF3B82F6),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _StatCard(
+                            label: 'Belum Sync',
+                            value: '${_ctrl.jumlahPending} transaksi',
+                            icon: Icons.cloud_off_outlined,
+                            color: const Color(0xFFF59E0B),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _StatCard(
+                            label: 'Sudah Sync',
+                            value: '${_ctrl.jumlahSynced} transaksi',
+                            icon: Icons.cloud_done_outlined,
+                            color: AppTheme.hijauMuda,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    const _SectionHeader(title: 'Sisa Kas Agen'),
+                    const SizedBox(height: 12),
+                    _KasAgenCard(user: _ctrl.user),
+                    const SizedBox(height: 24),
+                    const _SectionHeader(title: 'Transaksi Terbaru'),
+                    const SizedBox(height: 12),
+                    if (transaksiTampil.isEmpty)
+                      const _EmptyCard(msg: 'Belum ada transaksi dari agen.')
+                    else
+                      ...transaksiTampil.map((t) => _TransaksiRow(trx: t)),
+                  ]),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ManajerHeader extends StatelessWidget {
+  final UserHiveModel user;
+  final bool syncing;
+  final VoidCallback onSync;
+  final VoidCallback onLogout;
+
+  const _ManajerHeader({
+    required this.user,
+    required this.syncing,
+    required this.onSync,
+    required this.onLogout,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.of(context).padding.top;
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: AppTheme.headerGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, top + 16, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFFF59E0B),
+                child: Text(
+                  user.username.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(
+                      color: Color(0xFF019241),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Halo, ${user.username} 👋',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(top: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Manajer Gudang',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _IkonBtn(icon: Icons.sync_rounded, spinning: syncing, onTap: onSync),
+              const SizedBox(width: 8),
+              _IkonBtn(icon: Icons.logout_rounded, onTap: onLogout),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.15)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.dashboard_outlined, color: Colors.white70, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Dasbor Manajer — pantau stok & agen lapangan',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
+  final Color color;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: AppTheme.cardDecoration(radius: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(height: 10),
+            Text(value,
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+          ],
+        ),
+      );
+}
+
+class _KasAgenCard extends StatelessWidget {
+  final UserHiveModel user;
+  const _KasAgenCard({required this.user});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: AppTheme.cardDecoration(radius: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.hijauSoft,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(child: Text('👤', style: TextStyle(fontSize: 20))),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(user.username,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  const Text('Pengepul Lapangan',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecond)),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _fmtRupiah(user.sisaUangJalan),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: AppTheme.hijauTua),
+                ),
+                const SizedBox(height: 2),
+                const Text('Sisa Uang Jalan',
+                    style: TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+class _TransaksiRow extends StatelessWidget {
+  final TransaksiHiveModel trx;
+  const _TransaksiRow({required this.trx});
+
+  @override
+  Widget build(BuildContext context) {
+    final isPending = trx.statusSinkronisasi == 'pending';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: AppTheme.cardDecoration(radius: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppTheme.hijauSoft,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Center(child: Text('🌾', style: TextStyle(fontSize: 18))),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(trx.namaPetani,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppTheme.textSecond)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _fmtRupiah(trx.totalBayar),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: AppTheme.hijauTua),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isPending
+                      ? const Color(0xFFFEF3C7)
+                      : AppTheme.hijauSoft,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isPending
+                            ? const Color(0xFFF59E0B)
+                            : AppTheme.hijauMuda,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isPending ? 'Pending' : 'Synced',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: isPending
+                            ? const Color(0xFF92400E)
+                            : AppTheme.hijauTua,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) => Text(title,
+      style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.textPrimary));
+}
+
+class _EmptyCard extends StatelessWidget {
+  final String msg;
+  const _EmptyCard({required this.msg});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: AppTheme.cardDecoration(radius: 12),
+        child: Center(
+          child: Text(msg,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 13, color: AppTheme.textSecond, height: 1.5)),
+        ),
+      );
+}
+
+class _IkonBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool spinning;
+
+  const _IkonBtn(
+      {required this.icon, required this.onTap, this.spinning = false});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: spinning
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2))
+              : Icon(icon, color: Colors.white, size: 18),
+        ),
+      );
+}
+
+String _fmtRupiah(double angka) {
+  final s = angka.toInt().toString();
+  final buf = StringBuffer();
+  for (int i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+    buf.write(s[i]);
+  }
+  return 'Rp ${buf.toString()}';
+}
