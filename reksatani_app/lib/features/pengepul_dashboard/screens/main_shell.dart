@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'beranda_screen.dart';
 import 'pasar_screen.dart';
+import 'transaksi_screen.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 
-// import 'transaksi_screen.dart';
 // import 'riwayat_screen.dart';
 // import 'profil_screen.dart';
 
@@ -24,10 +24,10 @@ class MainShellState extends State<MainShell> {
 
   static const _screens = <Widget>[
     BerandaScreen(),
-    PasarScreen(),                                                           // ✅ aktif
-    _PlaceholderScreen(label: 'Transaksi', icon: Icons.camera_alt_outlined),
-    _PlaceholderScreen(label: 'Riwayat',   icon: Icons.history_outlined),
-    _PlaceholderScreen(label: 'Profil',    icon: Icons.person_outline),
+    PasarScreen(),
+    TransaksiScreen(),                                                       // ✅ aktif
+    _PlaceholderScreen(label: 'Riwayat', icon: Icons.history_outlined),
+    _PlaceholderScreen(label: 'Profil',  icon: Icons.person_outline),
   ];
 
   static const _tabs = [
@@ -55,20 +55,14 @@ class _BottomNav extends StatelessWidget {
   final List<_Tab> tabs;
   final ValueChanged<int> onTap;
 
-  const _BottomNav({
-    required this.currentIndex,
-    required this.tabs,
-    required this.onTap,
-  });
+  const _BottomNav({required this.currentIndex, required this.tabs, required this.onTap});
 
   @override
   Widget build(BuildContext context) => Container(
         decoration: const BoxDecoration(
           color: Colors.white,
           border: Border(top: BorderSide(color: AppTheme.border)),
-          boxShadow: [
-            BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -2)),
-          ],
+          boxShadow: [BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -2))],
         ),
         child: SafeArea(
           top: false,
@@ -90,13 +84,7 @@ class _BottomNav extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: active ? AppTheme.hijauTua : AppTheme.hijauMuda,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.hijauMuda.withOpacity(0.4),
-                              blurRadius: 14,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                          boxShadow: [BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.4), blurRadius: 14, offset: const Offset(0, 4))],
                         ),
                         child: Icon(tab.activeIcon, color: Colors.white, size: 24),
                       ),
@@ -112,18 +100,13 @@ class _BottomNav extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          active ? tab.activeIcon : tab.icon,
-                          color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
-                          size: 22,
-                        ),
+                        Icon(active ? tab.activeIcon : tab.icon,
+                            color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA), size: 22),
                         const SizedBox(height: 3),
-                        Text(tab.label,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
-                              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                            )),
+                        Text(tab.label, style: TextStyle(
+                            fontSize: 10,
+                            color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
+                            fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
                       ],
                     ),
                   ),
@@ -139,12 +122,7 @@ class _Tab {
   final IconData icon, activeIcon;
   final String label;
   final bool isCenter;
-  const _Tab({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    this.isCenter = false,
-  });
+  const _Tab({required this.icon, required this.activeIcon, required this.label, this.isCenter = false});
 }
 
 class _PlaceholderScreen extends StatelessWidget {
@@ -161,14 +139,9 @@ class _PlaceholderScreen extends StatelessWidget {
             children: [
               Icon(icon, size: 48, color: AppTheme.textHint),
               const SizedBox(height: 12),
-              Text('Halaman $label',
-                  style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecond)),
+              Text('Halaman $label', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
               const SizedBox(height: 6),
-              const Text('Coming soon...',
-                  style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
+              const Text('Coming soon...', style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
             ],
           ),
         ),
