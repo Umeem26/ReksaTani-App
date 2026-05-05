@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../../models/hive/user_hive_model.dart';
 import '../../../../../models/hive/transaksi_hive_model.dart';
-import '../../../../../services/hive_service.dart';
-import '../../../../../services/master_data_service.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../../../../core/routing/app_router.dart';
-import '../../auth/controllers/auth_controller.dart';
+import '../controllers/beranda_controller.dart';
 import 'main_shell.dart';
 
 class BerandaScreen extends StatefulWidget {
@@ -17,15 +15,12 @@ class BerandaScreen extends StatefulWidget {
 }
 
 class _BerandaScreenState extends State<BerandaScreen> {
-  final _svc  = MasterDataService();
-  final _hive = HiveService();
+  final _controller = BerandaController();
   bool _syncing = false;
-
-  UserHiveModel get _user => _hive.usersBox.get('currentUser')!;
 
   Future<void> _refresh() async {
     setState(() => _syncing = true);
-    await _svc.syncAll();
+    await _controller.syncData();
     if (mounted) setState(() => _syncing = false);
   }
 
@@ -62,7 +57,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
     );
 
     if (konfirmasi == true && mounted) {
-      await AuthController().logout();
+      await _controller.logout();
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => AppRouter.getGatekeeper()),
@@ -72,8 +67,8 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final harga   = _svc.getDaftarHargaDisplay().take(3).toList();
-    final riwayat = _svc.getRiwayatTransaksi().take(3).toList();
+    final harga   = _controller.hargaTerbaru;
+    final riwayat = _controller.riwayatTerbaru;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -88,7 +83,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
               // ── Header ────────────────────────────────────────
               SliverToBoxAdapter(
                 child: _Header(
-                  user: _user,
+                  user: _controller.user,
                   syncing: _syncing,
                   onSync: _refresh,
                   onLogout: _logout,
@@ -103,9 +98,9 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
                     // Stat cards
                     _StatRow(
-                      jumlahTransaksi: _hive.transaksiBox.length,
-                      totalBerat: _svc.totalBeratHariIni,
-                      pending: _svc.jumlahPending,
+                      jumlahTransaksi: _controller.jumlahTransaksi,
+                      totalBerat: _controller.totalBerat,
+                      pending: _controller.pending,
                     ),
                     const SizedBox(height: 24),
 

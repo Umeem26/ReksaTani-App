@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../models/hive/transaksi_hive_model.dart';
 import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/komoditas_hive_model.dart';
-import '../../../services/hive_service.dart';
+import '../controllers/transaksi_controller.dart';
 import '../../../shared/widgets/app_theme.dart';
 
 // ═══════════════════════════════════════════════════════════════
@@ -261,7 +260,7 @@ class _FormScreen extends StatefulWidget {
 
 class _FormScreenState extends State<_FormScreen> {
   final _formKey    = GlobalKey<FormState>();
-  final _hive       = HiveService();
+  final _controller = TransaksiController();
 
   // Controllers
   final _namaPenjualCtrl = TextEditingController();
@@ -275,37 +274,24 @@ class _FormScreenState extends State<_FormScreen> {
   String?             _gradeTerpilih;
   bool                _saving = false;
 
-  // Data dari Hive
+  // Data dari Controller
   List<PetaniHiveModel> get _daftarPetani =>
-      _hive.petaniBox.values.toList();
+      _controller.daftarPetani;
 
   List<KomoditasHiveModel> get _daftarKomoditas =>
-      _hive.komoditasBox.values.toList();
+      _controller.daftarKomoditas;
 
-  List<Map<String, dynamic>> get _daftarGrade {
-    if (_komoditasTerpilih == null) return [];
-    return _komoditasTerpilih!.gradeKualitas;
-  }
+  List<Map<String, dynamic>> get _daftarGrade =>
+      _controller.getDaftarGrade(_komoditasTerpilih);
 
-  double get _hargaMaksGrade {
-    if (_gradeTerpilih == null || _daftarGrade.isEmpty) return 0;
-    final g = _daftarGrade.firstWhere(
-      (g) => g['grade'] == _gradeTerpilih,
-      orElse: () => {},
-    );
-    return (g['harga_maks'] as num?)?.toDouble() ?? 0;
-  }
+  double get _hargaMaksGrade =>
+      _controller.getHargaMaksGrade(_komoditasTerpilih, _gradeTerpilih);
 
-  double get _totalBayar {
-    final berat = double.tryParse(_beratCtrl.text) ?? 0;
-    final harga = double.tryParse(_hargaCtrl.text) ?? 0;
-    return berat * harga;
-  }
+  double get _totalBayar =>
+      _controller.getTotalBayar(_beratCtrl.text, _hargaCtrl.text);
 
-  bool get _hargaMelebihi {
-    final harga = double.tryParse(_hargaCtrl.text) ?? 0;
-    return _hargaMaksGrade > 0 && harga > _hargaMaksGrade;
-  }
+  bool get _hargaMelebihi =>
+      _controller.isHargaMelebihi(_komoditasTerpilih, _gradeTerpilih, _hargaCtrl.text);
 
   @override
   void dispose() {
@@ -329,31 +315,15 @@ class _FormScreenState extends State<_FormScreen> {
 
     setState(() => _saving = true);
 
-    final user = _hive.usersBox.get('currentUser')!;
-    final now  = DateTime.now();
-
-    final trx = TransaksiHiveModel(
-      idLokal: '${user.id}_${now.millisecondsSinceEpoch}',
-      pengepulId: user.id,
-      petaniId: _petaniTerpilih?.id ?? '',
-      namaPengepul: user.username,
-      namaPetani: _namaPenjualCtrl.text.trim(),
-      namaKomoditas: _komoditasTerpilih?.namaKomoditas ?? '',
-      gradeTerpilih: _gradeTerpilih ?? '',
-      berat: double.tryParse(_beratCtrl.text) ?? 0,
-      hargaBeliSatuan: double.tryParse(_hargaCtrl.text) ?? 0,
-      nominalPotongKasbon: _petaniTerpilih?.sisaHutangKasbon ?? 0,
+    await _controller.simpanTransaksi(
+      petaniTerpilih: _petaniTerpilih,
+      namaPenjual: _namaPenjualCtrl.text,
+      komoditasTerpilih: _komoditasTerpilih,
+      gradeTerpilih: _gradeTerpilih,
+      beratText: _beratCtrl.text,
+      hargaText: _hargaCtrl.text,
       totalBayar: _totalBayar,
-      fotoFisikBarang: '',
-      fotoNota: '',
-      latitude: 0,
-      longitude: 0,
-      statusSinkronisasi: 'pending',
-      createdAt: now,
     );
-
-    await _hive.saveTransaksi(trx);
-    await Future.delayed(const Duration(milliseconds: 400));
 
     if (!mounted) return;
     setState(() => _saving = false);
