@@ -98,6 +98,11 @@ class TransaksiController {
     existingTrx.berat           = double.tryParse(beratText) ?? 0;
     existingTrx.hargaBeliSatuan = double.tryParse(hargaText) ?? 0;
     existingTrx.totalBayar      = totalBayar;
+    
+    if (existingTrx.statusSinkronisasi == 'synced') {
+      existingTrx.statusSinkronisasi = 'pending_update';
+    }
+
     await existingTrx.save();
     await Future.delayed(const Duration(milliseconds: 400));
   }

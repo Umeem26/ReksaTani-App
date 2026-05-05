@@ -136,7 +136,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     else
                       ...riwayat.map((t) => _TransaksiRow(
                         trx: t,
-                        onEdit: t.statusSinkronisasi == 'pending'
+                        onEdit: t.statusSinkronisasi != 'pending_delete'
                             ? () async {
                                 final changed = await Navigator.push<bool>(
                                   context,
@@ -147,7 +147,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                 if (changed == true && mounted) setState(() {});
                               }
                             : null,
-                        onDelete: t.statusSinkronisasi == 'pending'
+                        onDelete: t.statusSinkronisasi != 'pending_delete'
                             ? () async {
                                 final ok = await showDialog<bool>(
                                   context: context,
@@ -573,7 +573,25 @@ class _TransaksiRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isPending = trx.statusSinkronisasi == 'pending';
+    final status = trx.statusSinkronisasi;
+    final isPendingOrUpdate = status == 'pending' || status == 'pending_update';
+    
+    Color badgeBg = AppTheme.hijauSoft;
+    Color badgeDot = AppTheme.hijauMuda;
+    Color badgeTextCol = AppTheme.hijauTua;
+    String badgeText = 'Synced';
+
+    if (status == 'pending') {
+      badgeBg = const Color(0xFFFEF3C7);
+      badgeDot = const Color(0xFFF59E0B);
+      badgeTextCol = const Color(0xFF92400E);
+      badgeText = 'Pending';
+    } else if (status == 'pending_update') {
+      badgeBg = const Color(0xFFDBEAFE);
+      badgeDot = const Color(0xFF3B82F6);
+      badgeTextCol = const Color(0xFF1E3A8A);
+      badgeText = 'Updating';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -627,9 +645,7 @@ class _TransaksiRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isPending
-                      ? const Color(0xFFFEF3C7)
-                      : AppTheme.hijauSoft,
+                  color: badgeBg,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -639,20 +655,16 @@ class _TransaksiRow extends StatelessWidget {
                       width: 5, height: 5,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isPending
-                            ? const Color(0xFFF59E0B)
-                            : AppTheme.hijauMuda,
+                        color: badgeDot,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isPending ? 'Pending' : 'Synced',
+                      badgeText,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: isPending
-                            ? const Color(0xFF92400E)
-                            : AppTheme.hijauTua,
+                        color: badgeTextCol,
                       ),
                     ),
                   ],
@@ -660,8 +672,8 @@ class _TransaksiRow extends StatelessWidget {
               ),
             ],
           ),
-          // Tombol aksi hanya untuk transaksi pending
-          if (isPending && (onEdit != null || onDelete != null)) ...[
+          // Tombol aksi muncul jika onEdit/onDelete diberikan
+          if (onEdit != null || onDelete != null) ...[
             const SizedBox(width: 4),
             PopupMenuButton<String>(
               onSelected: (val) {

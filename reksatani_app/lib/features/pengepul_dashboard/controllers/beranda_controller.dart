@@ -24,6 +24,9 @@ class BerandaController {
   Future<void> hapusTransaksi(TransaksiHiveModel trx) async {
     if (trx.statusSinkronisasi == 'pending') {
       await _hive.transaksiBox.delete(trx.idLokal);
+    } else if (trx.statusSinkronisasi == 'synced' || trx.statusSinkronisasi == 'pending_update') {
+      trx.statusSinkronisasi = 'pending_delete';
+      await trx.save();
     }
   }
 

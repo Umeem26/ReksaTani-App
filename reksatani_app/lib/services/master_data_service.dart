@@ -155,10 +155,66 @@ class MasterDataService {
     }
   }
 
+  Future<void> uploadPendingUpdateTransaksi() async {
+    try {
+      final updates = _hive.getPendingUpdateTransaksi();
+      if (updates.isEmpty) return;
+
+      final coll = MongoDatabase.getCollection('transaksi');
+      for (final t in updates) {
+        final res = await coll.updateOne(
+          where.eq('id_lokal', t.idLokal),
+          modify
+              .set('petani_id', t.petaniId)
+              .set('nama_petani', t.namaPetani)
+              .set('nama_komoditas', t.namaKomoditas)
+              .set('grade_terpilih', t.gradeTerpilih)
+              .set('berat', t.berat)
+              .set('harga_beli_satuan', t.hargaBeliSatuan)
+              .set('total_bayar', t.totalBayar)
+              .set('status_sinkronisasi', 'synced')
+              .set('waktu_disinkron', DateTime.now().toIso8601String()),
+        );
+
+        if (res.isSuccess) {
+          t.statusSinkronisasi = 'synced';
+          t.waktuDisinkron = DateTime.now();
+          await t.save();
+        } else {
+          print('Error updateOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
+        }
+      }
+    } catch (e) {
+      print('Error uploadPendingUpdateTransaksi: $e');
+    }
+  }
+
+  Future<void> uploadPendingDeleteTransaksi() async {
+    try {
+      final deletes = _hive.getPendingDeleteTransaksi();
+      if (deletes.isEmpty) return;
+
+      final coll = MongoDatabase.getCollection('transaksi');
+      for (final t in deletes) {
+        final res = await coll.deleteOne(where.eq('id_lokal', t.idLokal));
+
+        if (res.isSuccess) {
+          await _hive.transaksiBox.delete(t.idLokal);
+        } else {
+          print('Error deleteOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
+        }
+      }
+    } catch (e) {
+      print('Error uploadPendingDeleteTransaksi: $e');
+    }
+  }
+
   Future<void> syncAll() async {
     await syncPetani();
     await syncKomoditas();
     await uploadPendingTransaksi();
+    await uploadPendingUpdateTransaksi();
+    await uploadPendingDeleteTransaksi();
     await syncRiwayatTransaksi();
   }
 
@@ -183,7 +239,9 @@ class MasterDataService {
       }).toList();
 
   List<TransaksiHiveModel> getRiwayatTransaksi() =>
-      _hive.transaksiBox.values.toList()
+      _hive.transaksiBox.values
+        .where((t) => t.statusSinkronisasi != 'pending_delete')
+        .toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   int get jumlahPending => _hive.getPendingTransaksi().length;
