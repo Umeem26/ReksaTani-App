@@ -60,7 +60,48 @@ class MasterDataService {
         );
         await _hive.komoditasBox.put(m.id, m);
       }
-    } catch (_) {}
+    } catch (e) {
+      print('Error syncKomoditas: $e');
+    }
+  }
+
+  Future<void> syncRiwayatTransaksi() async {
+    try {
+      final user = _hive.usersBox.get('currentUser');
+      if (user == null) return;
+      
+      final col = MongoDatabase.getCollection('transaksi');
+      final docs = await col.find({'pengepul_id': user.id}).toList();
+
+      for (final d in docs) {
+        final idLokal = d['id_lokal']?.toString() ?? d['_id'].toString();
+        if (_hive.transaksiBox.containsKey(idLokal)) continue;
+
+        final m = TransaksiHiveModel(
+          idLokal: idLokal,
+          pengepulId: d['pengepul_id']?.toString() ?? '',
+          petaniId: d['petani_id']?.toString() ?? '',
+          namaPengepul: d['nama_pengepul']?.toString() ?? '',
+          namaPetani: d['nama_petani']?.toString() ?? '',
+          namaKomoditas: d['nama_komoditas']?.toString() ?? '',
+          gradeTerpilih: d['grade_terpilih']?.toString() ?? '',
+          berat: (d['berat'] ?? 0).toDouble(),
+          hargaBeliSatuan: (d['harga_beli_satuan'] ?? 0).toDouble(),
+          nominalPotongKasbon: (d['nominal_potong_kasbon'] ?? 0).toDouble(),
+          totalBayar: (d['total_bayar'] ?? 0).toDouble(),
+          fotoFisikBarang: d['foto_fisik_barang']?.toString() ?? '',
+          fotoNota: d['foto_nota']?.toString() ?? '',
+          latitude: (d['latitude'] ?? 0).toDouble(),
+          longitude: (d['longitude'] ?? 0).toDouble(),
+          statusSinkronisasi: d['status_sinkronisasi']?.toString() ?? 'synced',
+          createdAt: DateTime.tryParse(d['created_at']?.toString() ?? '') ?? DateTime.now(),
+          waktuDisinkron: DateTime.tryParse(d['waktu_disinkron']?.toString() ?? ''),
+        );
+        await _hive.transaksiBox.put(m.idLokal, m);
+      }
+    } catch (e) {
+      print('Error syncRiwayatTransaksi: $e');
+    }
   }
 
   Future<void> uploadPendingTransaksi() async {
@@ -91,13 +132,16 @@ class MasterDataService {
         t.waktuDisinkron = DateTime.now();
         await t.save();
       }
-    } catch (_) {}
+    } catch (e) {
+      print('Error uploadPendingTransaksi: $e');
+    }
   }
 
   Future<void> syncAll() async {
     await syncPetani();
     await syncKomoditas();
     await uploadPendingTransaksi();
+    await syncRiwayatTransaksi();
   }
 
   // ── GETTER untuk UI (dari Hive lokal) ──────────────────────────
