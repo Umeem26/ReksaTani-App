@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'manajer_beranda_screen.dart';
+import 'manajer_peta_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 
 /// ManajerShell – Shell navigasi bottom nav untuk Manajer Gudang.
@@ -22,7 +23,7 @@ class ManajerShellState extends State<ManajerShell> {
   static const _screens = <Widget>[
     BerandaManajerScreen(),
     _PlaceholderScreen(label: 'Master Data', icon: Icons.tune_outlined),
-    _PlaceholderScreen(label: 'Peta',        icon: Icons.map_outlined),
+    ManajerPetaScreen(), // <--- UBAH BARIS INI (Hapus _PlaceholderScreen Peta)
   ];
 
   static const _tabs = [
