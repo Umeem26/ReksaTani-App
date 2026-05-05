@@ -99,6 +99,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         beratText:          _beratCtrl.text,
         hargaText:          _hargaCtrl.text,
         totalBayar:         _totalBayar,
+        fotoNotaPath:       widget.fotoNotaPath ?? '',  
+        fotoBarangPath:     widget.fotoBarangPath ?? '',
       );
     } else {
       await _controller.simpanTransaksi(
@@ -109,6 +111,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         beratText:         _beratCtrl.text,
         hargaText:         _hargaCtrl.text,
         totalBayar:        _totalBayar,
+        fotoNotaPath:       widget.fotoNotaPath ?? '',   
+        fotoBarangPath:     widget.fotoBarangPath ?? '',
       );
     }
 

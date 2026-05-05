@@ -44,6 +44,8 @@ class TransaksiController {
     required String beratText,
     required String hargaText,
     required double totalBayar,
+    required String fotoNotaPath,   
+    required String fotoBarangPath,
   }) async {
     final user = _hive.usersBox.get('currentUser')!;
     final now  = DateTime.now();
@@ -62,8 +64,8 @@ class TransaksiController {
       hargaBeliSatuan: double.tryParse(hargaText) ?? 0,
       nominalPotongKasbon: potongan,
       totalBayar: totalBayar,
-      fotoFisikBarang: '',
-      fotoNota: '',
+      fotoFisikBarang: fotoBarangPath, 
+      fotoNota: fotoNotaPath,
       latitude: 0,
       longitude: 0,
       statusSinkronisasi: 'pending',
@@ -90,6 +92,8 @@ class TransaksiController {
     required String beratText,
     required String hargaText,
     required double totalBayar,
+    required String fotoNotaPath,   
+    required String fotoBarangPath,
   }) async {
     existingTrx.petaniId        = petaniTerpilih?.id ?? '';
     existingTrx.namaPetani      = namaPenjual.trim();
@@ -98,6 +102,9 @@ class TransaksiController {
     existingTrx.berat           = double.tryParse(beratText) ?? 0;
     existingTrx.hargaBeliSatuan = double.tryParse(hargaText) ?? 0;
     existingTrx.totalBayar      = totalBayar;
+
+    if (fotoNotaPath.isNotEmpty) existingTrx.fotoNota = fotoNotaPath;
+    if (fotoBarangPath.isNotEmpty) existingTrx.fotoFisikBarang = fotoBarangPath;
     
     if (existingTrx.statusSinkronisasi == 'synced') {
       existingTrx.statusSinkronisasi = 'pending_update';
