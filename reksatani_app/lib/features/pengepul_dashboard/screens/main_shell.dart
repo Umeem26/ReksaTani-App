@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'beranda_screen.dart';
+import 'pasar_screen.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 
-// Import screen lain nanti saat sudah dibuat
-// import 'pasar_screen.dart';
 // import 'transaksi_screen.dart';
 // import 'riwayat_screen.dart';
 // import 'profil_screen.dart';
@@ -23,48 +22,44 @@ class MainShellState extends State<MainShell> {
 
   void changeTab(int i) => setState(() => _index = i);
 
-  // Sementara semua tab mengarah ke BerandaScreen
-  // Ganti satu per satu saat screen lain siap
   static const _screens = <Widget>[
     BerandaScreen(),
-    _PlaceholderScreen(label: 'Pasar',      icon: Icons.storefront_outlined),
-    _PlaceholderScreen(label: 'Transaksi',  icon: Icons.camera_alt_outlined),
-    _PlaceholderScreen(label: 'Riwayat',    icon: Icons.history_outlined),
-    _PlaceholderScreen(label: 'Profil',     icon: Icons.person_outline),
+    PasarScreen(),                                                           // ✅ aktif
+    _PlaceholderScreen(label: 'Transaksi', icon: Icons.camera_alt_outlined),
+    _PlaceholderScreen(label: 'Riwayat',   icon: Icons.history_outlined),
+    _PlaceholderScreen(label: 'Profil',    icon: Icons.person_outline),
   ];
 
   static const _tabs = [
-    _Tab(icon: Icons.home_outlined,       activeIcon: Icons.home_rounded,        label: 'Beranda'),
-    _Tab(icon: Icons.storefront_outlined, activeIcon: Icons.storefront_rounded,  label: 'Pasar'),
-    _Tab(icon: Icons.camera_alt_outlined, activeIcon: Icons.camera_alt_rounded,  label: '',       isCenter: true),
-    _Tab(icon: Icons.history_outlined,    activeIcon: Icons.history_rounded,     label: 'Riwayat'),
-    _Tab(icon: Icons.person_outline,      activeIcon: Icons.person_rounded,      label: 'Profil'),
+    _Tab(icon: Icons.home_outlined,       activeIcon: Icons.home_rounded,       label: 'Beranda'),
+    _Tab(icon: Icons.storefront_outlined, activeIcon: Icons.storefront_rounded, label: 'Pasar'),
+    _Tab(icon: Icons.camera_alt_outlined, activeIcon: Icons.camera_alt_rounded, label: '', isCenter: true),
+    _Tab(icon: Icons.history_outlined,    activeIcon: Icons.history_rounded,    label: 'Riwayat'),
+    _Tab(icon: Icons.person_outline,      activeIcon: Icons.person_rounded,     label: 'Profil'),
   ];
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.bgPage,
-      body: IndexedStack(index: _index, children: _screens),
-      bottomNavigationBar: _BottomNav(
-        currentIndex: _index,
-        tabs: _tabs,
-        onTap: changeTab,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: AppTheme.bgPage,
+        body: IndexedStack(index: _index, children: _screens),
+        bottomNavigationBar: _BottomNav(
+          currentIndex: _index,
+          tabs: _tabs,
+          onTap: changeTab,
+        ),
+      );
 }
 
-// ── Bottom Nav ───────────────────────────────────────────────────
 class _BottomNav extends StatelessWidget {
   final int currentIndex;
   final List<_Tab> tabs;
   final ValueChanged<int> onTap;
 
-  const _BottomNav(
-      {required this.currentIndex,
-      required this.tabs,
-      required this.onTap});
+  const _BottomNav({
+    required this.currentIndex,
+    required this.tabs,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -72,10 +67,7 @@ class _BottomNav extends StatelessWidget {
           color: Colors.white,
           border: Border(top: BorderSide(color: AppTheme.border)),
           boxShadow: [
-            BoxShadow(
-                color: Color(0x0A000000),
-                blurRadius: 10,
-                offset: Offset(0, -2))
+            BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -2)),
           ],
         ),
         child: SafeArea(
@@ -96,9 +88,7 @@ class _BottomNav extends StatelessWidget {
                       child: Container(
                         width: 56, height: 56,
                         decoration: BoxDecoration(
-                          color: active
-                              ? AppTheme.hijauTua
-                              : AppTheme.hijauMuda,
+                          color: active ? AppTheme.hijauTua : AppTheme.hijauMuda,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
@@ -108,8 +98,7 @@ class _BottomNav extends StatelessWidget {
                             ),
                           ],
                         ),
-                        child: Icon(tab.activeIcon,
-                            color: Colors.white, size: 24),
+                        child: Icon(tab.activeIcon, color: Colors.white, size: 24),
                       ),
                     ),
                   );
@@ -125,21 +114,15 @@ class _BottomNav extends StatelessWidget {
                       children: [
                         Icon(
                           active ? tab.activeIcon : tab.icon,
-                          color: active
-                              ? AppTheme.hijauMuda
-                              : const Color(0xFFAAAAAA),
+                          color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
                           size: 22,
                         ),
                         const SizedBox(height: 3),
                         Text(tab.label,
                             style: TextStyle(
                               fontSize: 10,
-                              color: active
-                                  ? AppTheme.hijauMuda
-                                  : const Color(0xFFAAAAAA),
-                              fontWeight: active
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
+                              color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
+                              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
                             )),
                       ],
                     ),
@@ -156,19 +139,18 @@ class _Tab {
   final IconData icon, activeIcon;
   final String label;
   final bool isCenter;
-  const _Tab(
-      {required this.icon,
-      required this.activeIcon,
-      required this.label,
-      this.isCenter = false});
+  const _Tab({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    this.isCenter = false,
+  });
 }
 
-// ── Placeholder tab yang belum dibuat ────────────────────────────
 class _PlaceholderScreen extends StatelessWidget {
   final String label;
   final IconData icon;
-  const _PlaceholderScreen(
-      {required this.label, required this.icon});
+  const _PlaceholderScreen({required this.label, required this.icon});
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -186,8 +168,7 @@ class _PlaceholderScreen extends StatelessWidget {
                       color: AppTheme.textSecond)),
               const SizedBox(height: 6),
               const Text('Coming soon...',
-                  style: TextStyle(
-                      fontSize: 13, color: AppTheme.textSecond)),
+                  style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
             ],
           ),
         ),
