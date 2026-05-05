@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../models/hive/transaksi_hive_model.dart';
 import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/komoditas_hive_model.dart';
 import '../controllers/transaksi_controller.dart';
@@ -9,7 +10,8 @@ import '../../../shared/widgets/app_theme.dart';
 // SHELL — orkestrasi flow: Kamera → Form
 // ═══════════════════════════════════════════════════════════════
 class TransaksiScreen extends StatefulWidget {
-  const TransaksiScreen({super.key});
+  final TransaksiHiveModel? editTrx;
+  const TransaksiScreen({super.key, this.editTrx});
 
   @override
   State<TransaksiScreen> createState() => _TransaksiScreenState();
@@ -18,11 +20,29 @@ class TransaksiScreen extends StatefulWidget {
 enum _Fase { kamera, form }
 
 class _TransaksiScreenState extends State<TransaksiScreen> {
-  _Fase _fase = _Fase.kamera;
+  late _Fase _fase;
+
+  @override
+  void initState() {
+    super.initState();
+    _fase = widget.editTrx != null ? _Fase.form : _Fase.kamera;
+  }
 
   void _onFotoDiambil() => setState(() => _fase = _Fase.form);
-  void _onKembali()     => setState(() => _fase = _Fase.kamera);
-  void _onSelesai()     => setState(() => _fase = _Fase.kamera);
+  void _onKembali() {
+    if (widget.editTrx != null) {
+      Navigator.pop(context);
+    } else {
+      setState(() => _fase = _Fase.kamera);
+    }
+  }
+  void _onSelesai() {
+    if (widget.editTrx != null) {
+      Navigator.pop(context, true);
+    } else {
+      setState(() => _fase = _Fase.kamera);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
@@ -38,6 +58,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
               )
             : _FormScreen(
                 key: const ValueKey('form'),
+                editTrx: widget.editTrx,
                 onKembali: _onKembali,
                 onSelesai: _onSelesai,
               ),
@@ -248,11 +269,14 @@ class _GridPainter extends CustomPainter {
 class _FormScreen extends StatefulWidget {
   final VoidCallback onKembali;
   final VoidCallback onSelesai;
+  final TransaksiHiveModel? editTrx;
 
-  const _FormScreen(
-      {super.key,
-      required this.onKembali,
-      required this.onSelesai});
+  const _FormScreen({
+    super.key,
+    required this.onKembali,
+    required this.onSelesai,
+    this.editTrx,
+  });
 
   @override
   State<_FormScreen> createState() => _FormScreenState();
@@ -293,6 +317,29 @@ class _FormScreenState extends State<_FormScreen> {
   bool get _hargaMelebihi =>
       _controller.isHargaMelebihi(_komoditasTerpilih, _gradeTerpilih, _hargaCtrl.text);
 
+  bool get _isEditMode => widget.editTrx != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final trx = widget.editTrx;
+    if (trx != null) {
+      _namaPenjualCtrl.text = trx.namaPetani;
+      _beratCtrl.text       = trx.berat.toInt().toString();
+      _hargaCtrl.text       = trx.hargaBeliSatuan.toInt().toString();
+      try {
+        _petaniTerpilih = _controller.daftarPetani
+            .firstWhere((p) => p.id == trx.petaniId);
+        _desaCtrl.text = _petaniTerpilih?.desa ?? '';
+      } catch (_) {}
+      try {
+        _komoditasTerpilih = _controller.daftarKomoditas
+            .firstWhere((k) => k.namaKomoditas == trx.namaKomoditas);
+      } catch (_) {}
+      _gradeTerpilih = trx.gradeTerpilih;
+    }
+  }
+
   @override
   void dispose() {
     _namaPenjualCtrl.dispose();
@@ -315,15 +362,28 @@ class _FormScreenState extends State<_FormScreen> {
 
     setState(() => _saving = true);
 
-    await _controller.simpanTransaksi(
-      petaniTerpilih: _petaniTerpilih,
-      namaPenjual: _namaPenjualCtrl.text,
-      komoditasTerpilih: _komoditasTerpilih,
-      gradeTerpilih: _gradeTerpilih,
-      beratText: _beratCtrl.text,
-      hargaText: _hargaCtrl.text,
-      totalBayar: _totalBayar,
-    );
+    if (_isEditMode) {
+      await _controller.updateTransaksi(
+        widget.editTrx!,
+        petaniTerpilih:     _petaniTerpilih,
+        namaPenjual:        _namaPenjualCtrl.text,
+        komoditasTerpilih:  _komoditasTerpilih,
+        gradeTerpilih:      _gradeTerpilih,
+        beratText:          _beratCtrl.text,
+        hargaText:          _hargaCtrl.text,
+        totalBayar:         _totalBayar,
+      );
+    } else {
+      await _controller.simpanTransaksi(
+        petaniTerpilih:    _petaniTerpilih,
+        namaPenjual:       _namaPenjualCtrl.text,
+        komoditasTerpilih: _komoditasTerpilih,
+        gradeTerpilih:     _gradeTerpilih,
+        beratText:         _beratCtrl.text,
+        hargaText:         _hargaCtrl.text,
+        totalBayar:        _totalBayar,
+      );
+    }
 
     if (!mounted) return;
     setState(() => _saving = false);
@@ -376,8 +436,10 @@ class _FormScreenState extends State<_FormScreen> {
         foregroundColor: AppTheme.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text('Input Transaksi',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+        title: Text(
+          _isEditMode ? 'Edit Transaksi' : 'Input Transaksi',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
           onPressed: widget.onKembali,

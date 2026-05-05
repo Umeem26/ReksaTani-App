@@ -6,6 +6,7 @@ import '../../../../../shared/widgets/app_theme.dart';
 import '../../../../../core/routing/app_router.dart';
 import '../controllers/beranda_controller.dart';
 import 'main_shell.dart';
+import 'transaksi_screen.dart';
 
 class BerandaScreen extends StatefulWidget {
   const BerandaScreen({super.key});
@@ -133,7 +134,53 @@ class _BerandaScreenState extends State<BerandaScreen> {
                           msg:
                               'Belum ada transaksi.\nTekan tombol kamera untuk mulai.')
                     else
-                      ...riwayat.map((t) => _TransaksiRow(trx: t)),
+                      ...riwayat.map((t) => _TransaksiRow(
+                        trx: t,
+                        onEdit: t.statusSinkronisasi != 'pending_delete'
+                            ? () async {
+                                final changed = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => TransaksiScreen(editTrx: t),
+                                  ),
+                                );
+                                if (changed == true && mounted) setState(() {});
+                              }
+                            : null,
+                        onDelete: t.statusSinkronisasi != 'pending_delete'
+                            ? () async {
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16)),
+                                    title: const Text('Hapus Transaksi',
+                                        style: TextStyle(fontWeight: FontWeight.w700)),
+                                    content: const Text(
+                                        'Transaksi ini akan dihapus dari perangkat. Lanjutkan?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, false),
+                                        child: const Text('Batal'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () => Navigator.pop(context, true),
+                                        style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppTheme.merah,
+                                            foregroundColor: Colors.white,
+                                            elevation: 0),
+                                        child: const Text('Hapus'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (ok == true && mounted) {
+                                  await _controller.hapusTransaksi(t);
+                                  setState(() {});
+                                }
+                              }
+                            : null,
+                      )),
                   ]),
                 ),
               ),
@@ -515,11 +562,36 @@ class _HargaRow extends StatelessWidget {
 // ── Transaksi Row ────────────────────────────────────────────────
 class _TransaksiRow extends StatelessWidget {
   final TransaksiHiveModel trx;
-  const _TransaksiRow({required this.trx});
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  const _TransaksiRow({
+    required this.trx,
+    this.onEdit,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isPending = trx.statusSinkronisasi == 'pending';
+    final status = trx.statusSinkronisasi;
+    final isPendingOrUpdate = status == 'pending' || status == 'pending_update';
+    
+    Color badgeBg = AppTheme.hijauSoft;
+    Color badgeDot = AppTheme.hijauMuda;
+    Color badgeTextCol = AppTheme.hijauTua;
+    String badgeText = 'Synced';
+
+    if (status == 'pending') {
+      badgeBg = const Color(0xFFFEF3C7);
+      badgeDot = const Color(0xFFF59E0B);
+      badgeTextCol = const Color(0xFF92400E);
+      badgeText = 'Pending';
+    } else if (status == 'pending_update') {
+      badgeBg = const Color(0xFFDBEAFE);
+      badgeDot = const Color(0xFF3B82F6);
+      badgeTextCol = const Color(0xFF1E3A8A);
+      badgeText = 'Updating';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -573,9 +645,7 @@ class _TransaksiRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isPending
-                      ? const Color(0xFFFEF3C7)
-                      : AppTheme.hijauSoft,
+                  color: badgeBg,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -585,20 +655,16 @@ class _TransaksiRow extends StatelessWidget {
                       width: 5, height: 5,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isPending
-                            ? const Color(0xFFF59E0B)
-                            : AppTheme.hijauMuda,
+                        color: badgeDot,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isPending ? 'Pending' : 'Synced',
+                      badgeText,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: isPending
-                            ? const Color(0xFF92400E)
-                            : AppTheme.hijauTua,
+                        color: badgeTextCol,
                       ),
                     ),
                   ],
@@ -606,6 +672,38 @@ class _TransaksiRow extends StatelessWidget {
               ),
             ],
           ),
+          // Tombol aksi muncul jika onEdit/onDelete diberikan
+          if (onEdit != null || onDelete != null) ...[
+            const SizedBox(width: 4),
+            PopupMenuButton<String>(
+              onSelected: (val) {
+                if (val == 'edit') onEdit?.call();
+                if (val == 'delete') onDelete?.call();
+              },
+              icon: const Icon(Icons.more_vert,
+                  size: 20, color: AppTheme.textSecond),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Edit'),
+                  ]),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(children: [
+                    Icon(Icons.delete_outline,
+                        size: 18, color: AppTheme.merah),
+                    SizedBox(width: 8),
+                    Text('Hapus',
+                        style: TextStyle(color: AppTheme.merah)),
+                  ]),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
