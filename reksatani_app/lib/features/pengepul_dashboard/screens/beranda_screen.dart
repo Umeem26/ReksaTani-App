@@ -5,6 +5,8 @@ import '../../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../../services/hive_service.dart';
 import '../../../../../services/master_data_service.dart';
 import '../../../../../shared/widgets/app_theme.dart';
+import '../../../../../core/routing/app_router.dart';
+import '../../auth/controllers/auth_controller.dart';
 import 'main_shell.dart';
 
 class BerandaScreen extends StatefulWidget {
@@ -25,6 +27,47 @@ class _BerandaScreenState extends State<BerandaScreen> {
     setState(() => _syncing = true);
     await _svc.syncAll();
     if (mounted) setState(() => _syncing = false);
+  }
+
+  Future<void> _logout() async {
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Keluar Aplikasi',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        content: const Text(
+            'Kamu yakin ingin logout?\nData luring tetap tersimpan di perangkat.',
+            style: TextStyle(fontSize: 13, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal',
+                style: TextStyle(color: AppTheme.textSecond)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.merah,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Logout',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (konfirmasi == true && mounted) {
+      await AuthController().logout();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => AppRouter.getGatekeeper()),
+      );
+    }
   }
 
   @override
@@ -48,6 +91,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                   user: _user,
                   syncing: _syncing,
                   onSync: _refresh,
+                  onLogout: _logout,
                 ),
               ),
 
@@ -111,11 +155,13 @@ class _Header extends StatelessWidget {
   final UserHiveModel user;
   final bool syncing;
   final VoidCallback onSync;
+  final VoidCallback onLogout;
 
   const _Header(
       {required this.user,
       required this.syncing,
-      required this.onSync});
+      required this.onSync,
+      required this.onLogout});
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +219,11 @@ class _Header extends StatelessWidget {
               _IkonBtn(
                 icon: Icons.notifications_outlined,
                 onTap: () {},
+              ),
+              const SizedBox(width: 8),
+              _IkonBtn(
+                icon: Icons.logout_rounded,
+                onTap: onLogout,
               ),
             ],
           ),
