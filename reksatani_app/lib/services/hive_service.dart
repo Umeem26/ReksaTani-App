@@ -51,6 +51,18 @@ class HiveService {
         .toList();
   }
 
+  List<TransaksiHiveModel> getPendingUpdateTransaksi() {
+    return transaksiBox.values
+        .where((t) => t.statusSinkronisasi == 'pending_update')
+        .toList();
+  }
+
+  List<TransaksiHiveModel> getPendingDeleteTransaksi() {
+    return transaksiBox.values
+        .where((t) => t.statusSinkronisasi == 'pending_delete')
+        .toList();
+  }
+
   Future<void> clearAllData() async {
     await usersBox.clear();
     await petaniBox.clear();

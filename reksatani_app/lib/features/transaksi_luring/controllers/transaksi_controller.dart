@@ -44,9 +44,13 @@ class TransaksiController {
     required String beratText,
     required String hargaText,
     required double totalBayar,
+    required String fotoNotaPath,   
+    required String fotoBarangPath,
   }) async {
     final user = _hive.usersBox.get('currentUser')!;
     final now  = DateTime.now();
+    final sisaKasbon  = petaniTerpilih?.sisaHutangKasbon ?? 0;
+    final potongan    = sisaKasbon > 0 ? sisaKasbon.clamp(0, totalBayar).toDouble() : 0.0;
 
     final trx = TransaksiHiveModel(
       idLokal: '${user.id}_${now.millisecondsSinceEpoch}',
@@ -58,10 +62,10 @@ class TransaksiController {
       gradeTerpilih: gradeTerpilih ?? '',
       berat: double.tryParse(beratText) ?? 0,
       hargaBeliSatuan: double.tryParse(hargaText) ?? 0,
-      nominalPotongKasbon: petaniTerpilih?.sisaHutangKasbon ?? 0,
+      nominalPotongKasbon: potongan,
       totalBayar: totalBayar,
-      fotoFisikBarang: '',
-      fotoNota: '',
+      fotoFisikBarang: fotoBarangPath, 
+      fotoNota: fotoNotaPath,
       latitude: 0,
       longitude: 0,
       statusSinkronisasi: 'pending',
@@ -69,6 +73,50 @@ class TransaksiController {
     );
 
     await _hive.saveTransaksi(trx);
+
+    if (petaniTerpilih != null && potongan > 0) {
+      petaniTerpilih.sisaHutangKasbon =
+          (petaniTerpilih.sisaHutangKasbon - potongan).clamp(0, double.infinity);
+      await petaniTerpilih.save();
+    }
+
     await Future.delayed(const Duration(milliseconds: 400));
+  }
+
+  Future<void> updateTransaksi(
+    TransaksiHiveModel existingTrx, {
+    required PetaniHiveModel? petaniTerpilih,
+    required String namaPenjual,
+    required KomoditasHiveModel? komoditasTerpilih,
+    required String? gradeTerpilih,
+    required String beratText,
+    required String hargaText,
+    required double totalBayar,
+    required String fotoNotaPath,   
+    required String fotoBarangPath,
+  }) async {
+    existingTrx.petaniId        = petaniTerpilih?.id ?? '';
+    existingTrx.namaPetani      = namaPenjual.trim();
+    existingTrx.namaKomoditas   = komoditasTerpilih?.namaKomoditas ?? '';
+    existingTrx.gradeTerpilih   = gradeTerpilih ?? '';
+    existingTrx.berat           = double.tryParse(beratText) ?? 0;
+    existingTrx.hargaBeliSatuan = double.tryParse(hargaText) ?? 0;
+    existingTrx.totalBayar      = totalBayar;
+
+    if (fotoNotaPath.isNotEmpty) existingTrx.fotoNota = fotoNotaPath;
+    if (fotoBarangPath.isNotEmpty) existingTrx.fotoFisikBarang = fotoBarangPath;
+    
+    if (existingTrx.statusSinkronisasi == 'synced') {
+      existingTrx.statusSinkronisasi = 'pending_update';
+    }
+
+    await existingTrx.save();
+    await Future.delayed(const Duration(milliseconds: 400));
+  }
+
+  Future<void> deleteTransaksi(TransaksiHiveModel trx) async {
+    if (trx.statusSinkronisasi == 'pending') {
+      await _hive.transaksiBox.delete(trx.idLokal);
+    }
   }
 }
