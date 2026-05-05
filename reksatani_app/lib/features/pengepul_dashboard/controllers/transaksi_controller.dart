@@ -47,6 +47,8 @@ class TransaksiController {
   }) async {
     final user = _hive.usersBox.get('currentUser')!;
     final now  = DateTime.now();
+    final sisaKasbon  = petaniTerpilih?.sisaHutangKasbon ?? 0;
+    final potongan    = sisaKasbon > 0 ? sisaKasbon.clamp(0, totalBayar).toDouble() : 0.0;
 
     final trx = TransaksiHiveModel(
       idLokal: '${user.id}_${now.millisecondsSinceEpoch}',
@@ -58,7 +60,7 @@ class TransaksiController {
       gradeTerpilih: gradeTerpilih ?? '',
       berat: double.tryParse(beratText) ?? 0,
       hargaBeliSatuan: double.tryParse(hargaText) ?? 0,
-      nominalPotongKasbon: petaniTerpilih?.sisaHutangKasbon ?? 0,
+      nominalPotongKasbon: potongan,
       totalBayar: totalBayar,
       fotoFisikBarang: '',
       fotoNota: '',
@@ -69,6 +71,13 @@ class TransaksiController {
     );
 
     await _hive.saveTransaksi(trx);
+
+    if (petaniTerpilih != null && potongan > 0) {
+      petaniTerpilih.sisaHutangKasbon =
+          (petaniTerpilih.sisaHutangKasbon - potongan).clamp(0, double.infinity);
+      await petaniTerpilih.save();
+    }
+
     await Future.delayed(const Duration(milliseconds: 400));
   }
 

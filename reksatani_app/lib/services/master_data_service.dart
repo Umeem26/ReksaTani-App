@@ -1,3 +1,4 @@
+import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import '../services/hive_service.dart';
 import '../services/mongodb_service.dart';
 import '../models/hive/petani_hive_model.dart';
@@ -134,6 +135,17 @@ class MasterDataService {
           t.statusSinkronisasi = 'synced';
           t.waktuDisinkron = DateTime.now();
           await t.save();
+
+          if (t.nominalPotongKasbon > 0 && t.petaniId.isNotEmpty) {
+            try {
+              await MongoDatabase.getCollection('petani').updateOne(
+                where.eq('_id', t.petaniId),
+                modify.inc('sisa_hutang_kasbon', -t.nominalPotongKasbon),
+              );
+            } catch (e) {
+              print('Error update kasbon petani di MongoDB: $e');
+            }
+          }
         } else {
           print('Error insertOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
         }
