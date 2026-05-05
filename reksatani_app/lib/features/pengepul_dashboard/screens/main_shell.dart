@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'beranda_screen.dart';
 import 'pasar_screen.dart';
-import 'transaksi_screen.dart';
 import '../../../../../shared/widgets/app_theme.dart';
+import '../../pcd_scanner/screens/pcd_camera_screen.dart';
 
 // import 'riwayat_screen.dart';
 // import 'profil_screen.dart';
@@ -25,7 +25,7 @@ class MainShellState extends State<MainShell> {
   static const _screens = <Widget>[
     BerandaScreen(),
     PasarScreen(),
-    TransaksiScreen(),                                                       // ✅ aktif
+    PcdCameraScreen(),                                                    
     _PlaceholderScreen(label: 'Riwayat', icon: Icons.history_outlined),
     _PlaceholderScreen(label: 'Profil',  icon: Icons.person_outline),
   ];
