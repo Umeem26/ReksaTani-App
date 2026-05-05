@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../services/hive_service.dart';
-import '../../../models/hive/komoditas_hive_model.dart';
+import '../controllers/pasar_controller.dart';
 import '../../../shared/widgets/app_theme.dart';
 
 class PasarScreen extends StatefulWidget {
@@ -11,32 +10,11 @@ class PasarScreen extends StatefulWidget {
 }
 
 class _PasarScreenState extends State<PasarScreen> {
-  final _hive = HiveService();
-  String _filterGrade = 'Semua';
-
-  /// Flatten semua komoditas + grade jadi list flat untuk ditampilkan
-  List<_HargaItem> get _daftarHarga {
-    final result = <_HargaItem>[];
-    for (final k in _hive.komoditasBox.values) {
-      for (final g in k.gradeKualitas) {
-        final grade    = g['grade'] as String? ?? '';
-        final hargaMaks = (g['harga_maks'] as num?)?.toDouble() ?? 0;
-        if (_filterGrade == 'Semua' || _filterGrade == grade) {
-          result.add(_HargaItem(
-            namaKomoditas: k.namaKomoditas,
-            unitSatuan: k.unitSatuan,
-            grade: grade,
-            hargaMaks: hargaMaks,
-          ));
-        }
-      }
-    }
-    return result;
-  }
+  final _controller = PasarController();
 
   @override
   Widget build(BuildContext context) {
-    final list = _daftarHarga;
+    final list = _controller.daftarHarga;
 
     return Scaffold(
       backgroundColor: AppTheme.bgPage,
@@ -89,8 +67,8 @@ class _PasarScreenState extends State<PasarScreen> {
         child: Row(
           children: ['Semua', 'A', 'B', 'C'].map((g) => _GradeChip(
             label: g == 'Semua' ? 'Semua' : 'Grade $g',
-            isActive: _filterGrade == g,
-            onTap: () => setState(() => _filterGrade = g),
+            isActive: _controller.filterGrade == g,
+            onTap: () => setState(() => _controller.setFilterGrade(g)),
           )).toList(),
         ),
       );
@@ -137,20 +115,6 @@ class _PasarScreenState extends State<PasarScreen> {
       );
 }
 
-// ── Data class ringan untuk display ──────────────────────────────
-class _HargaItem {
-  final String namaKomoditas;
-  final String unitSatuan;
-  final String grade;
-  final double hargaMaks;
-
-  const _HargaItem({
-    required this.namaKomoditas,
-    required this.unitSatuan,
-    required this.grade,
-    required this.hargaMaks,
-  });
-}
 
 // ── Grade chip filter ─────────────────────────────────────────────
 class _GradeChip extends StatelessWidget {
@@ -192,7 +156,7 @@ class _GradeChip extends StatelessWidget {
 
 // ── Kartu satu harga komoditas ────────────────────────────────────
 class _HargaCard extends StatelessWidget {
-  final _HargaItem item;
+  final HargaItem item;
   const _HargaCard({required this.item});
 
   @override
