@@ -110,7 +110,8 @@ class MasterDataService {
     try {
       final col = MongoDatabase.getCollection('transaksi');
       for (final t in pending) {
-        await col.insertOne({
+        final res = await col.insertOne({
+          'id_lokal': t.idLokal,
           'pengepul_id': t.pengepulId,
           'petani_id': t.petaniId,
           'nama_pengepul': t.namaPengepul,
@@ -128,9 +129,14 @@ class MasterDataService {
           'status_sinkronisasi': 'synced',
           'created_at': t.createdAt.toIso8601String(),
         });
-        t.statusSinkronisasi = 'synced';
-        t.waktuDisinkron = DateTime.now();
-        await t.save();
+        
+        if (res.isSuccess) {
+          t.statusSinkronisasi = 'synced';
+          t.waktuDisinkron = DateTime.now();
+          await t.save();
+        } else {
+          print('Error insertOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
+        }
       }
     } catch (e) {
       print('Error uploadPendingTransaksi: $e');

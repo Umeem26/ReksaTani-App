@@ -71,4 +71,31 @@ class TransaksiController {
     await _hive.saveTransaksi(trx);
     await Future.delayed(const Duration(milliseconds: 400));
   }
+
+  Future<void> updateTransaksi(
+    TransaksiHiveModel existingTrx, {
+    required PetaniHiveModel? petaniTerpilih,
+    required String namaPenjual,
+    required KomoditasHiveModel? komoditasTerpilih,
+    required String? gradeTerpilih,
+    required String beratText,
+    required String hargaText,
+    required double totalBayar,
+  }) async {
+    existingTrx.petaniId        = petaniTerpilih?.id ?? '';
+    existingTrx.namaPetani      = namaPenjual.trim();
+    existingTrx.namaKomoditas   = komoditasTerpilih?.namaKomoditas ?? '';
+    existingTrx.gradeTerpilih   = gradeTerpilih ?? '';
+    existingTrx.berat           = double.tryParse(beratText) ?? 0;
+    existingTrx.hargaBeliSatuan = double.tryParse(hargaText) ?? 0;
+    existingTrx.totalBayar      = totalBayar;
+    await existingTrx.save();
+    await Future.delayed(const Duration(milliseconds: 400));
+  }
+
+  Future<void> deleteTransaksi(TransaksiHiveModel trx) async {
+    if (trx.statusSinkronisasi == 'pending') {
+      await _hive.transaksiBox.delete(trx.idLokal);
+    }
+  }
 }

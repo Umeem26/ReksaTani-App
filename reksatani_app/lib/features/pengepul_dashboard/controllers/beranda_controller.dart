@@ -21,6 +21,12 @@ class BerandaController {
     await _svc.syncAll();
   }
 
+  Future<void> hapusTransaksi(TransaksiHiveModel trx) async {
+    if (trx.statusSinkronisasi == 'pending') {
+      await _hive.transaksiBox.delete(trx.idLokal);
+    }
+  }
+
   Future<void> logout() async {
     await AuthController().logout();
   }
