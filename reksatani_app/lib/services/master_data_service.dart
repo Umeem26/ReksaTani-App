@@ -211,6 +211,29 @@ class MasterDataService {
         final res = await coll.deleteOne(where.eq('id_lokal', t.idLokal));
 
         if (res.isSuccess) {
+          if (t.nominalPotongKasbon > 0 && t.petaniId.isNotEmpty) {
+            try {
+              await MongoDatabase.getCollection('petani').updateOne(
+                where.eq('_id', t.petaniId),
+                modify.inc('sisa_hutang_kasbon', t.nominalPotongKasbon),
+              );
+            } catch (e) {
+              print('Error refund kasbon petani di MongoDB: $e');
+            }
+          }
+
+          final uangTunaiKeluar = t.totalBayar - t.nominalPotongKasbon;
+          if (uangTunaiKeluar > 0) {
+            try {
+              await MongoDatabase.getCollection('users').updateOne(
+                where.eq('_id', t.pengepulId),
+                modify.inc('sisa_uang_jalan', uangTunaiKeluar),
+              );
+            } catch (e) {
+              print('Error refund uang jalan agen di MongoDB: $e');
+            }
+          }
+
           await _hive.transaksiBox.delete(t.idLokal);
         } else {
           print('Error deleteOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
