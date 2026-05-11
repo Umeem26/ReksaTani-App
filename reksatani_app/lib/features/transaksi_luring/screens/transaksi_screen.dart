@@ -264,7 +264,21 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                         hint: '0',
                         type: TextInputType.number,
                         formatters: [FilteringTextInputFormatter.digitsOnly],
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (val) {
+                          final maks = _hargaMaksGrade;
+                          final h = double.tryParse(val) ?? 0;
+                          if (maks > 0 && h > maks) {
+                            _hargaCtrl.text = maks.toInt().toString();
+                            _hargaCtrl.selection = TextSelection.fromPosition(
+                              TextPosition(offset: _hargaCtrl.text.length),
+                            );
+                            _showSnack(
+                              'Harga disesuaikan ke batas maksimal grade $_gradeTerpilih (Rp ${_fmt(maks.toInt())})',
+                              isError: true,
+                            );
+                          }
+                          setState(() {});
+                        },
                         validator: (v) => (v?.isEmpty ?? true) ? 'Wajib' : null,
                         isError: _hargaMelebihi,
                       ),
