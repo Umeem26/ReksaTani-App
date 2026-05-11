@@ -90,6 +90,18 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       return;
     }
 
+    final sisaKasbon = _petaniTerpilih?.sisaHutangKasbon ?? 0;
+    final potongan = sisaKasbon > 0 ? sisaKasbon.clamp(0, _totalBayar).toDouble() : 0.0;
+    final uangTunaiKeluar = _totalBayar - potongan;
+
+    if (_controller.sisaUangJalan < uangTunaiKeluar) {
+      _showSnack(
+        'Saldo Uang Jalan tidak mencukupi! Sisa: Rp ${_fmt(_controller.sisaUangJalan.toInt())}',
+        isError: true,
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
     if (_isEditMode) {

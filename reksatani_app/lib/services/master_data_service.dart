@@ -146,6 +146,18 @@ class MasterDataService {
               print('Error update kasbon petani di MongoDB: $e');
             }
           }
+
+          final uangTunaiKeluar = t.totalBayar - t.nominalPotongKasbon;
+          if (uangTunaiKeluar > 0) {
+            try {
+              await MongoDatabase.getCollection('users').updateOne(
+                where.eq('_id', t.pengepulId),
+                modify.inc('sisa_uang_jalan', -uangTunaiKeluar),
+              );
+            } catch (e) {
+              print('Error update saldo kas agen di MongoDB: $e');
+            }
+          }
         } else {
           print('Error insertOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
         }
