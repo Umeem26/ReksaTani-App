@@ -102,12 +102,11 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
           'Manajemen Harga & Komoditas',
           style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle, color: AppTheme.hijauTua),
-            onPressed: () => _showFormDialog(),
-          ),
-        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showFormDialog(),
+        backgroundColor: AppTheme.hijauTua,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.hijauMuda))
