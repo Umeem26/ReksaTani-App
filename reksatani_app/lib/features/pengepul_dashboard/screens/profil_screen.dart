@@ -144,7 +144,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            _ctrl.isConnected ? 'Terhubung' : 'Luring (Offline)',
+                            _ctrl.isConnected ? 'Terhubung' : 'Terputus',
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _ctrl.isConnected ? AppTheme.hijauTua : AppTheme.merah),
                           ),
                         ],

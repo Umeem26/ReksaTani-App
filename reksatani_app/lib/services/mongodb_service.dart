@@ -30,6 +30,18 @@ class MongoDatabase {
     return _db.collection(collectionName);
   }
 
+  static Future<bool> ping() async {
+    try {
+      if (!_db.isConnected) {
+        await connect();
+      }
+      await _db.collection('users').findOne();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   static Future<void> close() async {
     if (_db.isConnected) {
       await _db.close();

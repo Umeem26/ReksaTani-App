@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../models/hive/user_hive_model.dart';
 import '../../../../services/hive_service.dart';
+import '../../../../services/mongodb_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 
 class ProfilController extends ChangeNotifier {
@@ -16,15 +17,12 @@ class ProfilController extends ChangeNotifier {
     cekKoneksi();
   }
 
-  // Simulasi/pengecekan aman koneksi server tanpa memanggil .db internal
   Future<void> cekKoneksi() async {
     _isChecking = true;
     notifyListeners();
     
     try {
-      // Kita asumsikan jika tidak ada error jaringan, status daring aktif
-      await Future.delayed(const Duration(milliseconds: 600));
-      _isConnected = true;
+      _isConnected = await MongoDatabase.ping();
     } catch (_) {
       _isConnected = false;
     } finally {
