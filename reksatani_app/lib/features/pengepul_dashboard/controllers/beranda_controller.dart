@@ -17,7 +17,15 @@ class BerandaController {
 
   List<Map<String, dynamic>> get hargaTerbaru => _svc.getDaftarHargaDisplay().take(3).toList();
   List<TransaksiHiveModel> get riwayatTerbaru => _svc.getRiwayatTransaksi().take(3).toList();
-  List<PetaniHiveModel> get mitraTerbaru => _hive.petaniBox.values.toList().take(3).toList();
+  List<PetaniHiveModel> get mitraTerbaru {
+    final userId = user.id;
+    return _hive.petaniBox.values
+        .where((p) => p.pengepulId == userId)
+        .toList()
+        .reversed
+        .take(3)
+        .toList();
+  }
 
   Future<void> syncData() async {
     await _svc.syncAll();

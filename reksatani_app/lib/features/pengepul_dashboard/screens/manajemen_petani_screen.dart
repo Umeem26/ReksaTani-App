@@ -26,7 +26,7 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) => _PetaniFormSheet(
+      builder: (_) => PetaniFormSheet(
         petaniLama: petani,
         onSimpan: (nama, desa) async {
           if (petani == null) {
@@ -154,9 +154,14 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
             child: ValueListenableBuilder(
               valueListenable: _hiveService.petaniBox.listenable(),
               builder: (context, Box<PetaniHiveModel> box, _) {
+                final currentUser = _hiveService.usersBox.get('currentUser');
+                final currentUserId = currentUser?.id ?? '';
+                
                 final list = box.values.where((p) {
-                  return p.namaPetani.toLowerCase().contains(_searchQuery) ||
+                  final isMyMitra = p.pengepulId == currentUserId;
+                  final matchSearch = p.namaPetani.toLowerCase().contains(_searchQuery) ||
                          p.desa.toLowerCase().contains(_searchQuery);
+                  return isMyMitra && matchSearch;
                 }).toList();
 
                 if (list.isEmpty) {
@@ -222,17 +227,17 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
   }
 }
 
-class _PetaniFormSheet extends StatefulWidget {
+class PetaniFormSheet extends StatefulWidget {
   final PetaniHiveModel? petaniLama;
   final Function(String nama, String desa) onSimpan;
 
-  const _PetaniFormSheet({this.petaniLama, required this.onSimpan});
+  const PetaniFormSheet({super.key, this.petaniLama, required this.onSimpan});
 
   @override
-  State<_PetaniFormSheet> createState() => _PetaniFormSheetState();
+  State<PetaniFormSheet> createState() => _PetaniFormSheetState();
 }
 
-class _PetaniFormSheetState extends State<_PetaniFormSheet> {
+class _PetaniFormSheetState extends State<PetaniFormSheet> {
   final _namaCtrl = TextEditingController();
   final _desaCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();

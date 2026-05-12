@@ -9,6 +9,8 @@ import '../controllers/beranda_controller.dart';
 import 'main_shell.dart';
 import 'manajemen_petani_screen.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
+import '../../../../../services/mongodb_service.dart';
+import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 
 
 class BerandaScreen extends StatefulWidget {
@@ -121,7 +123,59 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     if (mitra.isEmpty)
                       const _EmptyCard(msg: 'Belum ada data mitra.\nTambahkan mitra baru.')
                     else
-                      ...mitra.map((p) => _MitraRow(data: p)),
+                      ...mitra.map((p) => _MitraRow(
+                        data: p,
+                        onEdit: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.white,
+                            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+                            builder: (_) => PetaniFormSheet(
+                              petaniLama: p,
+                              onSimpan: (nama, desa) async {
+                                p.namaPetani = nama;
+                                p.desa = desa;
+                                await p.save();
+                                try {
+                                  final col = MongoDatabase.getCollection('petani');
+                                  await col.updateOne(where.eq('_id', p.id), modify.set('nama_petani', nama).set('desa', desa));
+                                } catch (_) {}
+                                if (mounted) { Navigator.pop(context); setState((){}); }
+                              },
+                            ),
+                          );
+                        },
+                        onDelete: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              title: const Text('Hapus Petani', style: TextStyle(fontWeight: FontWeight.bold)),
+                              content: Text('Yakin ingin menghapus ${p.namaPetani}?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond)),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    final idHapus = p.id;
+                                    await p.delete();
+                                    try {
+                                      final col = MongoDatabase.getCollection('petani');
+                                      await col.deleteOne(where.eq('_id', idHapus));
+                                    } catch (_) {}
+                                    if (mounted) { Navigator.pop(context); setState((){}); }
+                                  },
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
+                                  child: const Text('Hapus'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      )),
                     const SizedBox(height: 24),
 
                     // Harga pasar preview
@@ -580,7 +634,14 @@ class _HargaRow extends StatelessWidget {
 
 class _MitraRow extends StatelessWidget {
   final PetaniHiveModel data;
-  const _MitraRow({required this.data});
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  
+  const _MitraRow({
+    required this.data,
+    this.onEdit,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -614,6 +675,34 @@ class _MitraRow extends StatelessWidget {
               ],
             ),
           ),
+          if (onEdit != null || onDelete != null) ...[
+            const SizedBox(width: 4),
+            PopupMenuButton<String>(
+              onSelected: (val) {
+                if (val == 'edit') onEdit?.call();
+                if (val == 'delete') onDelete?.call();
+              },
+              icon: const Icon(Icons.more_vert, size: 20, color: AppTheme.textSecond),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Edit'),
+                  ]),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(children: [
+                    Icon(Icons.delete_outline, size: 18, color: AppTheme.merah),
+                    SizedBox(width: 8),
+                    Text('Hapus', style: TextStyle(color: AppTheme.merah)),
+                  ]),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
