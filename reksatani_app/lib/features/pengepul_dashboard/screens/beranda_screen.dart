@@ -11,6 +11,9 @@ import 'manajemen_petani_screen.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../../../services/mongodb_service.dart';
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
+import '../../../../services/notification_service.dart';
+import 'notifikasi_screen.dart';
+import 'package:provider/provider.dart';
 
 
 class BerandaScreen extends StatefulWidget {
@@ -26,8 +29,24 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   Future<void> _refresh() async {
     setState(() => _syncing = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Memulai sinkronisasi data...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
     await _controller.syncData();
-    if (mounted) setState(() => _syncing = false);
+
+    if (mounted) {
+      setState(() => _syncing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data berhasil disinkronkan!'),
+          backgroundColor: AppTheme.hijauMuda,
+        ),
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -331,9 +350,47 @@ class _Header extends StatelessWidget {
                 onTap: onSync,
               ),
               const SizedBox(width: 8),
-              _IkonBtn(
-                icon: Icons.notifications_outlined,
-                onTap: () {},
+              ChangeNotifierProvider.value(
+                value: NotificationService(),
+                child: Consumer<NotificationService>(
+                  builder: (context, svc, _) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _IkonBtn(
+                        icon: Icons.notifications_outlined,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const NotifikasiScreen()),
+                        ),
+                      ),
+                      if (svc.unreadCount > 0)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppTheme.merah,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              '${svc.unreadCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
               _IkonBtn(
@@ -385,27 +442,6 @@ class _Header extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {},
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(children: [
-                      Icon(Icons.add,
-                          size: 14, color: Color(0xFF019241)),
-                      SizedBox(width: 4),
-                      Text('Top-up',
-                          style: TextStyle(
-                              color: Color(0xFF019241),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700)),
-                    ]),
                   ),
                 ),
               ],

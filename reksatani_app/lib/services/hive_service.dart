@@ -3,6 +3,8 @@ import '../models/hive/user_hive_model.dart';
 import '../models/hive/petani_hive_model.dart';
 import '../models/hive/komoditas_hive_model.dart';
 import '../models/hive/transaksi_hive_model.dart';
+import 'notification_service.dart';
+import '../models/hive/notifikasi_hive_model.dart';
 
 class HiveService {
   static final HiveService _instance = HiveService._internal();
@@ -31,11 +33,15 @@ class HiveService {
     if (!Hive.isAdapterRegistered(3)) {
       Hive.registerAdapter(TransaksiHiveModelAdapter());
     }
+    if (!Hive.isAdapterRegistered(4)) {
+      Hive.registerAdapter(NotifikasiHiveModelAdapter());
+    }
 
     await Hive.openBox<UserHiveModel>(_usersBoxName);
     await Hive.openBox<PetaniHiveModel>(_petaniBoxName);
     await Hive.openBox<KomoditasHiveModel>(_komoditasBoxName);
     await Hive.openBox<TransaksiHiveModel>(_transaksiBoxName);
+    await Hive.openBox<NotifikasiHiveModel>('notifikasiBox');
     // 2. Buka box settings (tanpa tipe khusus agar bisa menampung tipe data dinamis)
     await Hive.openBox(_settingsBoxName);
   }
@@ -44,6 +50,7 @@ class HiveService {
   Box<PetaniHiveModel> get petaniBox => Hive.box<PetaniHiveModel>(_petaniBoxName);
   Box<KomoditasHiveModel> get komoditasBox => Hive.box<KomoditasHiveModel>(_komoditasBoxName);
   Box<TransaksiHiveModel> get transaksiBox => Hive.box<TransaksiHiveModel>(_transaksiBoxName);
+  Box<NotifikasiHiveModel> get notifikasiBox => Hive.box<NotifikasiHiveModel>('notifikasiBox');
   // 3. Buat getter untuk settingsBox
   Box get settingsBox => Hive.box(_settingsBoxName);
   
@@ -64,6 +71,12 @@ class HiveService {
 
   Future<void> saveTransaksi(TransaksiHiveModel transaksi) async {
     await transaksiBox.put(transaksi.idLokal, transaksi);
+    
+    NotificationService().addNotification(
+      judul: 'Transaksi Tersimpan',
+      pesan: 'Data ${transaksi.namaKomoditas} (${transaksi.berat.toInt()} kg) tersimpan di perangkat. Jangan lupa sinkronisasi saat online.',
+      tipe: 'sync',
+    );
   }
 
   List<TransaksiHiveModel> getPendingTransaksi() {

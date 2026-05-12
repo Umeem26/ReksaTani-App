@@ -7,6 +7,9 @@ import '../../../features/auth/controllers/auth_controller.dart';
 import '../../../core/routing/app_router.dart';
 import '../controllers/manajer_beranda_controller.dart';
 import 'manajer_shell.dart';
+import '../../../../services/notification_service.dart';
+import '../../pengepul_dashboard/screens/notifikasi_screen.dart';
+import 'package:provider/provider.dart';
 
 class BerandaManajerScreen extends StatefulWidget {
   const BerandaManajerScreen({super.key});
@@ -304,6 +307,50 @@ class _ManajerHeader extends StatelessWidget {
                 ),
               ),
               _IkonBtn(icon: Icons.sync_rounded, spinning: syncing, onTap: onSync),
+              const SizedBox(width: 8),
+              ChangeNotifierProvider.value(
+                value: NotificationService(),
+                child: Consumer<NotificationService>(
+                  builder: (context, svc, _) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _IkonBtn(
+                        icon: Icons.notifications_outlined,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const NotifikasiScreen()),
+                        ),
+                      ),
+                      if (svc.unreadCount > 0)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppTheme.merah,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              '${svc.unreadCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(width: 8),
               _IkonBtn(icon: Icons.logout_rounded, onTap: onLogout),
             ],

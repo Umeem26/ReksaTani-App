@@ -5,6 +5,7 @@ import '../models/hive/petani_hive_model.dart';
 import '../models/hive/komoditas_hive_model.dart';
 import '../models/hive/transaksi_hive_model.dart';
 import '../models/hive/user_hive_model.dart';
+import 'notification_service.dart';
 
 /// SRP: Satu-satunya class yang boleh baca/tulis data master
 /// antara MongoDB dan Hive lokal.
@@ -95,10 +96,11 @@ class MasterDataService {
     }
   }
 
-  Future<void> syncRiwayatTransaksi() async {
+  Future<int> syncRiwayatTransaksi() async {
+    int countBaru = 0;
     try {
       final user = _hive.usersBox.get('currentUser');
-      if (user == null) return;
+      if (user == null) return 0;
 
       final col = MongoDatabase.getCollection('transaksi');
       
@@ -134,10 +136,12 @@ class MasterDataService {
           waktuDisinkron: _parseDateTimeNullable(d['waktu_disinkron']),
         );
         await _hive.transaksiBox.put(m.idLokal, m);
+        countBaru++;
       }
     } catch (e) {
       print('Error syncRiwayatTransaksi: $e');
     }
+    return countBaru;
   }
 
   DateTime _parseDateTime(dynamic val) {
@@ -292,13 +296,61 @@ class MasterDataService {
   }
 
   Future<void> syncAll() async {
+    final pendingCount = _hive.getPendingTransaksi().length;
+    
     await syncPetani();
     await syncKomoditas();
     await syncAgents();
     await uploadPendingTransaksi();
     await uploadPendingUpdateTransaksi();
     await uploadPendingDeleteTransaksi();
-    await syncRiwayatTransaksi();
+    final trxBaru = await syncRiwayatTransaksi();
+    
+    final remainingCount = _hive.getPendingTransaksi().length;
+    final successCount = pendingCount - remainingCount;
+    
+    final user = _hive.usersBox.get('currentUser');
+    final isPengepul = user?.role == 'pengepul';
+    final isManajer = user?.role == 'manager' || user?.role == 'manajer' || user?.role == 'admin';
+
+    if (user != null && user.role == 'pengepul') {
+      if (successCount > 0) {
+        NotificationService().addNotification(
+          judul: 'Sinkronisasi Berhasil',
+          pesan: '$successCount transaksi telah berhasil diunggah ke server.',
+          tipe: 'sync',
+        );
+      }
+      if (user.sisaUangJalan < 500000) {
+        NotificationService().addNotification(
+          judul: 'Saldo Rendah',
+          pesan: 'Sisa uang jalan Anda tinggal Rp ${user.sisaUangJalan.toInt()}. Segera lapor manajer.',
+          tipe: 'saldo',
+        );
+      }
+    }
+
+    if (isManajer) {
+      if (trxBaru > 0) {
+        NotificationService().addNotification(
+          judul: 'Transaksi Baru',
+          pesan: 'Ada $trxBaru transaksi baru masuk dari agen lapangan.',
+          tipe: 'info',
+        );
+      }
+      
+      final agenRendah = _hive.usersBox.values
+          .where((u) => u.role == 'pengepul' && u.sisaUangJalan < 500000)
+          .toList();
+      if (agenRendah.isNotEmpty) {
+        final namaAgen = agenRendah.map((e) => e.username).join(', ');
+        NotificationService().addNotification(
+          judul: 'Peringatan Saldo Agen',
+          pesan: '${agenRendah.length} agen butuh top-up uang jalan: $namaAgen',
+          tipe: 'saldo',
+        );
+      }
+    }
   }
 
   // ── GETTER untuk UI (dari Hive lokal) ──────────────────────────
