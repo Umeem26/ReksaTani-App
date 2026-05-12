@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'manajer_beranda_screen.dart';
 import 'manajer_analitik_screen.dart';
 import 'manajer_peta_screen.dart';
+import 'manajemen_komoditas_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 
 class ManajerShell extends StatefulWidget {
@@ -23,12 +24,14 @@ class ManajerShellState extends State<ManajerShell> {
     BerandaManajerScreen(),
     ManajerAnalitikScreen(),
     ManajerPetaScreen(),
+    ManajemenKomoditasScreen(),
   ];
 
   static const _tabs = [
     _Tab(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Beranda'),
     _Tab(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Analitik'),
     _Tab(icon: Icons.map_outlined,       activeIcon: Icons.map_rounded,       label: 'Peta'),
+    _Tab(icon: Icons.category_outlined,  activeIcon: Icons.category_rounded,  label: 'Komoditas'),
   ];
 
   @override

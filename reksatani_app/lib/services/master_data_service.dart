@@ -58,7 +58,7 @@ class MasterDataService {
           gradeKualitas: grades,
           diperbaruiOleh: d['diperbarui_oleh']?.toString() ?? '',
           waktuPembaruan:
-              DateTime.tryParse(d['waktu_pembaruan']?.toString() ?? '') ??
+              DateTime.tryParse(d['waktu_pembaruan_harga']?.toString() ?? '') ??
                   DateTime.now(),
         );
         await _hive.komoditasBox.put(m.id, m);
@@ -104,7 +104,7 @@ class MasterDataService {
       final col = MongoDatabase.getCollection('transaksi');
       
       // Jika manager/admin, ambil semua transaksi. Jika pengepul, ambil miliknya saja.
-      final selector = (user.role == 'manager' || user.role == 'admin')
+      final selector = (user.role == 'manager' || user.role == 'manajer' || user.role == 'admin')
           ? where.ne('pengepul_id', '') 
           : where.eq('pengepul_id', user.id);
           
