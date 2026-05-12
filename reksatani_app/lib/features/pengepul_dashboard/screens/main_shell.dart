@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'beranda_screen.dart';
 import 'pasar_screen.dart';
 import 'riwayat_screen.dart'; 
+import 'profil_screen.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../pcd_scanner/screens/pcd_camera_screen.dart';
 
@@ -25,7 +26,7 @@ class MainShellState extends State<MainShell> {
     PasarScreen(),
     PcdCameraScreen(),                                                    
     RiwayatScreen(),
-    _PlaceholderScreen(label: 'Profil',  icon: Icons.person_outline),
+    ProfilScreen(),
   ];
 
   static const _tabs = [
