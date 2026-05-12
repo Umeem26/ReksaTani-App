@@ -6,6 +6,7 @@ import '../../../models/hive/user_hive_model.dart';
 import '../../../features/auth/controllers/auth_controller.dart';
 import '../../../core/routing/app_router.dart';
 import '../controllers/manajer_beranda_controller.dart';
+import 'manajer_shell.dart';
 
 class BerandaManajerScreen extends StatefulWidget {
   const BerandaManajerScreen({super.key});
@@ -142,6 +143,54 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
+
+                    // Shortcut ke Manajemen Komoditas
+                    GestureDetector(
+                      onTap: () {
+                        // Memanggil tab ke-3 (indeks 3) di ManajerShell
+                        ManajerShellState.of(context)?.changeTab(3);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.hijauMuda.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.category_rounded, color: AppTheme.hijauTua, size: 22),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Kelola Harga & Komoditas',
+                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.textPrimary),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Atur daftar komoditas dan update harga pasar terkini.',
+                                    style: TextStyle(fontSize: 11, color: AppTheme.textSecond),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.hijauMuda, size: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
                     const _SectionHeader(title: 'Sisa Kas Agen'),
                     const SizedBox(height: 12),
                     if (_ctrl.daftarAgen.isEmpty)

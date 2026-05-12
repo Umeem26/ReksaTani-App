@@ -1,7 +1,7 @@
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
+import 'package:uuid/uuid.dart';
 import '../../../../services/mongodb_service.dart';
 import '../../../../services/hive_service.dart';
-import 'package:uuid/uuid.dart';
 
 class ManajemenKomoditasController {
   final _hive = HiveService();
@@ -26,17 +26,18 @@ class ManajemenKomoditasController {
       final user = _hive.usersBox.get('currentUser');
       final col = MongoDatabase.getCollection('komoditas');
       
-      await col.insertOne({
-        '_id': const Uuid().v4(),
+      final id = const Uuid().v4();
+      await col.insert({
+        '_id': id,
         'nama_komoditas': namaKomoditas,
         'unit_satuan': unitSatuan,
         'grade_kualitas': gradeKualitas,
         'diperbarui_oleh': user?.id ?? '',
-        'waktu_pembaruan': DateTime.now().toIso8601String(),
+        'waktu_pembaruan_harga': DateTime.now().toIso8601String(),
       });
       return true;
     } catch (e) {
-      print('Error tambahKomoditas: $e');
+      print('Exception tambahKomoditas: $e');
       return false;
     }
   }
@@ -58,7 +59,7 @@ class ManajemenKomoditasController {
             .set('unit_satuan', unitSatuan)
             .set('grade_kualitas', gradeKualitas)
             .set('diperbarui_oleh', user?.id ?? '')
-            .set('waktu_pembaruan', DateTime.now().toIso8601String()),
+            .set('waktu_pembaruan_harga', DateTime.now().toIso8601String()),
       );
       return true;
     } catch (e) {
