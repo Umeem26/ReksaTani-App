@@ -96,10 +96,11 @@ class MasterDataService {
     }
   }
 
-  Future<void> syncRiwayatTransaksi() async {
+  Future<int> syncRiwayatTransaksi() async {
+    int countBaru = 0;
     try {
       final user = _hive.usersBox.get('currentUser');
-      if (user == null) return;
+      if (user == null) return 0;
 
       final col = MongoDatabase.getCollection('transaksi');
       
@@ -135,10 +136,12 @@ class MasterDataService {
           waktuDisinkron: _parseDateTimeNullable(d['waktu_disinkron']),
         );
         await _hive.transaksiBox.put(m.idLokal, m);
+        countBaru++;
       }
     } catch (e) {
       print('Error syncRiwayatTransaksi: $e');
     }
+    return countBaru;
   }
 
   DateTime _parseDateTime(dynamic val) {
@@ -301,27 +304,52 @@ class MasterDataService {
     await uploadPendingTransaksi();
     await uploadPendingUpdateTransaksi();
     await uploadPendingDeleteTransaksi();
-    await syncRiwayatTransaksi();
+    final trxBaru = await syncRiwayatTransaksi();
     
     final remainingCount = _hive.getPendingTransaksi().length;
     final successCount = pendingCount - remainingCount;
     
-    if (successCount > 0) {
-      NotificationService().addNotification(
-        judul: 'Sinkronisasi Berhasil',
-        pesan: '$successCount transaksi telah berhasil diunggah ke server.',
-        tipe: 'sync',
-      );
+    final user = _hive.usersBox.get('currentUser');
+    final isPengepul = user?.role == 'pengepul';
+    final isManajer = user?.role == 'manager' || user?.role == 'manajer' || user?.role == 'admin';
+
+    if (user != null && user.role == 'pengepul') {
+      if (successCount > 0) {
+        NotificationService().addNotification(
+          judul: 'Sinkronisasi Berhasil',
+          pesan: '$successCount transaksi telah berhasil diunggah ke server.',
+          tipe: 'sync',
+        );
+      }
+      if (user.sisaUangJalan < 500000) {
+        NotificationService().addNotification(
+          judul: 'Saldo Rendah',
+          pesan: 'Sisa uang jalan Anda tinggal Rp ${user.sisaUangJalan.toInt()}. Segera lapor manajer.',
+          tipe: 'saldo',
+        );
+      }
     }
 
-    // Cek saldo
-    final user = _hive.usersBox.get('currentUser');
-    if (user != null && user.role == 'pengepul' && user.sisaUangJalan < 500000) {
-      NotificationService().addNotification(
-        judul: 'Saldo Rendah',
-        pesan: 'Sisa uang jalan Anda tinggal Rp ${user.sisaUangJalan.toInt()}. Segera lapor manajer.',
-        tipe: 'saldo',
-      );
+    if (isManajer) {
+      if (trxBaru > 0) {
+        NotificationService().addNotification(
+          judul: 'Transaksi Baru',
+          pesan: 'Ada $trxBaru transaksi baru masuk dari agen lapangan.',
+          tipe: 'info',
+        );
+      }
+      
+      final agenRendah = _hive.usersBox.values
+          .where((u) => u.role == 'pengepul' && u.sisaUangJalan < 500000)
+          .toList();
+      if (agenRendah.isNotEmpty) {
+        final namaAgen = agenRendah.map((e) => e.username).join(', ');
+        NotificationService().addNotification(
+          judul: 'Peringatan Saldo Agen',
+          pesan: '${agenRendah.length} agen butuh top-up uang jalan: $namaAgen',
+          tipe: 'saldo',
+        );
+      }
     }
   }
 
