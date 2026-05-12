@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'beranda_screen.dart';
 import 'pasar_screen.dart';
+import 'riwayat_screen.dart'; 
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../pcd_scanner/screens/pcd_camera_screen.dart';
-
-// import 'riwayat_screen.dart';
-// import 'profil_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -26,7 +24,7 @@ class MainShellState extends State<MainShell> {
     BerandaScreen(),
     PasarScreen(),
     PcdCameraScreen(),                                                    
-    _PlaceholderScreen(label: 'Riwayat', icon: Icons.history_outlined),
+    RiwayatScreen(),
     _PlaceholderScreen(label: 'Profil',  icon: Icons.person_outline),
   ];
 
