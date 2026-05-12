@@ -144,51 +144,63 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Shortcut ke Manajemen Komoditas
-                    GestureDetector(
-                      onTap: () {
-                        // Memanggil tab ke-3 (indeks 3) di ManajerShell
-                        ManajerShellState.of(context)?.changeTab(3);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.hijauMuda.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(Icons.category_rounded, color: AppTheme.hijauTua, size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Kelola Harga & Komoditas',
-                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.textPrimary),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    'Atur daftar komoditas dan update harga pasar terkini.',
-                                    style: TextStyle(fontSize: 11, color: AppTheme.textSecond),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.hijauMuda, size: 16),
-                          ],
-                        ),
+                    _SectionHeader(
+                      title: 'Harga & Komoditas',
+                      trailing: GestureDetector(
+                        onTap: () => ManajerShellState.of(context)?.changeTab(3),
+                        child: const Text('Lihat Semua',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.hijauTua)),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    if (_ctrl.daftarKomoditas.isEmpty)
+                      const _EmptyCard(msg: 'Belum ada komoditas terdaftar.')
+                    else
+                      ..._ctrl.daftarKomoditas.take(3).map((k) => Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(16),
+                            decoration: AppTheme.cardDecoration(radius: 14),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.hijauSoft,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Center(
+                                    child: Icon(Icons.category_rounded, color: AppTheme.hijauTua, size: 22),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(k.namaKomoditas,
+                                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                                      const SizedBox(height: 3),
+                                      Text('${k.gradeKualitas.length} Grade Kualitas',
+                                          style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+                                    ],
+                                  ),
+                                ),
+                                if (k.gradeKualitas.isNotEmpty)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      const Text('Mulai dari', style: TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        _fmtRupiah((k.gradeKualitas.last['harga_maks'] as num).toDouble()),
+                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.textPrimary),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          )),
                     const SizedBox(height: 24),
 
                     const _SectionHeader(title: 'Sisa Kas Agen'),
@@ -666,14 +678,22 @@ class _TransaksiRow extends StatelessWidget {
 
 class _SectionHeader extends StatelessWidget {
   final String title;
-  const _SectionHeader({required this.title});
+  final Widget? trailing;
+  const _SectionHeader({required this.title, this.trailing});
 
   @override
-  Widget build(BuildContext context) => Text(title,
-      style: const TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w700,
-          color: AppTheme.textPrimary));
+  Widget build(BuildContext context) {
+    if (trailing != null) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+          trailing!,
+        ],
+      );
+    }
+    return Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimary));
+  }
 }
 
 class _EmptyCard extends StatelessWidget {

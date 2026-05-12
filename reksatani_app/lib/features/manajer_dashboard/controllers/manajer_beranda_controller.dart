@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../models/hive/komoditas_hive_model.dart';
 import '../../../models/hive/transaksi_hive_model.dart';
 import '../../../models/hive/user_hive_model.dart';
 import '../../../services/hive_service.dart';
@@ -15,6 +16,7 @@ class ManajerBerandaController extends ChangeNotifier {
   UserHiveModel get user => _hive.usersBox.get('currentUser')!;
   
   List<UserHiveModel> get daftarAgen => _svc.getDaftarAgen();
+  List<KomoditasHiveModel> get daftarKomoditas => _svc.getDaftarKomoditas();
 
   List<TransaksiHiveModel> get semuaTransaksi =>
       _svc.getRiwayatTransaksi();
