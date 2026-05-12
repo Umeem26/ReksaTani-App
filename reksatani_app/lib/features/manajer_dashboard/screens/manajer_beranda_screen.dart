@@ -110,6 +110,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                             value: '${_ctrl.totalStokKg.toStringAsFixed(0)} kg',
                             icon: Icons.inventory_2_outlined,
                             color: AppTheme.hijauMuda,
+                            onTap: () => ManajerShellState.of(context)?.changeTab(1),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -119,6 +120,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                             value: _fmtRupiah(_ctrl.totalNilai),
                             icon: Icons.payments_outlined,
                             color: const Color(0xFF3B82F6),
+                            onTap: () => ManajerShellState.of(context)?.changeTab(1),
                           ),
                         ),
                       ],
@@ -132,6 +134,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                             value: '${_ctrl.jumlahPending} transaksi',
                             icon: Icons.cloud_off_outlined,
                             color: const Color(0xFFF59E0B),
+                            onTap: () => ManajerShellState.of(context)?.changeTab(1),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -141,6 +144,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                             value: '${_ctrl.jumlahSynced} transaksi',
                             icon: Icons.cloud_done_outlined,
                             color: AppTheme.hijauMuda,
+                            onTap: () => ManajerShellState.of(context)?.changeTab(1),
                           ),
                         ),
                       ],
@@ -219,13 +223,6 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                               lastSync: _ctrl.getWaktuSyncTerakhir(agen.id),
                             ),
                           )),
-                    const SizedBox(height: 24),
-                    const _SectionHeader(title: 'Transaksi Terbaru'),
-                    const SizedBox(height: 12),
-                    if (transaksiTampil.isEmpty)
-                      const _EmptyCard(msg: 'Belum ada transaksi dari agen.')
-                    else
-                      ...transaksiTampil.map((t) => _TransaksiRow(trx: t)),
                   ]),
                 ),
               ),
@@ -383,47 +380,6 @@ class _ManajerHeader extends StatelessWidget {
       ),
     );
   }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label, value;
-  final IconData icon;
-  final Color color;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: AppTheme.cardDecoration(radius: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: color, size: 18),
-            ),
-            const SizedBox(height: 10),
-            Text(value,
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary)),
-            const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
-          ],
-        ),
-      );
 }
 
 class _KasAgenCard extends StatefulWidget {
@@ -628,96 +584,46 @@ class _SmallTrxRow extends StatelessWidget {
   }
 }
 
-class _TransaksiRow extends StatelessWidget {
-  final TransaksiHiveModel trx;
-  const _TransaksiRow({required this.trx});
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isPending = trx.statusSinkronisasi == 'pending';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: AppTheme.cardDecoration(radius: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppTheme.hijauSoft,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Center(child: Text('🌾', style: TextStyle(fontSize: 18))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(trx.namaPetani,
-                    style: const TextStyle(
-                        fontSize: 11, color: AppTheme.textSecond)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                _fmtRupiah(trx.totalBayar),
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: AppTheme.hijauTua),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: AppTheme.cardDecoration(radius: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isPending
-                      ? const Color(0xFFFEF3C7)
-                      : AppTheme.hijauSoft,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isPending
-                            ? const Color(0xFFF59E0B)
-                            : AppTheme.hijauMuda,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isPending ? 'Pending' : 'Synced',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: isPending
-                            ? const Color(0xFF92400E)
-                            : AppTheme.hijauTua,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(height: 12),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.textPrimary)),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w500)),
+          ],
+        ),
       ),
     );
   }

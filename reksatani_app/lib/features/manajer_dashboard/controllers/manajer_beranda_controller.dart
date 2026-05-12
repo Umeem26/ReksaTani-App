@@ -27,6 +27,14 @@ class ManajerBerandaController extends ChangeNotifier {
   double get totalNilai =>
       semuaTransaksi.fold(0, (sum, t) => sum + t.totalBayar);
 
+  Map<String, double> get stokPerKomoditas {
+    final Map<String, double> hasil = {};
+    for (var t in semuaTransaksi) {
+      hasil[t.namaKomoditas] = (hasil[t.namaKomoditas] ?? 0) + t.berat;
+    }
+    return hasil;
+  }
+
   List<TransaksiHiveModel> getTransaksiAgen(String pengepulId) {
     return semuaTransaksi.where((t) => t.pengepulId == pengepulId).take(5).toList();
   }
