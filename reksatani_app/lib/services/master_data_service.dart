@@ -5,6 +5,7 @@ import '../models/hive/petani_hive_model.dart';
 import '../models/hive/komoditas_hive_model.dart';
 import '../models/hive/transaksi_hive_model.dart';
 import '../models/hive/user_hive_model.dart';
+import 'notification_service.dart';
 
 /// SRP: Satu-satunya class yang boleh baca/tulis data master
 /// antara MongoDB dan Hive lokal.
@@ -292,6 +293,8 @@ class MasterDataService {
   }
 
   Future<void> syncAll() async {
+    final pendingCount = _hive.getPendingTransaksi().length;
+    
     await syncPetani();
     await syncKomoditas();
     await syncAgents();
@@ -299,6 +302,27 @@ class MasterDataService {
     await uploadPendingUpdateTransaksi();
     await uploadPendingDeleteTransaksi();
     await syncRiwayatTransaksi();
+    
+    final remainingCount = _hive.getPendingTransaksi().length;
+    final successCount = pendingCount - remainingCount;
+    
+    if (successCount > 0) {
+      NotificationService().addNotification(
+        judul: 'Sinkronisasi Berhasil',
+        pesan: '$successCount transaksi telah berhasil diunggah ke server.',
+        tipe: 'sync',
+      );
+    }
+
+    // Cek saldo
+    final user = _hive.usersBox.get('currentUser');
+    if (user != null && user.role == 'pengepul' && user.sisaUangJalan < 500000) {
+      NotificationService().addNotification(
+        judul: 'Saldo Rendah',
+        pesan: 'Sisa uang jalan Anda tinggal Rp ${user.sisaUangJalan.toInt()}. Segera lapor manajer.',
+        tipe: 'saldo',
+      );
+    }
   }
 
   // ── GETTER untuk UI (dari Hive lokal) ──────────────────────────
