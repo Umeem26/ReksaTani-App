@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../../models/hive/user_hive_model.dart';
 import '../../../../../models/hive/transaksi_hive_model.dart';
+import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../../../../core/routing/app_router.dart';
 import '../controllers/beranda_controller.dart';
 import 'main_shell.dart';
+import 'manajemen_petani_screen.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 
 
@@ -71,6 +73,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
   Widget build(BuildContext context) {
     final harga   = _controller.hargaTerbaru;
     final riwayat = _controller.riwayatTerbaru;
+    final mitra   = _controller.mitraTerbaru;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -104,6 +107,21 @@ class _BerandaScreenState extends State<BerandaScreen> {
                       totalBerat: _controller.totalBerat,
                       pending: _controller.pending,
                     ),
+                    const SizedBox(height: 24),
+
+                    _SectionHeader(
+                      title: 'Daftar Mitra',
+                      actionLabel: 'Lihat Semua',
+                      onAction: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ManajemenPetaniScreen()),
+                      ).then((_) => setState(() {})),
+                    ),
+                    const SizedBox(height: 12),
+                    if (mitra.isEmpty)
+                      const _EmptyCard(msg: 'Belum ada data mitra.\nTambahkan mitra baru.')
+                    else
+                      ...mitra.map((p) => _MitraRow(data: p)),
                     const SizedBox(height: 24),
 
                     // Harga pasar preview
@@ -553,6 +571,48 @@ class _HargaRow extends StatelessWidget {
             'Rp ${_fmtRibu(harga.toInt())}/$satuan',
             style: const TextStyle(
                 fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MitraRow extends StatelessWidget {
+  final PetaniHiveModel data;
+  const _MitraRow({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: AppTheme.cardDecoration(radius: 12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: AppTheme.hijauSoft,
+            child: Text(
+              data.namaPetani.substring(0, 1).toUpperCase(),
+              style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.namaPetani,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  data.desa,
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecond),
+                ),
+              ],
+            ),
           ),
         ],
       ),
