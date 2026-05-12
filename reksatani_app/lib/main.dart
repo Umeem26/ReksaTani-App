@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'services/mongodb_service.dart';
 import 'services/hive_service.dart';
 import 'core/routing/app_router.dart';
+import 'features/auth/screens/splash_screen.dart';
 
 void main() async {
   // Pastikan engine Flutter sudah siap
@@ -48,7 +49,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       // Arahkan ke Gatekeeper
-      home: AppRouter.getGatekeeper(), 
+      home: const SplashScreen(),
     );
   }
 }

@@ -13,6 +13,8 @@ class HiveService {
   static const String _petaniBoxName = 'petaniBox';
   static const String _komoditasBoxName = 'komoditasBox';
   static const String _transaksiBoxName = 'transaksiBox';
+  // 1. Tambahkan nama box khusus pengaturan/sesi
+  static const String _settingsBoxName = 'settingsBox';
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -34,13 +36,32 @@ class HiveService {
     await Hive.openBox<PetaniHiveModel>(_petaniBoxName);
     await Hive.openBox<KomoditasHiveModel>(_komoditasBoxName);
     await Hive.openBox<TransaksiHiveModel>(_transaksiBoxName);
+    // 2. Buka box settings (tanpa tipe khusus agar bisa menampung tipe data dinamis)
+    await Hive.openBox(_settingsBoxName);
   }
 
   Box<UserHiveModel> get usersBox => Hive.box<UserHiveModel>(_usersBoxName);
   Box<PetaniHiveModel> get petaniBox => Hive.box<PetaniHiveModel>(_petaniBoxName);
   Box<KomoditasHiveModel> get komoditasBox => Hive.box<KomoditasHiveModel>(_komoditasBoxName);
   Box<TransaksiHiveModel> get transaksiBox => Hive.box<TransaksiHiveModel>(_transaksiBoxName);
+  // 3. Buat getter untuk settingsBox
+  Box get settingsBox => Hive.box(_settingsBoxName);
   
+  bool isFirstTime() {
+    // Jika 'hasOnboarded' bernilai false atau belum ada (null), berarti ini pertama kali
+    final hasOnboarded = settingsBox.get('hasOnboarded', defaultValue: false);
+    return !hasOnboarded;
+  }
+
+  /// Menandai bahwa user sudah selesai melewati layar Onboarding
+  Future<void> completeOnboarding() async {
+    await settingsBox.put('hasOnboarded', true);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOGIKA TRANSAKSI & DATA
+  // ═══════════════════════════════════════════════════════════════
+
   Future<void> saveTransaksi(TransaksiHiveModel transaksi) async {
     await transaksiBox.put(transaksi.idLokal, transaksi);
   }
