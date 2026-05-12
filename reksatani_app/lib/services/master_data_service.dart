@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import '../services/hive_service.dart';
 import '../services/mongodb_service.dart';
@@ -11,7 +14,31 @@ import '../models/hive/user_hive_model.dart';
 class MasterDataService {
   static final MasterDataService _i = MasterDataService._();
   factory MasterDataService() => _i;
-  MasterDataService._();
+  
+  bool _isAutoSyncInitialized = false;
+  bool _isSyncing = false;
+
+  MasterDataService._() {
+    _initAutoSync();
+  }
+
+  void _initAutoSync() {
+    if (_isAutoSyncInitialized) return;
+    _isAutoSyncInitialized = true;
+
+    Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) async {
+      if (results.contains(ConnectivityResult.mobile) || results.contains(ConnectivityResult.wifi)) {
+        if (_isSyncing) return;
+        
+        final isOnline = await MongoDatabase.ping();
+        if (isOnline) {
+          debugPrint('Internet pulih! Memulai Auto-Sync di latar belakang...');
+          await syncAll();
+          debugPrint('Auto-Sync latar belakang selesai!');
+        }
+      }
+    });
+  }
 
   final _hive = HiveService();
 
@@ -292,13 +319,19 @@ class MasterDataService {
   }
 
   Future<void> syncAll() async {
-    await syncPetani();
-    await syncKomoditas();
-    await syncAgents();
-    await uploadPendingTransaksi();
-    await uploadPendingUpdateTransaksi();
-    await uploadPendingDeleteTransaksi();
-    await syncRiwayatTransaksi();
+    if (_isSyncing) return;
+    _isSyncing = true;
+    try {
+      await syncPetani();
+      await syncKomoditas();
+      await syncAgents();
+      await uploadPendingTransaksi();
+      await uploadPendingUpdateTransaksi();
+      await uploadPendingDeleteTransaksi();
+      await syncRiwayatTransaksi();
+    } finally {
+      _isSyncing = false;
+    }
   }
 
   // ── GETTER untuk UI (dari Hive lokal) ──────────────────────────
