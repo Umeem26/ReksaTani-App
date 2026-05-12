@@ -144,7 +144,17 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                     const SizedBox(height: 24),
                     const _SectionHeader(title: 'Sisa Kas Agen'),
                     const SizedBox(height: 12),
-                    _KasAgenCard(user: _ctrl.user),
+                    if (_ctrl.daftarAgen.isEmpty)
+                      const _EmptyCard(msg: 'Belum ada data agen terdaftar.')
+                    else
+                      ..._ctrl.daftarAgen.map((agen) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _KasAgenCard(
+                              user: agen,
+                              history: _ctrl.getTransaksiAgen(agen.id),
+                              lastSync: _ctrl.getWaktuSyncTerakhir(agen.id),
+                            ),
+                          )),
                     const SizedBox(height: 24),
                     const _SectionHeader(title: 'Transaksi Terbaru'),
                     const SizedBox(height: 12),
@@ -308,57 +318,206 @@ class _StatCard extends StatelessWidget {
       );
 }
 
-class _KasAgenCard extends StatelessWidget {
+class _KasAgenCard extends StatefulWidget {
   final UserHiveModel user;
-  const _KasAgenCard({required this.user});
+  final List<TransaksiHiveModel> history;
+  final DateTime? lastSync;
+  const _KasAgenCard(
+      {required this.user, required this.history, this.lastSync});
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: AppTheme.cardDecoration(radius: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppTheme.hijauSoft,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(child: Text('👤', style: TextStyle(fontSize: 20))),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  State<_KasAgenCard> createState() => _KasAgenCardState();
+}
+
+class _KasAgenCardState extends State<_KasAgenCard> {
+  bool _isExpanded = false;
+
+  bool get _isOnline {
+    if (widget.lastSync == null) return false;
+    final now = DateTime.now().toUtc();
+    final syncTime = widget.lastSync!.toUtc();
+    final diff = now.difference(syncTime);
+    return diff.inMinutes < 60; // Anggap online jika sync dalam 1 jam terakhir
+  }
+
+  String get _timeAgo {
+    if (widget.lastSync == null) return 'Belum pernah sync';
+    final diff = DateTime.now().difference(widget.lastSync!);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m lalu';
+    if (diff.inHours < 24) return '${diff.inHours}j lalu';
+    return '${diff.inDays} hari lalu';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: AppTheme.cardDecoration(radius: 14),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // ── Header (Klik untuk Expand) ──
+          InkWell(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
                 children: [
-                  Text(user.username,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  const Text('Pengepul Lapangan',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecond)),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppTheme.hijauSoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                        child: Text('👤', style: TextStyle(fontSize: 20))),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.user.username,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 14)),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _isOnline ? Colors.green : Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _isOnline ? 'Online' : _timeAgo,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: _isOnline
+                                      ? Colors.green.shade700
+                                      : AppTheme.textSecond),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        _fmtRupiah(widget.user.sisaUangJalan),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            color: AppTheme.hijauTua),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text('Sisa Uang Jalan',
+                          style: TextStyle(
+                              fontSize: 11, color: AppTheme.textSecond)),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    _isExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: AppTheme.textSecond,
+                    size: 20,
+                  ),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _fmtRupiah(user.sisaUangJalan),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      color: AppTheme.hijauTua),
-                ),
-                const SizedBox(height: 2),
-                const Text('Sisa Uang Jalan',
-                    style: TextStyle(fontSize: 11, color: AppTheme.textSecond)),
-              ],
+          ),
+
+          // ── Konten Expand (Riwayat 5 Transaksi) ──
+          if (_isExpanded) ...[
+            const Divider(
+                height: 1, indent: 16, endIndent: 16, color: AppTheme.border),
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: AppTheme.bgPage.withOpacity(0.4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.history_rounded,
+                          size: 14, color: AppTheme.textSecond),
+                      const SizedBox(width: 6),
+                      Text('5 Transaksi Terakhir ${widget.user.username}:',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textSecond)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (widget.history.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Belum ada transaksi dari agen ini.',
+                          style: TextStyle(
+                              fontSize: 11, color: AppTheme.textSecond)),
+                    )
+                  else
+                    ...widget.history.map((t) => _SmallTrxRow(trx: t)),
+                ],
+              ),
             ),
           ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallTrxRow extends StatelessWidget {
+  final TransaksiHiveModel trx;
+  const _SmallTrxRow({required this.trx});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 12),
+                ),
+                Text(
+                  '${trx.namaPetani} · ${_fmtDate(trx.createdAt)}',
+                  style: const TextStyle(
+                      fontSize: 10, color: AppTheme.textSecond),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            _fmtRupiah(trx.totalBayar),
+            style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                color: AppTheme.hijauTua),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmtDate(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
 }
 
 class _TransaksiRow extends StatelessWidget {

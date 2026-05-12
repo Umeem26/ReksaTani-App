@@ -13,6 +13,8 @@ class ManajerBerandaController extends ChangeNotifier {
   bool syncing = false;
 
   UserHiveModel get user => _hive.usersBox.get('currentUser')!;
+  
+  List<UserHiveModel> get daftarAgen => _svc.getDaftarAgen();
 
   List<TransaksiHiveModel> get semuaTransaksi =>
       _svc.getRiwayatTransaksi();
@@ -22,6 +24,22 @@ class ManajerBerandaController extends ChangeNotifier {
 
   double get totalNilai =>
       semuaTransaksi.fold(0, (sum, t) => sum + t.totalBayar);
+
+  List<TransaksiHiveModel> getTransaksiAgen(String pengepulId) {
+    return semuaTransaksi.where((t) => t.pengepulId == pengepulId).take(5).toList();
+  }
+
+  DateTime? getWaktuSyncTerakhir(String pengepulId) {
+    final synced = semuaTransaksi
+        .where((t) => t.pengepulId == pengepulId && t.waktuDisinkron != null)
+        .toList();
+    if (synced.isEmpty) return null;
+    
+    // Sortir berdasarkan waktu sinkronisasi (terbaru ke terlama)
+    synced.sort((a, b) => b.waktuDisinkron!.compareTo(a.waktuDisinkron!));
+    
+    return synced.first.waktuDisinkron;
+  }
 
   int get jumlahPending =>
       semuaTransaksi.where((t) => t.statusSinkronisasi == 'pending').length;
