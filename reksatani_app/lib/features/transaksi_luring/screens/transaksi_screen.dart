@@ -90,6 +90,18 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       return;
     }
 
+    final sisaKasbon = _petaniTerpilih?.sisaHutangKasbon ?? 0;
+    final potongan = sisaKasbon > 0 ? sisaKasbon.clamp(0, _totalBayar).toDouble() : 0.0;
+    final uangTunaiKeluar = _totalBayar - potongan;
+
+    if (_controller.sisaUangJalan < uangTunaiKeluar) {
+      _showSnack(
+        'Saldo Uang Jalan tidak mencukupi! Sisa: Rp ${_fmt(_controller.sisaUangJalan.toInt())}',
+        isError: true,
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
     if (_isEditMode) {
@@ -264,7 +276,21 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                         hint: '0',
                         type: TextInputType.number,
                         formatters: [FilteringTextInputFormatter.digitsOnly],
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (val) {
+                          final maks = _hargaMaksGrade;
+                          final h = double.tryParse(val) ?? 0;
+                          if (maks > 0 && h > maks) {
+                            _hargaCtrl.text = maks.toInt().toString();
+                            _hargaCtrl.selection = TextSelection.fromPosition(
+                              TextPosition(offset: _hargaCtrl.text.length),
+                            );
+                            _showSnack(
+                              'Harga disesuaikan ke batas maksimal grade $_gradeTerpilih (Rp ${_fmt(maks.toInt())})',
+                              isError: true,
+                            );
+                          }
+                          setState(() {});
+                        },
                         validator: (v) => (v?.isEmpty ?? true) ? 'Wajib' : null,
                         isError: _hargaMelebihi,
                       ),

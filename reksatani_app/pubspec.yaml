@@ -43,6 +43,7 @@ dependencies:
   geolocator: ^14.0.2
   flutter_map: ^8.3.0
   latlong2: ^0.9.1
+  lottie: ^3.3.3
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +67,10 @@ flutter:
   assets:
       - .env
       - assets/logo.png
+      - assets/onboard1.json
+      - assets/onboard2.json
+      - assets/onboard3.json
+      - assets/onboard4.json
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

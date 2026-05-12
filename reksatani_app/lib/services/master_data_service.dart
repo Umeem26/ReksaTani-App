@@ -4,6 +4,7 @@ import '../services/mongodb_service.dart';
 import '../models/hive/petani_hive_model.dart';
 import '../models/hive/komoditas_hive_model.dart';
 import '../models/hive/transaksi_hive_model.dart';
+import '../models/hive/user_hive_model.dart';
 
 /// SRP: Satu-satunya class yang boleh baca/tulis data master
 /// antara MongoDB dan Hive lokal.
@@ -66,13 +67,47 @@ class MasterDataService {
     }
   }
 
+  Future<void> syncAgents() async {
+    try {
+      final col = MongoDatabase.getCollection('users');
+      final docs = await col.find({'role': 'pengepul'}).toList();
+
+      // Hapus data agen lama (kecuali currentUser)
+      final keysToDelete = _hive.usersBox.keys
+          .where((k) => k != 'currentUser')
+          .toList();
+      await _hive.usersBox.deleteAll(keysToDelete);
+
+      for (final d in docs) {
+        final m = UserHiveModel(
+          id: d['_id'].toString(),
+          username: d['username'] ?? '',
+          passwordHash: '', 
+          role: d['role'] ?? 'pengepul',
+          sisaUangJalan: (d['sisa_uang_jalan'] ?? 0).toDouble(),
+          waktuDibuat: DateTime.tryParse(d['waktu_dibuat']?.toString() ?? '') ??
+              DateTime.now(),
+        );
+        await _hive.usersBox.put(m.id, m);
+      }
+    } catch (e) {
+      print('Error syncAgents: $e');
+    }
+  }
+
   Future<void> syncRiwayatTransaksi() async {
     try {
       final user = _hive.usersBox.get('currentUser');
       if (user == null) return;
-      
+
       final col = MongoDatabase.getCollection('transaksi');
-      final docs = await col.find({'pengepul_id': user.id}).toList();
+      
+      // Jika manager/admin, ambil semua transaksi. Jika pengepul, ambil miliknya saja.
+      final selector = (user.role == 'manager' || user.role == 'admin')
+          ? where.ne('pengepul_id', '') 
+          : where.eq('pengepul_id', user.id);
+          
+      final docs = await col.find(selector).toList();
 
       for (final d in docs) {
         final idLokal = d['id_lokal']?.toString() ?? d['_id'].toString();
@@ -95,14 +130,26 @@ class MasterDataService {
           latitude: (d['latitude'] ?? 0).toDouble(),
           longitude: (d['longitude'] ?? 0).toDouble(),
           statusSinkronisasi: d['status_sinkronisasi']?.toString() ?? 'synced',
-          createdAt: DateTime.tryParse(d['created_at']?.toString() ?? '') ?? DateTime.now(),
-          waktuDisinkron: DateTime.tryParse(d['waktu_disinkron']?.toString() ?? ''),
+          createdAt: _parseDateTime(d['created_at']),
+          waktuDisinkron: _parseDateTimeNullable(d['waktu_disinkron']),
         );
         await _hive.transaksiBox.put(m.idLokal, m);
       }
     } catch (e) {
       print('Error syncRiwayatTransaksi: $e');
     }
+  }
+
+  DateTime _parseDateTime(dynamic val) {
+    if (val == null) return DateTime.now();
+    if (val is DateTime) return val;
+    return DateTime.tryParse(val.toString()) ?? DateTime.now();
+  }
+
+  DateTime? _parseDateTimeNullable(dynamic val) {
+    if (val == null) return null;
+    if (val is DateTime) return val;
+    return DateTime.tryParse(val.toString());
   }
 
   Future<void> uploadPendingTransaksi() async {
@@ -144,6 +191,18 @@ class MasterDataService {
               );
             } catch (e) {
               print('Error update kasbon petani di MongoDB: $e');
+            }
+          }
+
+          final uangTunaiKeluar = t.totalBayar - t.nominalPotongKasbon;
+          if (uangTunaiKeluar > 0) {
+            try {
+              await MongoDatabase.getCollection('users').updateOne(
+                where.eq('_id', t.pengepulId),
+                modify.inc('sisa_uang_jalan', -uangTunaiKeluar),
+              );
+            } catch (e) {
+              print('Error update saldo kas agen di MongoDB: $e');
             }
           }
         } else {
@@ -199,6 +258,29 @@ class MasterDataService {
         final res = await coll.deleteOne(where.eq('id_lokal', t.idLokal));
 
         if (res.isSuccess) {
+          if (t.nominalPotongKasbon > 0 && t.petaniId.isNotEmpty) {
+            try {
+              await MongoDatabase.getCollection('petani').updateOne(
+                where.eq('_id', t.petaniId),
+                modify.inc('sisa_hutang_kasbon', t.nominalPotongKasbon),
+              );
+            } catch (e) {
+              print('Error refund kasbon petani di MongoDB: $e');
+            }
+          }
+
+          final uangTunaiKeluar = t.totalBayar - t.nominalPotongKasbon;
+          if (uangTunaiKeluar > 0) {
+            try {
+              await MongoDatabase.getCollection('users').updateOne(
+                where.eq('_id', t.pengepulId),
+                modify.inc('sisa_uang_jalan', uangTunaiKeluar),
+              );
+            } catch (e) {
+              print('Error refund uang jalan agen di MongoDB: $e');
+            }
+          }
+
           await _hive.transaksiBox.delete(t.idLokal);
         } else {
           print('Error deleteOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
@@ -212,6 +294,7 @@ class MasterDataService {
   Future<void> syncAll() async {
     await syncPetani();
     await syncKomoditas();
+    await syncAgents();
     await uploadPendingTransaksi();
     await uploadPendingUpdateTransaksi();
     await uploadPendingDeleteTransaksi();
@@ -224,6 +307,9 @@ class MasterDataService {
 
   List<KomoditasHiveModel> getDaftarKomoditas() =>
       _hive.komoditasBox.values.toList();
+
+  List<UserHiveModel> getDaftarAgen() =>
+      _hive.usersBox.values.where((u) => u.role == 'pengepul').toList();
 
   /// Flatten komoditas + grade → list siap tampil
   /// Output: [{namaKomoditas, grade, hargaMaks, unitSatuan, komoditasId}]

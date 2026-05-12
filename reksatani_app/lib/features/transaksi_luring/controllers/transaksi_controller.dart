@@ -8,6 +8,8 @@ import '../../../../../services/hive_service.dart';
 class TransaksiController {
   final _hive = HiveService();
 
+  double get sisaUangJalan => _hive.usersBox.get('currentUser')?.sisaUangJalan ?? 0.0;
+
   List<PetaniHiveModel> get daftarPetani => _hive.petaniBox.values.toList();
   List<KomoditasHiveModel> get daftarKomoditas => _hive.komoditasBox.values.toList();
 
@@ -118,6 +120,12 @@ class TransaksiController {
       petaniTerpilih.sisaHutangKasbon =
           (petaniTerpilih.sisaHutangKasbon - potongan).clamp(0, double.infinity);
       await petaniTerpilih.save();
+    }
+
+    final uangTunaiKeluar = totalBayar - potongan;
+    if (uangTunaiKeluar > 0) {
+      user.sisaUangJalan -= uangTunaiKeluar;
+      await user.save();
     }
 
     // Sedikit delay agar animasi loading di layar terlihat natural
