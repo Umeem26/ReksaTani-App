@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../../../../services/hive_service.dart';
+import '../../../../../services/mongodb_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 
 class ManajemenPetaniScreen extends StatefulWidget {
   const ManajemenPetaniScreen({super.key});
@@ -40,11 +42,36 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
               waktuDibuat: DateTime.now(),
             );
             await _hiveService.petaniBox.put(id, p);
+            
+            try {
+              final col = MongoDatabase.getCollection('petani');
+              await col.insertOne({
+                '_id': id,
+                'nama_petani': nama,
+                'desa': desa,
+                'pengepul_id': p.pengepulId,
+                'sisa_hutang_kasbon': 0.0,
+                'waktu_dibuat': p.waktuDibuat.toIso8601String(),
+              });
+            } catch (e) {
+              print('Gagal push petani baru ke mongo: $e');
+            }
+
           } else {
             // Update
             petani.namaPetani = nama;
             petani.desa = desa;
             await petani.save();
+
+            try {
+              final col = MongoDatabase.getCollection('petani');
+              await col.updateOne(
+                where.eq('_id', petani.id),
+                modify.set('nama_petani', nama).set('desa', desa),
+              );
+            } catch (e) {
+               print('Gagal update petani di mongo: $e');
+            }
           }
           Navigator.pop(context);
         },
@@ -66,7 +93,16 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final idHapus = petani.id;
               await petani.delete();
+              
+              try {
+                final col = MongoDatabase.getCollection('petani');
+                await col.deleteOne(where.eq('_id', idHapus));
+              } catch (e) {
+                print('Gagal hapus petani di mongo: $e');
+              }
+
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
