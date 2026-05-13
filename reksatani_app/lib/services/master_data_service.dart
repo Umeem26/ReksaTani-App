@@ -1,6 +1,8 @@
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
+import 'dart:io';
 import '../services/hive_service.dart';
 import '../services/mongodb_service.dart';
+import '../services/cloudinary_service.dart';
 import '../models/hive/petani_hive_model.dart';
 import '../models/hive/komoditas_hive_model.dart';
 import '../models/hive/transaksi_hive_model.dart';
@@ -15,6 +17,7 @@ class MasterDataService {
   MasterDataService._();
 
   final _hive = HiveService();
+  final _cloudinary = CloudinaryService();
 
   // ── SYNC MongoDB → Hive ────────────────────────────────────────
   Future<void> syncPetani() async {
@@ -162,6 +165,25 @@ class MasterDataService {
     try {
       final col = MongoDatabase.getCollection('transaksi');
       for (final t in pending) {
+        if (t.fotoNota.isNotEmpty && !t.fotoNota.startsWith('http')) {
+          if (await File(t.fotoNota).exists()) {
+            final url = await _cloudinary.uploadImage(t.fotoNota);
+            if (url != null) {
+              t.fotoNota = url;
+              await t.save();
+            }
+          }
+        }
+
+        if (t.fotoFisikBarang.isNotEmpty && !t.fotoFisikBarang.startsWith('http')) {
+          if (await File(t.fotoFisikBarang).exists()) {
+            final url = await _cloudinary.uploadImage(t.fotoFisikBarang);
+            if (url != null) {
+              t.fotoFisikBarang = url;
+              await t.save();
+            }
+          }
+        }
         final res = await col.insertOne({
           'id_lokal': t.idLokal,
           'pengepul_id': t.pengepulId,

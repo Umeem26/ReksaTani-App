@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import '../../../models/hive/transaksi_hive_model.dart';
 import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/komoditas_hive_model.dart';
@@ -36,6 +40,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   PetaniHiveModel? _petaniTerpilih;
   KomoditasHiveModel? _komoditasTerpilih;
   String? _gradeTerpilih;
+  String? _fotoNotaPath;
+  String? _fotoBarangPath;
   bool _saving = false;
 
   List<PetaniHiveModel> get _daftarPetani => _controller.daftarPetani;
@@ -68,6 +74,13 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       if (widget.gradeTebakanPcd != null) {
         _gradeTerpilih = widget.gradeTebakanPcd;
       }
+    }
+    _fotoNotaPath = widget.fotoNotaPath;
+    _fotoBarangPath = widget.fotoBarangPath;
+    
+    if (_isEditMode) {
+      _fotoNotaPath = trx?.fotoNota;
+      _fotoBarangPath = trx?.fotoFisikBarang;
     }
   }
 
@@ -114,8 +127,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         beratText: _beratCtrl.text,
         hargaText: _hargaCtrl.text,
         totalBayar: _totalBayar,
-        fotoNotaPath: widget.fotoNotaPath ?? '',
-        fotoBarangPath: widget.fotoBarangPath ?? '',
+        fotoNotaPath: _fotoNotaPath ?? '',
+        fotoBarangPath: _fotoBarangPath ?? '',
       );
     } else {
       await _controller.simpanTransaksi(
@@ -126,8 +139,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         beratText: _beratCtrl.text,
         hargaText: _hargaCtrl.text,
         totalBayar: _totalBayar,
-        fotoNotaPath: widget.fotoNotaPath ?? '',
-        fotoBarangPath: widget.fotoBarangPath ?? '',
+        fotoNotaPath: _fotoNotaPath ?? '',
+        fotoBarangPath: _fotoBarangPath ?? '',
       );
     }
 
@@ -153,6 +166,24 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _ambilFotoNota() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+    );
+
+    if (image != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = 'nota_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
+      final savedImage = await File(image.path).copy('${appDir.path}/$fileName');
+
+      setState(() {
+        _fotoNotaPath = savedImage.path;
+      });
+    }
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -342,6 +373,56 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                     setState(() {});
                   }),
                 ),
+              ],
+            ),
+            _FormSection(
+              title: 'Lampiran Bukti Fisik',
+              icon: Icons.camera_alt_outlined,
+              children: [
+                _FieldLabel('Foto Nota / Kwitansi'),
+                const SizedBox(height: 4),
+                if (_fotoNotaPath != null && _fotoNotaPath!.isNotEmpty)
+                  Stack(
+                    children: [
+                      Container(
+                        height: 180,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          image: DecorationImage(
+                            image: _fotoNotaPath!.startsWith('http') 
+                                ? NetworkImage(_fotoNotaPath!) as ImageProvider
+                                : FileImage(File(_fotoNotaPath!)),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _fotoNotaPath = null),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle),
+                            child: const Icon(Icons.close, color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  OutlinedButton.icon(
+                    onPressed: _ambilFotoNota,
+                    icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+                    label: const Text('Ambil Foto Nota'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: AppTheme.border),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      foregroundColor: AppTheme.textSecond,
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 14),
