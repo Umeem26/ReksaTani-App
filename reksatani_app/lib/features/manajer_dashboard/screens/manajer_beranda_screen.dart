@@ -398,18 +398,20 @@ class _KasAgenCardState extends State<_KasAgenCard> {
 
   bool get _isOnline {
     if (widget.lastSync == null) return false;
-    final now = DateTime.now().toUtc();
-    final syncTime = widget.lastSync!.toUtc();
-    final diff = now.difference(syncTime);
-    return diff.inMinutes < 60; // Anggap online jika sync dalam 1 jam terakhir
+    final diff = DateTime.now().difference(widget.lastSync!);
+    return diff.inMinutes.abs() < 60;
   }
 
   String get _timeAgo {
-    if (widget.lastSync == null) return 'Belum pernah sync';
+    if (widget.lastSync == null) return 'Belum ada aktivitas';
     final diff = DateTime.now().difference(widget.lastSync!);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m lalu';
-    if (diff.inHours < 24) return '${diff.inHours}j lalu';
-    return '${diff.inDays} hari lalu';
+    
+    if (diff.inSeconds.abs() < 60) return 'Baru saja';
+    if (diff.inMinutes.abs() < 60) return '${diff.inMinutes.abs()}m lalu';
+    if (diff.inHours.abs() < 24) return '${diff.inHours.abs()}j lalu';
+    if (diff.inDays.abs() < 7) return '${diff.inDays.abs()} hari lalu';
+    
+    return '${widget.lastSync!.day}/${widget.lastSync!.month}/${widget.lastSync!.year}';
   }
 
   @override

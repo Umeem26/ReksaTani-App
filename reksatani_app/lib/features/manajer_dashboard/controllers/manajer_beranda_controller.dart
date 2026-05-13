@@ -40,15 +40,21 @@ class ManajerBerandaController extends ChangeNotifier {
   }
 
   DateTime? getWaktuSyncTerakhir(String pengepulId) {
-    final synced = semuaTransaksi
-        .where((t) => t.pengepulId == pengepulId && t.waktuDisinkron != null)
-        .toList();
-    if (synced.isEmpty) return null;
-    
-    // Sortir berdasarkan waktu sinkronisasi (terbaru ke terlama)
-    synced.sort((a, b) => b.waktuDisinkron!.compareTo(a.waktuDisinkron!));
-    
-    return synced.first.waktuDisinkron;
+    final trxAgen = semuaTransaksi.where((t) => t.pengepulId == pengepulId).toList();
+    if (trxAgen.isEmpty) return null;
+
+    DateTime? terbaru;
+    for (var t in trxAgen) {
+      if (terbaru == null || t.createdAt.isAfter(terbaru)) {
+        terbaru = t.createdAt;
+      }
+      if (t.waktuDisinkron != null) {
+        if (terbaru == null || t.waktuDisinkron!.isAfter(terbaru)) {
+          terbaru = t.waktuDisinkron;
+        }
+      }
+    }
+    return terbaru;
   }
 
   int get jumlahPending =>
