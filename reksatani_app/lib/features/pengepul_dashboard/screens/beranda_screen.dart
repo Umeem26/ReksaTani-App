@@ -290,18 +290,6 @@ class _Header extends StatelessWidget {
           // Row: avatar + salam + ikon aksi
           Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFFF59E0B),
-                child: Text(
-                  user.username.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                      color: Color(0xFF019241),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 20),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,12 +312,6 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              _IkonBtn(
-                icon: Icons.sync_rounded,
-                spinning: syncing,
-                onTap: onSync,
-              ),
-              const SizedBox(width: 8),
               ChangeNotifierProvider.value(
                 value: NotificationService(),
                 child: Consumer<NotificationService>(
@@ -372,6 +354,18 @@ class _Header extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 12),
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: const Color(0xFFF59E0B),
+                child: Text(
+                  user.username.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(
+                      color: Color(0xFF019241),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -380,10 +374,18 @@ class _Header extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
+              color: const Color(0xFF015225),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                  color: Colors.white.withOpacity(0.2)),
+                  color: Colors.white.withOpacity(0.15),
+                  width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
