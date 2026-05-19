@@ -3,6 +3,7 @@ import 'manajer_beranda_screen.dart';
 import 'manajer_analitik_screen.dart';
 import 'manajer_peta_screen.dart';
 import 'manajemen_komoditas_screen.dart';
+import 'manajemen_pengepul_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 
 class ManajerShell extends StatefulWidget {
@@ -25,6 +26,7 @@ class ManajerShellState extends State<ManajerShell> {
     ManajerAnalitikScreen(),
     ManajerPetaScreen(),
     ManajemenKomoditasScreen(),
+    ManajemenPengepulScreen(),
   ];
 
   static const _tabs = [
@@ -32,6 +34,7 @@ class ManajerShellState extends State<ManajerShell> {
     _Tab(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Analitik'),
     _Tab(icon: Icons.map_outlined,       activeIcon: Icons.map_rounded,       label: 'Peta'),
     _Tab(icon: Icons.category_outlined,  activeIcon: Icons.category_rounded,  label: 'Komoditas'),
+    _Tab(icon: Icons.people_outline,     activeIcon: Icons.people_rounded,    label: 'Pengepul'),
   ];
 
   @override
@@ -76,7 +79,7 @@ class _BottomNav extends StatelessWidget {
                   onTap: () => onTap(i),
                   behavior: HitTestBehavior.opaque,
                   child: SizedBox(
-                    width: 80,
+                    width: 70,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

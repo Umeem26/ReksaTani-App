@@ -221,7 +221,14 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                           )),
                     const SizedBox(height: 24),
 
-                    const _SectionHeader(title: 'Sisa Kas Agen'),
+                    _SectionHeader(
+                      title: 'Aktivitas & Kas Agen',
+                      trailing: GestureDetector(
+                        onTap: () => ManajerShellState.of(context)?.changeTab(4),
+                        child: const Text('Lihat Semua',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.hijauTua)),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     if (_ctrl.daftarAgen.isEmpty)
                       const _EmptyCard(msg: 'Belum ada data agen terdaftar.')

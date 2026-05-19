@@ -10,7 +10,13 @@ class TransaksiController {
 
   double get sisaUangJalan => _hive.usersBox.get('currentUser')?.sisaUangJalan ?? 0.0;
 
-  List<PetaniHiveModel> get daftarPetani => _hive.petaniBox.values.toList();
+  List<PetaniHiveModel> get daftarPetani {
+    final user = _hive.usersBox.get('currentUser');
+    if (user == null) return [];
+    return _hive.petaniBox.values
+        .where((p) => p.pengepulId == user.id)
+        .toList();
+  }
   List<KomoditasHiveModel> get daftarKomoditas => _hive.komoditasBox.values.toList();
 
   List<Map<String, dynamic>> getDaftarGrade(KomoditasHiveModel? komoditas) {
