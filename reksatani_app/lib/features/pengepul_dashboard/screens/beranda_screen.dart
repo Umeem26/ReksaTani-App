@@ -30,9 +30,19 @@ class _BerandaScreenState extends State<BerandaScreen> {
   Future<void> _refresh() async {
     setState(() => _syncing = true);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Memulai sinkronisasi data...'),
-        duration: Duration(seconds: 1),
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.sync_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 10),
+            Text('Memulai sinkronisasi data...', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+          ],
+        ),
+        backgroundColor: AppTheme.hijauTua,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        duration: const Duration(seconds: 1),
       ),
     );
 
@@ -41,51 +51,20 @@ class _BerandaScreenState extends State<BerandaScreen> {
     if (mounted) {
       setState(() => _syncing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Data berhasil disinkronkan!'),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.cloud_done_rounded, color: Colors.white, size: 18),
+              SizedBox(width: 10),
+              Text('Data berhasil disinkronkan!', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+            ],
+          ),
           backgroundColor: AppTheme.hijauMuda,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          duration: const Duration(seconds: 2),
         ),
-      );
-    }
-  }
-
-  Future<void> _logout() async {
-    final konfirmasi = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Keluar Aplikasi',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-        content: const Text(
-            'Kamu yakin ingin logout?\nData luring tetap tersimpan di perangkat.',
-            style: TextStyle(fontSize: 13, height: 1.5)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal',
-                style: TextStyle(color: AppTheme.textSecond)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.merah,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Logout',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-
-    if (konfirmasi == true && mounted) {
-      await _controller.logout();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => AppRouter.getGatekeeper()),
       );
     }
   }
@@ -109,16 +88,15 @@ class _BerandaScreenState extends State<BerandaScreen> {
               // ── Header ────────────────────────────────────────
               SliverToBoxAdapter(
                 child: _Header(
-                  user: _controller.user,
+                  controller: _controller,
                   syncing: _syncing,
                   onSync: _refresh,
-                  onLogout: _logout,
                 ),
               ),
 
               // ── Body ──────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 150),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
 
@@ -130,6 +108,85 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     ),
                     const SizedBox(height: 24),
 
+                    // Riwayat transaksi preview (Dipindah ke atas)
+                    _SectionHeader(
+                      title: 'Transaksi Terakhir',
+                      actionLabel: 'Lihat Semua',
+                      onAction: () =>
+                          MainShellState.of(context)?.changeTab(3),
+                    ),
+                    const SizedBox(height: 12),
+                    if (riwayat.isEmpty)
+                      const _EmptyCard(
+                          msg:
+                              'Belum ada transaksi.\nTekan tombol kamera untuk mulai.')
+                    else
+                      ...riwayat.map((t) => _TransaksiRow(
+                        trx: t,
+                        onEdit: t.statusSinkronisasi != 'pending_delete'
+                            ? () async {
+                                final changed = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => TransaksiScreen(editTrx: t),
+                                  ),
+                                );
+                                if (changed == true && mounted) setState(() {});
+                              }
+                            : null,
+                        onDelete: t.statusSinkronisasi != 'pending_delete'
+                            ? () async {
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16)),
+                                    title: const Text('Hapus Transaksi',
+                                        style: TextStyle(fontWeight: FontWeight.w700)),
+                                    content: const Text(
+                                        'Transaksi ini akan dihapus dari perangkat. Lanjutkan?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, false),
+                                        child: const Text('Batal'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () => Navigator.pop(context, true),
+                                        style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppTheme.merah,
+                                            foregroundColor: Colors.white,
+                                            elevation: 0),
+                                        child: const Text('Hapus'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (ok == true && mounted) {
+                                  await _controller.hapusTransaksi(t);
+                                  setState(() {});
+                                }
+                              }
+                            : null,
+                      )),
+                    const SizedBox(height: 24),
+
+                    // Harga pasar preview
+                    _SectionHeader(
+                      title: 'Harga Pasar Terkini',
+                      actionLabel: 'Lihat Semua',
+                      onAction: () =>
+                          MainShellState.of(context)?.changeTab(1),
+                    ),
+                    const SizedBox(height: 12),
+                    if (harga.isEmpty)
+                      const _EmptyCard(
+                          msg:
+                              'Belum ada data harga.\nTarik ke bawah untuk sync dari server.')
+                    else
+                      ...harga.map((h) => _HargaRow(data: h)),
+                    const SizedBox(height: 24),
+
+                    // Daftar Mitra
                     _SectionHeader(
                       title: 'Daftar Mitra',
                       actionLabel: 'Lihat Semua',
@@ -195,84 +252,6 @@ class _BerandaScreenState extends State<BerandaScreen> {
                           );
                         },
                       )),
-                    const SizedBox(height: 24),
-
-                    // Harga pasar preview
-                    _SectionHeader(
-                      title: 'Harga Pasar Terkini',
-                      actionLabel: 'Lihat Semua',
-                      onAction: () =>
-                          MainShellState.of(context)?.changeTab(1),
-                    ),
-                    const SizedBox(height: 12),
-                    if (harga.isEmpty)
-                      _EmptyCard(
-                          msg:
-                              'Belum ada data harga.\nTarik ke bawah untuk sync dari server.')
-                    else
-                      ...harga.map((h) => _HargaRow(data: h)),
-                    const SizedBox(height: 24),
-
-                    // Riwayat transaksi preview
-                    _SectionHeader(
-                      title: 'Transaksi Terakhir',
-                      actionLabel: 'Lihat Semua',
-                      onAction: () =>
-                          MainShellState.of(context)?.changeTab(3),
-                    ),
-                    const SizedBox(height: 12),
-                    if (riwayat.isEmpty)
-                      _EmptyCard(
-                          msg:
-                              'Belum ada transaksi.\nTekan tombol kamera untuk mulai.')
-                    else
-                      ...riwayat.map((t) => _TransaksiRow(
-                        trx: t,
-                        onEdit: t.statusSinkronisasi != 'pending_delete'
-                            ? () async {
-                                final changed = await Navigator.push<bool>(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TransaksiScreen(editTrx: t),
-                                  ),
-                                );
-                                if (changed == true && mounted) setState(() {});
-                              }
-                            : null,
-                        onDelete: t.statusSinkronisasi != 'pending_delete'
-                            ? () async {
-                                final ok = await showDialog<bool>(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16)),
-                                    title: const Text('Hapus Transaksi',
-                                        style: TextStyle(fontWeight: FontWeight.w700)),
-                                    content: const Text(
-                                        'Transaksi ini akan dihapus dari perangkat. Lanjutkan?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context, false),
-                                        child: const Text('Batal'),
-                                      ),
-                                      ElevatedButton(
-                                        onPressed: () => Navigator.pop(context, true),
-                                        style: ElevatedButton.styleFrom(
-                                            backgroundColor: AppTheme.merah,
-                                            foregroundColor: Colors.white,
-                                            elevation: 0),
-                                        child: const Text('Hapus'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (ok == true && mounted) {
-                                  await _controller.hapusTransaksi(t);
-                                  setState(() {});
-                                }
-                              }
-                            : null,
-                      )),
                   ]),
                 ),
               ),
@@ -286,19 +265,18 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
 // ── Header bergradien ────────────────────────────────────────────
 class _Header extends StatelessWidget {
-  final UserHiveModel user;
+  final BerandaController controller;
   final bool syncing;
   final VoidCallback onSync;
-  final VoidCallback onLogout;
 
   const _Header(
-      {required this.user,
+      {required this.controller,
       required this.syncing,
-      required this.onSync,
-      required this.onLogout});
+      required this.onSync});
 
   @override
   Widget build(BuildContext context) {
+    final user = controller.user;
     final top = MediaQuery.of(context).padding.top;
     return Container(
       decoration: const BoxDecoration(
@@ -312,44 +290,28 @@ class _Header extends StatelessWidget {
           // Row: avatar + salam + ikon aksi
           Row(
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFFF59E0B),
-                child: Text(
-                  user.username.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                      color: Color(0xFF019241),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const Text(
+                      'Selamat siang,',
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
                     Text(
-                      'Selamat Siang, ${user.username} 👋',
+                      user.username,
                       style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700),
-                    ),
-                    Text(
-                      user.role,
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.65),
-                          fontSize: 12),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800),
                     ),
                   ],
                 ),
               ),
-              _IkonBtn(
-                icon: Icons.sync_rounded,
-                spinning: syncing,
-                onTap: onSync,
-              ),
-              const SizedBox(width: 8),
               ChangeNotifierProvider.value(
                 value: NotificationService(),
                 child: Consumer<NotificationService>(
@@ -368,20 +330,20 @@ class _Header extends StatelessWidget {
                           right: -2,
                           top: -2,
                           child: Container(
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.all(6),
                             decoration: const BoxDecoration(
                               color: AppTheme.merah,
                               shape: BoxShape.circle,
                             ),
                             constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
+                              minWidth: 20,
+                              minHeight: 20,
                             ),
                             child: Text(
                               '${svc.unreadCount}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 9,
+                                fontSize: 11,
                                 fontWeight: FontWeight.bold,
                               ),
                               textAlign: TextAlign.center,
@@ -392,57 +354,112 @@ class _Header extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              _IkonBtn(
-                icon: Icons.logout_rounded,
-                onTap: onLogout,
+              const SizedBox(width: 12),
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: const Color(0xFFF59E0B),
+                child: Text(
+                  user.username.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(
+                      color: Color(0xFF019241),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
 
-          // Saldo card
+          // Saldo / Balancing card
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: const Color(0xFF015225),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                  color: Colors.white.withOpacity(0.15)),
+                  color: Colors.white.withOpacity(0.15),
+                  width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        const Icon(
-                          Icons.account_balance_wallet_outlined,
-                          color: Colors.white54,
-                          size: 13,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Saldo Uang Jalan',
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 12),
-                        ),
-                      ]),
-                      const SizedBox(height: 6),
-                      Text(
-                        _fmtRupiah(user.sisaUangJalan),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [
+                      const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: Colors.white,
+                        size: 18,
                       ),
-                    ],
+                      const SizedBox(width: 8),
+                      Text(
+                        'Saldo Uang Jalan Saat Ini',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14),
+                      ),
+                    ]),
+                    // Badge status sinkronisasi kas
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: controller.pending > 0 ? const Color(0xFFF59E0B) : AppTheme.hijauMuda,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        controller.pending > 0 ? '${controller.pending} Pending Sync' : 'Kas Tersinkron',
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _fmtRupiah(user.sisaUangJalan),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
                   ),
+                ),
+                const SizedBox(height: 16),
+                Container(height: 1, color: Colors.white.withOpacity(0.15)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Pengeluaran Hari Ini', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Text(_fmtRupiah(controller.totalPengeluaranHariIni), style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                    Container(width: 1, height: 30, color: Colors.white.withOpacity(0.15)),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Potongan Kasbon', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Text(_fmtRupiah(controller.totalPotonganKasbonHariIni), style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -467,18 +484,18 @@ class _IkonBtn extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(10),
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: spinning
               ? const SizedBox(
-                  width: 18,
-                  height: 18,
+                  width: 24,
+                  height: 24,
                   child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2))
-              : Icon(icon, color: Colors.white, size: 18),
+                      color: Colors.white, strokeWidth: 2.5))
+              : Icon(icon, color: Colors.white, size: 24),
         ),
       );
 }
@@ -550,13 +567,13 @@ class _StatCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(value,
                   style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.w800,
                       color: AppTheme.textPrimary)),
               const SizedBox(height: 2),
               Text(label,
                   style: const TextStyle(
-                      fontSize: 10, color: AppTheme.textSecond)),
+                      fontSize: 12, color: AppTheme.textSecond)),
             ],
           ),
         ),
@@ -578,7 +595,7 @@ class _SectionHeader extends StatelessWidget {
         children: [
           Text(title,
               style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.textPrimary)),
           if (actionLabel != null)
@@ -586,7 +603,7 @@ class _SectionHeader extends StatelessWidget {
               onTap: onAction,
               child: Text(actionLabel!,
                   style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.hijauMuda)),
             ),
@@ -636,7 +653,7 @@ class _HargaRow extends StatelessWidget {
               children: [
                 Text(komoditas,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14)),
+                        fontWeight: FontWeight.w700, fontSize: 16)),
                 const SizedBox(height: 3),
                 // Grade badge
                 Container(
@@ -650,7 +667,7 @@ class _HargaRow extends StatelessWidget {
                   ),
                   child: Text('Grade $grade',
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: gradeColor)),
                 ),
@@ -660,7 +677,7 @@ class _HargaRow extends StatelessWidget {
           Text(
             'Rp ${_fmtRibu(harga.toInt())}/$satuan',
             style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 13),
+                fontWeight: FontWeight.w700, fontSize: 15),
           ),
         ],
       ),
@@ -701,41 +718,35 @@ class _MitraRow extends StatelessWidget {
               children: [
                 Text(
                   data.namaPetani,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   data.desa,
-                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecond),
+                  style: const TextStyle(fontSize: 13, color: AppTheme.textSecond),
                 ),
               ],
             ),
           ),
           if (onEdit != null || onDelete != null) ...[
             const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              onSelected: (val) {
-                if (val == 'edit') onEdit?.call();
-                if (val == 'delete') onDelete?.call();
-              },
-              icon: const Icon(Icons.more_vert, size: 20, color: AppTheme.textSecond),
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(children: [
-                    Icon(Icons.edit_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Edit'),
-                  ]),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(children: [
-                    Icon(Icons.delete_outline, size: 18, color: AppTheme.merah),
-                    SizedBox(width: 8),
-                    Text('Hapus', style: TextStyle(color: AppTheme.merah)),
-                  ]),
-                ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onEdit != null)
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, color: AppTheme.textSecond, size: 22),
+                    tooltip: 'Edit',
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline, color: AppTheme.merah, size: 22),
+                    tooltip: 'Hapus',
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
               ],
             ),
           ],
@@ -802,14 +813,14 @@ class _TransaksiRow extends StatelessWidget {
                 Text(
                   '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13),
+                      fontWeight: FontWeight.w700, fontSize: 15),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   trx.namaPetani,
                   style: const TextStyle(
-                      fontSize: 11, color: AppTheme.textSecond),
+                      fontSize: 13, color: AppTheme.textSecond),
                 ),
               ],
             ),
@@ -822,7 +833,7 @@ class _TransaksiRow extends StatelessWidget {
                 _fmtRupiah(trx.totalBayar),
                 style: const TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                    fontSize: 15,
                     color: AppTheme.hijauTua),
               ),
               const SizedBox(height: 4),
@@ -848,7 +859,7 @@ class _TransaksiRow extends StatelessWidget {
                     Text(
                       badgeText,
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: badgeTextCol,
                       ),
@@ -861,32 +872,23 @@ class _TransaksiRow extends StatelessWidget {
           // Tombol aksi muncul jika onEdit/onDelete diberikan
           if (onEdit != null || onDelete != null) ...[
             const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              onSelected: (val) {
-                if (val == 'edit') onEdit?.call();
-                if (val == 'delete') onDelete?.call();
-              },
-              icon: const Icon(Icons.more_vert,
-                  size: 20, color: AppTheme.textSecond),
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(children: [
-                    Icon(Icons.edit_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Edit'),
-                  ]),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(children: [
-                    Icon(Icons.delete_outline,
-                        size: 18, color: AppTheme.merah),
-                    SizedBox(width: 8),
-                    Text('Hapus',
-                        style: TextStyle(color: AppTheme.merah)),
-                  ]),
-                ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onEdit != null)
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, color: AppTheme.textSecond, size: 22),
+                    tooltip: 'Edit',
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline, color: AppTheme.merah, size: 22),
+                    tooltip: 'Hapus',
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
               ],
             ),
           ],

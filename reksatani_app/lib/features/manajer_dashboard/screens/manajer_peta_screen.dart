@@ -239,7 +239,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
 
             // ─── TOMBOL BIDIK PEMUSATAN PETA (RECENTER) ───
             Positioned(
-              bottom: _selectedTrx != null ? 220 : 32, // Menghindar secara dinamis dari kartu detail
+              bottom: _selectedTrx != null ? 350 : 150, // Menghindar secara dinamis dari kartu detail
               right: 20,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
@@ -269,7 +269,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
             // ─── KARTU DETAIL LOKASI (GLASSMORPHISM POP-UP) ───
             if (_selectedTrx != null)
               Positioned(
-                bottom: 24,
+                bottom: 150,
                 left: 20,
                 right: 20,
                 child: Container(
