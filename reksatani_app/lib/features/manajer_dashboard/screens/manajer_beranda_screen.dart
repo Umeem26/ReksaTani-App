@@ -99,7 +99,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     Row(

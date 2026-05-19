@@ -37,6 +37,7 @@ class ManajerShellState extends State<ManajerShell> {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: AppTheme.bgPage,
+        extendBody: true,
         body: IndexedStack(index: _index, children: _screens),
         bottomNavigationBar: _BottomNav(
           currentIndex: _index,
@@ -51,20 +52,19 @@ class _BottomNav extends StatelessWidget {
   final List<_Tab> tabs;
   final ValueChanged<int> onTap;
 
-  const _BottomNav(
-      {required this.currentIndex, required this.tabs, required this.onTap});
+  const _BottomNav({required this.currentIndex, required this.tabs, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppTheme.border)),
-          boxShadow: [
-            BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -2))
-          ],
-        ),
-        child: SafeArea(
-          top: false,
+  Widget build(BuildContext context) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(color: Color(0x12000000), blurRadius: 20, offset: Offset(0, 4)),
+            ],
+          ),
           child: SizedBox(
             height: 62,
             child: Row(
@@ -86,12 +86,11 @@ class _BottomNav extends StatelessWidget {
                           size: 22,
                         ),
                         const SizedBox(height: 3),
-                        Text(tab.label,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
-                              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                            )),
+                        Text(tab.label, style: TextStyle(
+                          fontSize: 10,
+                          color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
+                          fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                        )),
                       ],
                     ),
                   ),

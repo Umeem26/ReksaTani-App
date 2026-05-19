@@ -28,7 +28,7 @@ class _PasarScreenState extends State<PasarScreen> {
             child: list.isEmpty
                 ? _buildEmpty()
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, i) => _HargaCard(item: list[i]),
@@ -203,7 +203,7 @@ class _HargaCard extends StatelessWidget {
                 Text(
                   item.namaKomoditas,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 15),
+                      fontWeight: FontWeight.w700, fontSize: 17),
                 ),
                 const SizedBox(height: 5),
                 Container(
@@ -218,7 +218,7 @@ class _HargaCard extends StatelessWidget {
                   child: Text(
                     'Grade ${item.grade}',
                     style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: gradeColor),
                   ),
@@ -231,15 +231,15 @@ class _HargaCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
+               Text(
                 'Rp ${_fmt(item.hargaMaks.toInt())}',
                 style: const TextStyle(
-                    fontWeight: FontWeight.w800, fontSize: 16),
+                    fontWeight: FontWeight.w800, fontSize: 18),
               ),
               Text(
                 '/${item.unitSatuan}',
                 style: const TextStyle(
-                    fontSize: 11, color: AppTheme.textSecond),
+                    fontSize: 13, color: AppTheme.textSecond),
               ),
               const SizedBox(height: 5),
               Container(
@@ -252,7 +252,7 @@ class _HargaCard extends StatelessWidget {
                 child: const Text(
                   'Harga Maks',
                   style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.hijauTua),
                 ),

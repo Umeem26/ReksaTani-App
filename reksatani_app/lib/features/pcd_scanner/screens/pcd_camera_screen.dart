@@ -37,10 +37,18 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal mengakses modul kamera perangkat.'),
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 10),
+                Expanded(child: Text('Gagal mengakses modul kamera perangkat.', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white))),
+              ],
+            ),
             backgroundColor: AppTheme.merah,
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           ),
         );
       }
@@ -172,12 +180,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> {
 
             // --- AREA TOMBOL BAWAH (STICKY BOTTOM) ---
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: AppTheme.border)),
-                boxShadow: [BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -4))],
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
               child: SafeArea(
                 top: false,
                 child: SizedBox(

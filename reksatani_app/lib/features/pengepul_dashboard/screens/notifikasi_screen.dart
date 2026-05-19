@@ -24,7 +24,7 @@ class NotifikasiScreen extends StatelessWidget {
               builder: (context, svc, _) => TextButton(
                 onPressed: () => svc.markAllAsRead(),
                 child: const Text('Baca Semua', 
-                  style: TextStyle(color: AppTheme.hijauMuda, fontWeight: FontWeight.w600)),
+                  style: TextStyle(color: AppTheme.hijauMuda, fontWeight: FontWeight.w600, fontSize: 16)),
               ),
             ),
           ],
@@ -42,7 +42,7 @@ class NotifikasiScreen extends StatelessWidget {
                       size: 64, color: AppTheme.textSecond.withOpacity(0.3)),
                     const SizedBox(height: 16),
                     const Text('Belum ada notifikasi', 
-                      style: TextStyle(color: AppTheme.textSecond)),
+                      style: TextStyle(color: AppTheme.textSecond, fontSize: 16)),
                   ],
                 ),
               );
@@ -110,7 +110,7 @@ class _NotifTile extends StatelessWidget {
                 color: color.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(iconData, color: color, size: 20),
+              child: Icon(iconData, color: color, size: 22),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -123,17 +123,17 @@ class _NotifTile extends StatelessWidget {
                       Text(notif.judul, 
                         style: TextStyle(
                           fontWeight: notif.isRead ? FontWeight.w600 : FontWeight.w800,
-                          fontSize: 14,
+                          fontSize: 16,
                           color: AppTheme.textPrimary,
                         )),
                       Text(_fmtWaktu(notif.waktu), 
-                        style: const TextStyle(fontSize: 10, color: AppTheme.textSecond)),
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecond)),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(notif.pesan, 
                     style: TextStyle(
-                      fontSize: 12, 
+                      fontSize: 14, 
                       color: AppTheme.textSecond,
                       height: 1.4,
                       fontWeight: notif.isRead ? FontWeight.normal : FontWeight.w500,

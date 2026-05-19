@@ -103,10 +103,13 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
           style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showFormDialog(),
-        backgroundColor: AppTheme.hijauTua,
-        child: const Icon(Icons.add, color: Colors.white),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 96.0),
+        child: FloatingActionButton(
+          onPressed: () => _showFormDialog(),
+          backgroundColor: AppTheme.hijauTua,
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.hijauMuda))
@@ -116,7 +119,7 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
                   onRefresh: _fetchData,
                   color: AppTheme.hijauMuda,
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                     itemCount: _komoditasList.length,
                     itemBuilder: (context, index) {
                       final item = _komoditasList[index];

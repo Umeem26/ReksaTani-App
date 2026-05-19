@@ -33,8 +33,17 @@ class _ProfilScreenState extends State<ProfilScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$count data transaksi tersinkronisasi berhasil dibersihkan.'),
+          content: Row(
+            children: [
+              const Icon(Icons.cleaning_services_rounded, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(child: Text('$count data transaksi tersinkronisasi berhasil dibersihkan.', style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white))),
+            ],
+          ),
           backgroundColor: AppTheme.hijauTua,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         ),
       );
     }
@@ -80,7 +89,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
         bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: AppTheme.border)),
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
         children: [
           // ── Header User ──
           Center(
@@ -100,7 +109,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(12)),
-                  child: const Text('Pengepul Lapangan', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.hijauTua)),
+                  child: const Text('Pengepul Lapangan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.hijauTua)),
                 ),
               ],
             ),
@@ -117,7 +126,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 title: 'Saldo Uang Jalan',
                 trailingWidget: Text(
                   _fmtRupiah(user.sisaUangJalan),
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.hijauTua),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.hijauTua),
                 ),
                 showBorder: false,
               ),
@@ -145,7 +154,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           const SizedBox(width: 6),
                           Text(
                             _ctrl.isConnected ? 'Terhubung' : 'Terputus',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _ctrl.isConnected ? AppTheme.hijauTua : AppTheme.merah),
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _ctrl.isConnected ? AppTheme.hijauTua : AppTheme.merah),
                           ),
                         ],
                       ),
@@ -186,7 +195,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
             child: ElevatedButton.icon(
               onPressed: _handleLogout,
               icon: const Icon(Icons.logout_rounded, size: 20),
-              label: const Text('Keluar dari Akun', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              label: const Text('Keluar dari Akun', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.merah.withOpacity(0.1),
                 foregroundColor: AppTheme.merah,
@@ -197,7 +206,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
           ),
           const SizedBox(height: 24),
           
-          const Center(child: Text('ReksaTani v1.0.0 (Offline-first Edition)', style: TextStyle(fontSize: 11, color: AppTheme.textHint))),
+          const Center(child: Text('ReksaTani v1.0.0 (Offline-first Edition)', style: TextStyle(fontSize: 13, color: AppTheme.textHint))),
         ],
       ),
     );
@@ -222,7 +231,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(left: 4, bottom: 8),
-        child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textSecond)),
+        child: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textSecond)),
       );
 }
 
@@ -277,10 +286,10 @@ class _ListTileItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
-                      Text(subtitle!, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+                      Text(subtitle!, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond)),
                     ]
                   ],
                 ),

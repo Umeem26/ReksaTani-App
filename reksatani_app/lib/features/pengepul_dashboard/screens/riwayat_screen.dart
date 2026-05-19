@@ -59,11 +59,11 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
               onChanged: _ctrl.setSearchQuery,
               decoration: InputDecoration(
                 hintText: 'Cari nama petani atau komoditas...',
-                hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 13),
-                prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecond, size: 20),
+                hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 15),
+                prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecond, size: 22),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, color: AppTheme.textSecond, size: 18),
+                        icon: const Icon(Icons.clear_rounded, color: AppTheme.textSecond, size: 20),
                         onPressed: () {
                           _searchCtrl.clear();
                           _ctrl.setSearchQuery('');
@@ -92,7 +92,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                   child: FilterChip(
                     label: Text(status),
                     labelStyle: TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                       color: isActive ? Colors.white : AppTheme.textSecond,
                     ),
@@ -118,7 +118,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               children: [
-                Text('${list.length} transaksi ditemukan', style: const TextStyle(fontSize: 12, color: AppTheme.textSecond)),
+                Text('${list.length} transaksi ditemukan', style: const TextStyle(fontSize: 14, color: AppTheme.textSecond)),
               ],
             ),
           ),
@@ -128,7 +128,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
             child: list.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                     itemCount: list.length,
                     itemBuilder: (_, i) {
                       final t = list[i];
@@ -182,9 +182,9 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
           children: [
             Icon(Icons.receipt_long_outlined, size: 56, color: AppTheme.textHint),
             const SizedBox(height: 12),
-            const Text('Tidak ada riwayat transaksi.', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
+            const Text('Tidak ada riwayat transaksi.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
             const SizedBox(height: 4),
-            const Text('Coba ubah kata kunci pencarian atau filter status di atas.', style: TextStyle(fontSize: 12, color: AppTheme.textSecond)),
+            const Text('Coba ubah kata kunci pencarian atau filter status di atas.', style: TextStyle(fontSize: 14, color: AppTheme.textSecond)),
           ],
         ),
       );
@@ -242,14 +242,14 @@ class _TransaksiCard extends StatelessWidget {
               children: [
                 Text(
                   '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(trx.namaPetani, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+                Text(trx.namaPetani, style: const TextStyle(fontSize: 14, color: AppTheme.textSecond)),
                 if (trx.nominalPotongKasbon > 0) ...[
                   const SizedBox(height: 4),
-                  Text('Potong Kasbon: Rp ${_fmtRibu(trx.nominalPotongKasbon.toInt())}', style: const TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
+                  Text('Potong Kasbon: Rp ${_fmtRibu(trx.nominalPotongKasbon.toInt())}', style: const TextStyle(fontSize: 13, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
                 ]
               ],
             ),
@@ -258,7 +258,7 @@ class _TransaksiCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(_fmtRupiah(trx.totalBayar), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.hijauTua)),
+              Text(_fmtRupiah(trx.totalBayar), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppTheme.hijauTua)),
               const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -268,7 +268,7 @@ class _TransaksiCard extends StatelessWidget {
                   children: [
                     Container(width: 5, height: 5, decoration: BoxDecoration(shape: BoxShape.circle, color: badgeDot)),
                     const SizedBox(width: 4),
-                    Text(badgeText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: badgeTextCol)),
+                    Text(badgeText, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: badgeTextCol)),
                   ],
                 ),
               ),
@@ -276,15 +276,23 @@ class _TransaksiCard extends StatelessWidget {
           ),
           if (onEdit != null || onDelete != null) ...[
             const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              onSelected: (val) {
-                if (val == 'edit') onEdit?.call();
-                if (val == 'delete') onDelete?.call();
-              },
-              icon: const Icon(Icons.more_vert, size: 20, color: AppTheme.textSecond),
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit')])),
-                const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppTheme.merah), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: AppTheme.merah))])),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onEdit != null)
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, color: AppTheme.textSecond, size: 22),
+                    tooltip: 'Edit',
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline, color: AppTheme.merah, size: 22),
+                    tooltip: 'Hapus',
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
               ],
             ),
           ],

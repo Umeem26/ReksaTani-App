@@ -46,8 +46,8 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
         ),
         backgroundColor: AppTheme.hijauTua,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -114,7 +114,7 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
 
               // ── Body ───────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
 
