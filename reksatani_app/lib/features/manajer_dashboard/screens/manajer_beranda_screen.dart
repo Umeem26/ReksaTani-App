@@ -9,6 +9,7 @@ import '../controllers/manajer_beranda_controller.dart';
 import 'manajer_shell.dart';
 import '../../../../services/notification_service.dart';
 import '../../pengepul_dashboard/screens/notifikasi_screen.dart';
+import '../../../../services/master_data_service.dart';
 import 'package:provider/provider.dart';
 
 class BerandaManajerScreen extends StatefulWidget {
@@ -25,13 +26,23 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
   void initState() {
     super.initState();
     _ctrl = ManajerBerandaController();
+    
+    // Tambahkan listener agar beranda manajer "dengar" kalau sync selesai
+    MasterDataService().addListener(_onDataMasterChanged);
+    
     _ctrl.addListener(() {
       if (mounted) setState(() {});
     });
   }
 
+  void _onDataMasterChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    // Wajib hapus listener saat layar ditutup
+    MasterDataService().removeListener(_onDataMasterChanged);
     _ctrl.dispose();
     super.dispose();
   }

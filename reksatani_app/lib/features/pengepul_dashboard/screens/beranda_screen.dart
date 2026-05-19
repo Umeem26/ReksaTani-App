@@ -12,6 +12,7 @@ import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../../../services/mongodb_service.dart';
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import '../../../../services/notification_service.dart';
+import '../../../../services/master_data_service.dart';
 import 'notifikasi_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -26,6 +27,25 @@ class BerandaScreen extends StatefulWidget {
 class _BerandaScreenState extends State<BerandaScreen> {
   final _controller = BerandaController();
   bool _syncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tambahkan listener agar beranda "dengar" kalau sync selesai
+    MasterDataService().addListener(_onDataMasterChanged);
+  }
+
+  void _onDataMasterChanged() {
+    // Fungsi ini dipanggil otomatis setiap MasterDataService selesai syncAll()
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    // Wajib hapus listener saat layar ditutup agar tidak memory leak
+    MasterDataService().removeListener(_onDataMasterChanged);
+    super.dispose();
+  }
 
   Future<void> _refresh() async {
     setState(() => _syncing = true);

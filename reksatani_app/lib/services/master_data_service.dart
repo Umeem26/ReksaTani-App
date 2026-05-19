@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // Wajib untuk ChangeNotifier
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import 'dart:io';
 import '../services/hive_service.dart';
@@ -10,8 +11,8 @@ import '../models/hive/user_hive_model.dart';
 import 'notification_service.dart';
 
 /// SRP: Satu-satunya class yang boleh baca/tulis data master
-/// antara MongoDB dan Hive lokal.
-class MasterDataService {
+/// antara MongoDB dan Hive lokal. Sekarang bersifat REACTIVE (ChangeNotifier).
+class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends ChangeNotifier
   static final MasterDataService _i = MasterDataService._();
   factory MasterDataService() => _i;
   MasterDataService._();
@@ -19,11 +20,13 @@ class MasterDataService {
   final _hive = HiveService();
   final _cloudinary = CloudinaryService();
 
+  // Flag penanda agar tidak terjadi tumpang tindih saat sync
+  bool isSyncing = false;
+
   // ── SYNC MongoDB → Hive ────────────────────────────────────────
   Future<void> syncPetani() async {
     try {
-      final docs =
-          await MongoDatabase.getCollection('petani').find().toList();
+      final docs = await MongoDatabase.getCollection('petani').find().toList();
       await _hive.petaniBox.clear();
       for (final d in docs) {
         final m = PetaniHiveModel(
@@ -32,8 +35,7 @@ class MasterDataService {
           desa: d['desa'] ?? '',
           pengepulId: d['pengepul_id']?.toString() ?? '',
           sisaHutangKasbon: (d['sisa_hutang_kasbon'] ?? 0).toDouble(),
-          waktuDibuat: DateTime.tryParse(d['waktu_dibuat']?.toString() ?? '') ??
-              DateTime.now(),
+          waktuDibuat: DateTime.tryParse(d['waktu_dibuat']?.toString() ?? '') ?? DateTime.now(),
         );
         await _hive.petaniBox.put(m.id, m);
       }
@@ -42,11 +44,9 @@ class MasterDataService {
 
   Future<void> syncKomoditas() async {
     try {
-      final docs =
-          await MongoDatabase.getCollection('komoditas').find().toList();
+      final docs = await MongoDatabase.getCollection('komoditas').find().toList();
       await _hive.komoditasBox.clear();
       for (final d in docs) {
-        // gradeKualitas di MongoDB: [{grade: 'A', harga_maks: 6500}, ...]
         final grades = (d['grade_kualitas'] as List<dynamic>? ?? [])
             .map<Map<String, dynamic>>((g) => {
                   'grade': g['grade'] ?? '',
@@ -60,9 +60,7 @@ class MasterDataService {
           unitSatuan: d['unit_satuan'] ?? 'kg',
           gradeKualitas: grades,
           diperbaruiOleh: d['diperbarui_oleh']?.toString() ?? '',
-          waktuPembaruan:
-              DateTime.tryParse(d['waktu_pembaruan_harga']?.toString() ?? '') ??
-                  DateTime.now(),
+          waktuPembaruan: DateTime.tryParse(d['waktu_pembaruan_harga']?.toString() ?? '') ?? DateTime.now(),
         );
         await _hive.komoditasBox.put(m.id, m);
       }
@@ -76,10 +74,7 @@ class MasterDataService {
       final col = MongoDatabase.getCollection('users');
       final docs = await col.find({'role': 'pengepul'}).toList();
 
-      // Hapus data agen lama (kecuali currentUser)
-      final keysToDelete = _hive.usersBox.keys
-          .where((k) => k != 'currentUser')
-          .toList();
+      final keysToDelete = _hive.usersBox.keys.where((k) => k != 'currentUser').toList();
       await _hive.usersBox.deleteAll(keysToDelete);
 
       for (final d in docs) {
@@ -89,8 +84,7 @@ class MasterDataService {
           passwordHash: '', 
           role: d['role'] ?? 'pengepul',
           sisaUangJalan: (d['sisa_uang_jalan'] ?? 0).toDouble(),
-          waktuDibuat: DateTime.tryParse(d['waktu_dibuat']?.toString() ?? '') ??
-              DateTime.now(),
+          waktuDibuat: DateTime.tryParse(d['waktu_dibuat']?.toString() ?? '') ?? DateTime.now(),
         );
         await _hive.usersBox.put(m.id, m);
       }
@@ -107,7 +101,6 @@ class MasterDataService {
 
       final col = MongoDatabase.getCollection('transaksi');
       
-      // Jika manager/admin, ambil semua transaksi. Jika pengepul, ambil miliknya saja.
       final selector = (user.role == 'manager' || user.role == 'manajer' || user.role == 'admin')
           ? where.ne('pengepul_id', '') 
           : where.eq('pengepul_id', user.id);
@@ -231,8 +224,6 @@ class MasterDataService {
               print('Error update saldo kas agen di MongoDB: $e');
             }
           }
-        } else {
-          print('Error insertOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
         }
       }
     } catch (e) {
@@ -265,8 +256,6 @@ class MasterDataService {
           t.statusSinkronisasi = 'synced';
           t.waktuDisinkron = DateTime.now();
           await t.save();
-        } else {
-          print('Error updateOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
         }
       }
     } catch (e) {
@@ -290,9 +279,7 @@ class MasterDataService {
                 where.eq('_id', t.petaniId),
                 modify.inc('sisa_hutang_kasbon', t.nominalPotongKasbon),
               );
-            } catch (e) {
-              print('Error refund kasbon petani di MongoDB: $e');
-            }
+            } catch (e) {}
           }
 
           final uangTunaiKeluar = t.totalBayar - t.nominalPotongKasbon;
@@ -302,14 +289,10 @@ class MasterDataService {
                 where.eq('_id', t.pengepulId),
                 modify.inc('sisa_uang_jalan', uangTunaiKeluar),
               );
-            } catch (e) {
-              print('Error refund uang jalan agen di MongoDB: $e');
-            }
+            } catch (e) {}
           }
 
           await _hive.transaksiBox.delete(t.idLokal);
-        } else {
-          print('Error deleteOne dari MongoDB: ${res.errmsg ?? "Unknown Error"}');
         }
       }
     } catch (e) {
@@ -317,76 +300,68 @@ class MasterDataService {
     }
   }
 
+  // ─── JANTUNG AUTO-SYNC (DIPERBARUI) ───
   Future<void> syncAll() async {
-    final pendingCount = _hive.getPendingTransaksi().length;
-    
-    await syncPetani();
-    await syncKomoditas();
-    await syncAgents();
-    await uploadPendingTransaksi();
-    await uploadPendingUpdateTransaksi();
-    await uploadPendingDeleteTransaksi();
-    final trxBaru = await syncRiwayatTransaksi();
-    
-    final remainingCount = _hive.getPendingTransaksi().length;
-    final successCount = pendingCount - remainingCount;
-    
-    final user = _hive.usersBox.get('currentUser');
-    final isPengepul = user?.role == 'pengepul';
-    final isManajer = user?.role == 'manager' || user?.role == 'manajer' || user?.role == 'admin';
+    if (isSyncing) return; // Cegah double trigger
+    isSyncing = true;
+    notifyListeners(); // Beritahu UI kalau loading spinner bisa dimunculkan
 
-    if (user != null && user.role == 'pengepul') {
-      if (successCount > 0) {
-        NotificationService().addNotification(
-          judul: 'Sinkronisasi Berhasil',
-          pesan: '$successCount transaksi telah berhasil diunggah ke server.',
-          tipe: 'sync',
-        );
+    try {
+      // PERBAIKAN ERROR 2: Gunakan fungsi ping() bawaanmu yang sudah dilengkapi auto-reconnect!
+      final isDbReady = await MongoDatabase.ping();
+      if (!isDbReady) {
+         // Jika ping gagal (tidak ada internet), batalkan proses sync secara halus
+         return; 
       }
-      if (user.sisaUangJalan < 500000) {
-        NotificationService().addNotification(
-          judul: 'Saldo Rendah',
-          pesan: 'Sisa uang jalan Anda tinggal Rp ${user.sisaUangJalan.toInt()}. Segera lapor manajer.',
-          tipe: 'saldo',
-        );
-      }
-    }
 
-    if (isManajer) {
-      if (trxBaru > 0) {
+      final pendingCount = _hive.getPendingTransaksi().length;
+      
+      await syncPetani();
+      await syncKomoditas();
+      await syncAgents();
+      await uploadPendingTransaksi();
+      await uploadPendingUpdateTransaksi();
+      await uploadPendingDeleteTransaksi();
+      final trxBaru = await syncRiwayatTransaksi();
+      
+      final remainingCount = _hive.getPendingTransaksi().length;
+      final successCount = pendingCount - remainingCount;
+      
+      final user = _hive.usersBox.get('currentUser');
+      final isPengepul = user?.role == 'pengepul';
+      final isManajer = user?.role == 'manager' || user?.role == 'manajer' || user?.role == 'admin';
+
+      if (isPengepul) {
+        if (successCount > 0) {
+          NotificationService().addNotification(
+            judul: 'Sinkronisasi Otomatis Berhasil',
+            pesan: '$successCount transaksi telah berhasil diunggah ke server.',
+            tipe: 'sync',
+          );
+        }
+      }
+
+      if (isManajer && trxBaru > 0) {
         NotificationService().addNotification(
           judul: 'Transaksi Baru',
           pesan: 'Ada $trxBaru transaksi baru masuk dari agen lapangan.',
           tipe: 'info',
         );
       }
-      
-      final agenRendah = _hive.usersBox.values
-          .where((u) => u.role == 'pengepul' && u.sisaUangJalan < 500000)
-          .toList();
-      if (agenRendah.isNotEmpty) {
-        final namaAgen = agenRendah.map((e) => e.username).join(', ');
-        NotificationService().addNotification(
-          judul: 'Peringatan Saldo Agen',
-          pesan: '${agenRendah.length} agen butuh top-up uang jalan: $namaAgen',
-          tipe: 'saldo',
-        );
-      }
+
+    } catch (e) {
+      print('Auto-Sync failed: $e');
+    } finally {
+      isSyncing = false;
+      notifyListeners(); // 🔴 PENTING: BERITAHU SELURUH UI UNTUK RENDER ULANG!
     }
   }
 
   // ── GETTER untuk UI (dari Hive lokal) ──────────────────────────
-  List<PetaniHiveModel> getDaftarPetani() =>
-      _hive.petaniBox.values.toList();
+  List<PetaniHiveModel> getDaftarPetani() => _hive.petaniBox.values.toList();
+  List<KomoditasHiveModel> getDaftarKomoditas() => _hive.komoditasBox.values.toList();
+  List<UserHiveModel> getDaftarAgen() => _hive.usersBox.values.where((u) => u.role == 'pengepul').toList();
 
-  List<KomoditasHiveModel> getDaftarKomoditas() =>
-      _hive.komoditasBox.values.toList();
-
-  List<UserHiveModel> getDaftarAgen() =>
-      _hive.usersBox.values.where((u) => u.role == 'pengepul').toList();
-
-  /// Flatten komoditas + grade → list siap tampil
-  /// Output: [{namaKomoditas, grade, hargaMaks, unitSatuan, komoditasId}]
   List<Map<String, dynamic>> getDaftarHargaDisplay() =>
       _hive.komoditasBox.values.expand((k) {
         return k.gradeKualitas.map((g) => {
