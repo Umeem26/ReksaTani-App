@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../controllers/pasar_controller.dart';
 import '../../../shared/widgets/app_theme.dart';
+import 'tren_harga_screen.dart';
 
 class PasarScreen extends StatefulWidget {
   const PasarScreen({super.key});
@@ -54,9 +55,18 @@ class _PasarScreenState extends State<PasarScreen> {
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Icon(Icons.trending_up_rounded,
-                color: AppTheme.hijauMuda, size: 22),
+            padding: const EdgeInsets.only(right: 8),
+            // ─── PERUBAHAN MENJADI ICONBUTTON AKTIF ───
+            child: IconButton(
+              icon: const Icon(Icons.trending_up_rounded, color: AppTheme.hijauMuda, size: 24),
+              tooltip: 'Lihat Analitik Tren',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TrenHargaScreen()),
+                );
+              },
+            ),
           ),
         ],
       );

@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../../models/hive/user_hive_model.dart';
 import '../../../../../models/hive/transaksi_hive_model.dart';
+import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../../../../core/routing/app_router.dart';
 import '../controllers/beranda_controller.dart';
 import 'main_shell.dart';
+import 'manajemen_petani_screen.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
+import '../../../../../services/mongodb_service.dart';
+import 'package:mongo_dart/mongo_dart.dart' show modify, where;
+import '../../../../services/notification_service.dart';
+import 'notifikasi_screen.dart';
+import 'package:provider/provider.dart';
 
 
 class BerandaScreen extends StatefulWidget {
@@ -22,8 +29,24 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   Future<void> _refresh() async {
     setState(() => _syncing = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Memulai sinkronisasi data...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
     await _controller.syncData();
-    if (mounted) setState(() => _syncing = false);
+
+    if (mounted) {
+      setState(() => _syncing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data berhasil disinkronkan!'),
+          backgroundColor: AppTheme.hijauMuda,
+        ),
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -71,6 +94,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
   Widget build(BuildContext context) {
     final harga   = _controller.hargaTerbaru;
     final riwayat = _controller.riwayatTerbaru;
+    final mitra   = _controller.mitraTerbaru;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -104,6 +128,73 @@ class _BerandaScreenState extends State<BerandaScreen> {
                       totalBerat: _controller.totalBerat,
                       pending: _controller.pending,
                     ),
+                    const SizedBox(height: 24),
+
+                    _SectionHeader(
+                      title: 'Daftar Mitra',
+                      actionLabel: 'Lihat Semua',
+                      onAction: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ManajemenPetaniScreen()),
+                      ).then((_) => setState(() {})),
+                    ),
+                    const SizedBox(height: 12),
+                    if (mitra.isEmpty)
+                      const _EmptyCard(msg: 'Belum ada data mitra.\nTambahkan mitra baru.')
+                    else
+                      ...mitra.map((p) => _MitraRow(
+                        data: p,
+                        onEdit: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.white,
+                            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+                            builder: (_) => PetaniFormSheet(
+                              petaniLama: p,
+                              onSimpan: (nama, desa) async {
+                                p.namaPetani = nama;
+                                p.desa = desa;
+                                await p.save();
+                                try {
+                                  final col = MongoDatabase.getCollection('petani');
+                                  await col.updateOne(where.eq('_id', p.id), modify.set('nama_petani', nama).set('desa', desa));
+                                } catch (_) {}
+                                if (mounted) { Navigator.pop(context); setState((){}); }
+                              },
+                            ),
+                          );
+                        },
+                        onDelete: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              title: const Text('Hapus Petani', style: TextStyle(fontWeight: FontWeight.bold)),
+                              content: Text('Yakin ingin menghapus ${p.namaPetani}?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond)),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    final idHapus = p.id;
+                                    await p.delete();
+                                    try {
+                                      final col = MongoDatabase.getCollection('petani');
+                                      await col.deleteOne(where.eq('_id', idHapus));
+                                    } catch (_) {}
+                                    if (mounted) { Navigator.pop(context); setState((){}); }
+                                  },
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
+                                  child: const Text('Hapus'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      )),
                     const SizedBox(height: 24),
 
                     // Harga pasar preview
@@ -259,9 +350,47 @@ class _Header extends StatelessWidget {
                 onTap: onSync,
               ),
               const SizedBox(width: 8),
-              _IkonBtn(
-                icon: Icons.notifications_outlined,
-                onTap: () {},
+              ChangeNotifierProvider.value(
+                value: NotificationService(),
+                child: Consumer<NotificationService>(
+                  builder: (context, svc, _) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _IkonBtn(
+                        icon: Icons.notifications_outlined,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const NotifikasiScreen()),
+                        ),
+                      ),
+                      if (svc.unreadCount > 0)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppTheme.merah,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              '${svc.unreadCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
               _IkonBtn(
@@ -313,27 +442,6 @@ class _Header extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {},
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(children: [
-                      Icon(Icons.add,
-                          size: 14, color: Color(0xFF019241)),
-                      SizedBox(width: 4),
-                      Text('Top-up',
-                          style: TextStyle(
-                              color: Color(0xFF019241),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700)),
-                    ]),
                   ),
                 ),
               ],
@@ -554,6 +662,83 @@ class _HargaRow extends StatelessWidget {
             style: const TextStyle(
                 fontWeight: FontWeight.w700, fontSize: 13),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MitraRow extends StatelessWidget {
+  final PetaniHiveModel data;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  
+  const _MitraRow({
+    required this.data,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: AppTheme.cardDecoration(radius: 12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: AppTheme.hijauSoft,
+            child: Text(
+              data.namaPetani.substring(0, 1).toUpperCase(),
+              style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.namaPetani,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  data.desa,
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecond),
+                ),
+              ],
+            ),
+          ),
+          if (onEdit != null || onDelete != null) ...[
+            const SizedBox(width: 4),
+            PopupMenuButton<String>(
+              onSelected: (val) {
+                if (val == 'edit') onEdit?.call();
+                if (val == 'delete') onDelete?.call();
+              },
+              icon: const Icon(Icons.more_vert, size: 20, color: AppTheme.textSecond),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Edit'),
+                  ]),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(children: [
+                    Icon(Icons.delete_outline, size: 18, color: AppTheme.merah),
+                    SizedBox(width: 8),
+                    Text('Hapus', style: TextStyle(color: AppTheme.merah)),
+                  ]),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
