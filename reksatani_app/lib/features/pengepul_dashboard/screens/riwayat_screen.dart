@@ -128,7 +128,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
             child: list.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 150),
                     itemCount: list.length,
                     itemBuilder: (_, i) {
                       final t = list[i];

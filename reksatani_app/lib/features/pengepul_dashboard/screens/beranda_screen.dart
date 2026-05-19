@@ -96,7 +96,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
               // ── Body ──────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 150),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
 

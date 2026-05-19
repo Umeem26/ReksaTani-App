@@ -28,7 +28,7 @@ class _PasarScreenState extends State<PasarScreen> {
             child: list.isEmpty
                 ? _buildEmpty()
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 150),
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, i) => _HargaCard(item: list[i]),

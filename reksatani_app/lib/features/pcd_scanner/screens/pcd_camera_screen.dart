@@ -121,103 +121,91 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> {
             ),
           ],
         ),
-        body: Column(
-          children: [
-            // --- KONTEN SCROLLABLE ---
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header Informasi
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(10)),
-                          child: const Icon(Icons.document_scanner_rounded, color: AppTheme.hijauMuda, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'Langkah 1: Bukti Autentik',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
-                          ),
-                        ),
-                      ],
+        body: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 150),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Informasi
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.document_scanner_rounded, color: AppTheme.hijauMuda, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Langkah 1: Bukti Autentik',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Ambil foto nota timbangan dan fisik komoditas secara jelas. Data visual ini akan digunakan untuk persiapan validasi mutu otomatis (PCD).',
-                      style: TextStyle(fontSize: 12.5, color: AppTheme.textSecond, height: 1.5),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // KOTAK 1: FOTO NOTA
-                    _buildPhotoCard(
-                      title: 'Foto Nota / Bukti Timbang',
-                      subtitle: 'Pastikan angka berat terbaca jelas',
-                      icon: Icons.receipt_long_rounded,
-                      imagePath: _fotoNotaPath,
-                      onTap: () => _ambilFoto(true),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // KOTAK 2: FOTO BARANG
-                    _buildPhotoCard(
-                      title: 'Foto Fisik Komoditas',
-                      subtitle: 'Pencahayaan terang & fokus pada tekstur',
-                      icon: Icons.grass_rounded,
-                      imagePath: _fotoBarangPath,
-                      onTap: () => _ambilFoto(false),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
+              const SizedBox(height: 8),
+              const Text(
+                'Ambil foto nota timbangan dan fisik komoditas secara jelas. Data visual ini akan digunakan untuk persiapan validasi mutu otomatis (PCD).',
+                style: TextStyle(fontSize: 12.5, color: AppTheme.textSecond, height: 1.5),
+              ),
+              const SizedBox(height: 24),
 
-            // --- AREA TOMBOL BAWAH (STICKY BOTTOM) ---
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: isLengkap ? _lanjutKeForm : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.hijauMuda,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppTheme.border.withOpacity(0.6),
-                      elevation: isLengkap ? 4 : 0,
-                      shadowColor: AppTheme.hijauMuda.withOpacity(0.4),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          isLengkap ? 'Lanjut Isi Data Transaksi' : 'Lengkapi Foto Terlebih Dahulu',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800, 
-                            fontSize: 14, 
-                            color: isLengkap ? Colors.white : AppTheme.textHint,
-                          ),
+              // KOTAK 1: FOTO NOTA
+              _buildPhotoCard(
+                title: 'Foto Nota / Bukti Timbang',
+                subtitle: 'Pastikan angka berat terbaca jelas',
+                icon: Icons.receipt_long_rounded,
+                imagePath: _fotoNotaPath,
+                onTap: () => _ambilFoto(true),
+              ),
+              const SizedBox(height: 20),
+
+              // KOTAK 2: FOTO BARANG
+              _buildPhotoCard(
+                title: 'Foto Fisik Komoditas',
+                subtitle: 'Pencahayaan terang & fokus pada tekstur',
+                icon: Icons.grass_rounded,
+                imagePath: _fotoBarangPath,
+                onTap: () => _ambilFoto(false),
+              ),
+              const SizedBox(height: 32),
+
+              // Tombol Lanjut
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: isLengkap ? _lanjutKeForm : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.hijauMuda,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppTheme.border.withOpacity(0.6),
+                    elevation: isLengkap ? 4 : 0,
+                    shadowColor: AppTheme.hijauMuda.withOpacity(0.4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        isLengkap ? 'Lanjut Isi Data Transaksi' : 'Lengkapi Foto Terlebih Dahulu',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800, 
+                          fontSize: 14, 
+                          color: isLengkap ? Colors.white : AppTheme.textHint,
                         ),
-                        if (isLengkap) ...[
-                          const SizedBox(width: 8),
-                          const Icon(Icons.arrow_forward_rounded, size: 18),
-                        ]
-                      ],
-                    ),
+                      ),
+                      if (isLengkap) ...[
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_rounded, size: 18),
+                      ]
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

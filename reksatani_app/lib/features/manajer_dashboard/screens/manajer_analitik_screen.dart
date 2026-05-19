@@ -114,7 +114,7 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
 
               // ── Body ───────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 150),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
 

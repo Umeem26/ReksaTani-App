@@ -89,7 +89,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
         bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: AppTheme.border)),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 120),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 150),
         children: [
           // ── Header User ──
           Center(

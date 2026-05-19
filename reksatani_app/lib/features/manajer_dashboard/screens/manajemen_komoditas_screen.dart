@@ -104,7 +104,7 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
         ),
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 96.0),
+        padding: const EdgeInsets.only(bottom: 126.0),
         child: FloatingActionButton(
           onPressed: () => _showFormDialog(),
           backgroundColor: AppTheme.hijauTua,
@@ -119,7 +119,7 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
                   onRefresh: _fetchData,
                   color: AppTheme.hijauMuda,
                   child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 150),
                     itemCount: _komoditasList.length,
                     itemBuilder: (context, index) {
                       final item = _komoditasList[index];
