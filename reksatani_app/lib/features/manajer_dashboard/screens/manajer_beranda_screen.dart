@@ -342,18 +342,20 @@ class _ManajerHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              GestureDetector(
+              _IkonBtn(
+                icon: Icons.logout_rounded,
                 onTap: onLogout,
-                child: CircleAvatar(
-                  radius: 22,
-                  backgroundColor: const Color(0xFFF59E0B),
-                  child: Text(
-                    user.username.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(
-                        color: Color(0xFF019241),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18),
-                  ),
+              ),
+              const SizedBox(width: 12),
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFFF59E0B),
+                child: Text(
+                  user.username.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(
+                      color: Color(0xFF019241),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18),
                 ),
               ),
             ],
