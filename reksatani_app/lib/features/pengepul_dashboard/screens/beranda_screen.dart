@@ -131,14 +131,12 @@ class _BerandaScreenState extends State<BerandaScreen> {
               SliverToBoxAdapter(
                 child: _Header(
                   controller: _controller,
-                  syncing: _syncing,
-                  onSync: _refresh,
                 ),
               ),
 
               // ── Body ──────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 130),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 160),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
 
@@ -307,13 +305,9 @@ class _BerandaScreenState extends State<BerandaScreen> {
 // ── Header bergradien ────────────────────────────────────────────
 class _Header extends StatelessWidget {
   final BerandaController controller;
-  final bool syncing;
-  final VoidCallback onSync;
 
   const _Header({
     required this.controller,
-    required this.syncing,
-    required this.onSync,
   });
 
   @override
@@ -329,7 +323,7 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row: greeting + sync + notification + avatar
+          // Row: greeting + notification + avatar
           Row(
             children: [
               Expanded(
@@ -354,12 +348,6 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              _IkonBtn(
-                icon: Icons.sync_rounded,
-                spinning: syncing,
-                onTap: onSync,
-              ),
-              const SizedBox(width: 8),
               ChangeNotifierProvider.value(
                 value: NotificationService(),
                 child: Consumer<NotificationService>(
@@ -368,6 +356,7 @@ class _Header extends StatelessWidget {
                     children: [
                       _IkonBtn(
                         icon: Icons.notifications_outlined,
+                        iconSize: 26,
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const NotifikasiScreen()),
@@ -384,14 +373,14 @@ class _Header extends StatelessWidget {
                               shape: BoxShape.circle,
                             ),
                             constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
+                              minWidth: 18,
+                              minHeight: 18,
                             ),
                             child: Text(
                               '${svc.unreadCount}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 9,
+                                fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
                               textAlign: TextAlign.center,
@@ -522,28 +511,30 @@ class _IkonBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool spinning;
+  final double iconSize;
 
   const _IkonBtn(
       {required this.icon,
       required this.onTap,
-      this.spinning = false});
+      this.spinning = false,
+      this.iconSize = 22});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: spinning
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
+              ? SizedBox(
+                  width: iconSize,
+                  height: iconSize,
+                  child: const CircularProgressIndicator(
                       color: Colors.white, strokeWidth: 2))
-              : Icon(icon, color: Colors.white, size: 18),
+              : Icon(icon, color: Colors.white, size: iconSize),
         ),
       );
 }

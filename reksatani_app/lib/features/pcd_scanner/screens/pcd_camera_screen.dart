@@ -75,7 +75,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
         });
       }
     } catch (e) {
-      debugPrint("Error inisialisasi kamera: $e");
+      // Gagal inisialisasi kamera
     }
   }
 
@@ -124,7 +124,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
         _processAiAndNavigate();
       }
     } catch (e) {
-      debugPrint("Error mengambil gambar: $e");
+      // Gagal mengambil gambar
     }
   }
 
@@ -281,7 +281,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
 
           // 4. Tombol Kontrol Bawah
           Positioned(
-            bottom: 120,
+            bottom: 150,
             left: 0, right: 0,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
