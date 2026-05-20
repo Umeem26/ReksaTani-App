@@ -60,7 +60,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
               onChanged: _ctrl.setSearchQuery,
               decoration: InputDecoration(
                 hintText: 'Cari nama petani atau komoditas...',
-                hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 13),
+                hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 15),
                 prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecond, size: 20),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
@@ -78,6 +78,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.border)),
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.hijauMuda, width: 1.5)),
               ),
+              style: const TextStyle(fontSize: 16),
             ),
           ),
 
@@ -93,7 +94,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                   child: FilterChip(
                     label: Text(status),
                     labelStyle: TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                       color: isActive ? Colors.white : AppTheme.textSecond,
                     ),
@@ -119,7 +120,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               children: [
-                Text('${list.length} transaksi ditemukan', style: const TextStyle(fontSize: 12, color: AppTheme.textSecond)),
+                Text('${list.length} transaksi ditemukan', style: const TextStyle(fontSize: 14, color: AppTheme.textSecond)),
               ],
             ),
           ),
@@ -129,7 +130,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
             child: list.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 130),
                     itemCount: list.length,
                     itemBuilder: (_, i) {
                       final t = list[i];
@@ -248,14 +249,14 @@ class _TransaksiCard extends StatelessWidget {
                 children: [
                   Text(
                     '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
-                  Text(trx.namaPetani, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+                  const SizedBox(height: 3),
+                  Text(trx.namaPetani, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond)),
                   if (trx.nominalPotongKasbon > 0) ...[
-                    const SizedBox(height: 4),
-                    Text('Potong Kasbon: Rp ${_fmtRibu(trx.nominalPotongKasbon.toInt())}', style: const TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 5),
+                    Text('Potong Kasbon: Rp ${_fmtRibu(trx.nominalPotongKasbon.toInt())}', style: const TextStyle(fontSize: 13, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
                   ]
                 ],
               ),
@@ -264,8 +265,8 @@ class _TransaksiCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(_fmtRupiah(trx.totalBayar), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.hijauTua)),
-                const SizedBox(height: 4),
+                Text(_fmtRupiah(trx.totalBayar), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppTheme.hijauTua)),
+                const SizedBox(height: 5),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(20)),
@@ -274,7 +275,7 @@ class _TransaksiCard extends StatelessWidget {
                     children: [
                       Container(width: 5, height: 5, decoration: BoxDecoration(shape: BoxShape.circle, color: badgeDot)),
                       const SizedBox(width: 4),
-                      Text(badgeText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: badgeTextCol)),
+                      Text(badgeText, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: badgeTextCol)),
                     ],
                   ),
                 ),

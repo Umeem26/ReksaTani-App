@@ -6,6 +6,7 @@ import 'package:camera/camera.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
+import '../../pengepul_dashboard/screens/main_shell.dart';
 
 class PcdCameraScreen extends StatefulWidget {
   const PcdCameraScreen({super.key});
@@ -280,7 +281,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
 
           // 4. Tombol Kontrol Bawah
           Positioned(
-            bottom: 40,
+            bottom: 120,
             left: 0, right: 0,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -289,7 +290,13 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
                 children: [
                   // Tombol Keluar / Batal
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      } else {
+                        MainShellState.of(context)?.changeTab(0);
+                      }
+                    },
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
@@ -354,7 +361,7 @@ class ScannerOverlayPainter extends CustomPainter {
     final double cutoutHeight = isModeNota ? size.height * 0.52 : size.width * 0.82; 
     
     final double left = (size.width - cutoutWidth) / 2;
-    final double top = (size.height - cutoutHeight) / 2.1;
+    final double top = (size.height - cutoutHeight) / 2.4;
 
     final RRect cutoutRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(left, top, cutoutWidth, cutoutHeight),

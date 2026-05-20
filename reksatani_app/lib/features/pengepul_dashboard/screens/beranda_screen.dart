@@ -130,16 +130,15 @@ class _BerandaScreenState extends State<BerandaScreen> {
               // ── Header ────────────────────────────────────────
               SliverToBoxAdapter(
                 child: _Header(
-                  user: _controller.user,
+                  controller: _controller,
                   syncing: _syncing,
                   onSync: _refresh,
-                  onLogout: _logout,
                 ),
               ),
 
               // ── Body ──────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 130),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
 
@@ -307,19 +306,19 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
 // ── Header bergradien ────────────────────────────────────────────
 class _Header extends StatelessWidget {
-  final UserHiveModel user;
+  final BerandaController controller;
   final bool syncing;
   final VoidCallback onSync;
-  final VoidCallback onLogout;
 
-  const _Header(
-      {required this.user,
-      required this.syncing,
-      required this.onSync,
-      required this.onLogout});
+  const _Header({
+    required this.controller,
+    required this.syncing,
+    required this.onSync,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final user = controller.user;
     final top = MediaQuery.of(context).padding.top;
     return Container(
       decoration: const BoxDecoration(
@@ -330,37 +329,27 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row: avatar + salam + ikon aksi
+          // Row: greeting + sync + notification + avatar
           Row(
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFFF59E0B),
-                child: Text(
-                  user.username.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                      color: Color(0xFF019241),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Selamat Siang, ${user.username} 👋',
+                      'Selamat siang,',
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.username,
                       style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700),
-                    ),
-                    Text(
-                      user.role,
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.65),
-                          fontSize: 12),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800),
                     ),
                   ],
                 ),
@@ -413,57 +402,112 @@ class _Header extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              _IkonBtn(
-                icon: Icons.logout_rounded,
-                onTap: onLogout,
+              const SizedBox(width: 12),
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: const Color(0xFFF59E0B),
+                child: Text(
+                  user.username.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(
+                      color: Color(0xFF019241),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
 
-          // Saldo card
+          // Saldo / Balancing card
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: const Color(0xFF015225),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                  color: Colors.white.withOpacity(0.15)),
+                  color: Colors.white.withOpacity(0.15),
+                  width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        const Icon(
-                          Icons.account_balance_wallet_outlined,
-                          color: Colors.white54,
-                          size: 13,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Saldo Uang Jalan',
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 12),
-                        ),
-                      ]),
-                      const SizedBox(height: 6),
-                      Text(
-                        _fmtRupiah(user.sisaUangJalan),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [
+                      const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: Colors.white,
+                        size: 20,
                       ),
-                    ],
+                      const SizedBox(width: 8),
+                      Text(
+                        'Saldo Uang Jalan Saat Ini',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15),
+                      ),
+                    ]),
+                    // Badge status sinkronisasi kas
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: controller.pending > 0 ? const Color(0xFFF59E0B) : AppTheme.hijauMuda,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        controller.pending > 0 ? '${controller.pending} Pending' : 'Tersinkron',
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _fmtRupiah(user.sisaUangJalan),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
                   ),
+                ),
+                const SizedBox(height: 16),
+                Container(height: 1, color: Colors.white.withOpacity(0.15)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Pengeluaran Hari Ini', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
+                          const SizedBox(height: 4),
+                          Text(_fmtRupiah(controller.totalPengeluaranHariIni), style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                    Container(width: 1, height: 30, color: Colors.white.withOpacity(0.15)),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Potongan Kasbon', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
+                          const SizedBox(height: 4),
+                          Text(_fmtRupiah(controller.totalPotonganKasbonHariIni), style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -566,18 +610,18 @@ class _StatCard extends StatelessWidget {
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 16),
+                child: Icon(icon, color: color, size: 18),
               ),
               const SizedBox(height: 10),
               Text(value,
                   style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: AppTheme.textPrimary)),
               const SizedBox(height: 2),
               Text(label,
                   style: const TextStyle(
-                      fontSize: 10, color: AppTheme.textSecond)),
+                      fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -599,7 +643,7 @@ class _SectionHeader extends StatelessWidget {
         children: [
           Text(title,
               style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.textPrimary)),
           if (actionLabel != null)
@@ -607,7 +651,7 @@ class _SectionHeader extends StatelessWidget {
               onTap: onAction,
               child: Text(actionLabel!,
                   style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.hijauMuda)),
             ),
@@ -657,7 +701,7 @@ class _HargaRow extends StatelessWidget {
               children: [
                 Text(komoditas,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14)),
+                        fontWeight: FontWeight.w700, fontSize: 17)),
                 const SizedBox(height: 3),
                 // Grade badge
                 Container(
@@ -671,7 +715,7 @@ class _HargaRow extends StatelessWidget {
                   ),
                   child: Text('Grade $grade',
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: gradeColor)),
                 ),
@@ -681,7 +725,7 @@ class _HargaRow extends StatelessWidget {
           Text(
             'Rp ${_fmtRibu(harga.toInt())}/$satuan',
             style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 13),
+                fontWeight: FontWeight.w700, fontSize: 16),
           ),
         ],
       ),
@@ -722,12 +766,12 @@ class _MitraRow extends StatelessWidget {
               children: [
                 Text(
                   data.namaPetani,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   data.desa,
-                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecond),
+                  style: const TextStyle(fontSize: 14, color: AppTheme.textSecond),
                 ),
               ],
             ),
@@ -825,14 +869,14 @@ class _TransaksiRow extends StatelessWidget {
                   Text(
                     '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 13),
+                        fontWeight: FontWeight.w700, fontSize: 16),
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
                     trx.namaPetani,
                     style: const TextStyle(
-                        fontSize: 11, color: AppTheme.textSecond),
+                        fontSize: 13, color: AppTheme.textSecond),
                   ),
                 ],
               ),
@@ -845,7 +889,7 @@ class _TransaksiRow extends StatelessWidget {
                   _fmtRupiah(trx.totalBayar),
                   style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                      fontSize: 16,
                       color: AppTheme.hijauTua),
                 ),
                 const SizedBox(height: 4),
@@ -871,7 +915,7 @@ class _TransaksiRow extends StatelessWidget {
                       Text(
                         badgeText,
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: badgeTextCol,
                         ),
@@ -934,7 +978,7 @@ class _EmptyCard extends StatelessWidget {
           child: Text(msg,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 15,
                   color: AppTheme.textSecond,
                   height: 1.5)),
         ),
