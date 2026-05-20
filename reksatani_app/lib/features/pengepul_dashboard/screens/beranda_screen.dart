@@ -802,8 +802,7 @@ class _TransaksiRow extends StatelessWidget {
     // 👇 GestureDetector membungkus Container utama di sini 👇
     return GestureDetector(
       onTap: () => TransaksiDetailSheet.show(context, trx),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
+      behavior: HitTestBehavior.opaque,      child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(14),
         decoration: AppTheme.cardDecoration(radius: 12),

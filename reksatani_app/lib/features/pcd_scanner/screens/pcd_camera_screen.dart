@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
+import '../controllers/pcd_controller.dart';
 
 class PcdCameraScreen extends StatefulWidget {
   const PcdCameraScreen({super.key});
@@ -12,316 +14,315 @@ class PcdCameraScreen extends StatefulWidget {
   State<PcdCameraScreen> createState() => _PcdCameraScreenState();
 }
 
-class _PcdCameraScreenState extends State<PcdCameraScreen> {
-  final _picker = ImagePicker();
+// ─── TASK 4.1: Optimasi Lifecycle dengan WidgetsBindingObserver ───
+class _PcdCameraScreenState extends State<PcdCameraScreen> 
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  
+  CameraController? _cameraController;
+  List<CameraDescription>? _cameras;
+  bool _isCameraInitialized = false;
+
+  // State Pemindai: 0 = Mode Nota, 1 = Mode Barang, 2 = Selesai
+  int _step = 0; 
   String? _fotoNotaPath;
   String? _fotoBarangPath;
 
-  Future<void> _ambilFoto(bool isNota) async {
-    try {
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 65, // Kompresi optimal agar memori database lokal tetap ringan
-      );
+  final PcdController _pcdController = PcdController();
+  
+  // Kontrol Animasi untuk efek denyut bingkai (Glowing Pulse)
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
-      if (photo != null) {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
+    // Inisialisasi animasi berdenyut 0.6 sampai 1.0 balik lagi secara berkala
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    
+    _pulseAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _initCamera();
+  }
+
+  Future<void> _initCamera() async {
+    try {
+      _cameras = await availableCameras();
+      if (_cameras!.isNotEmpty) {
+        final backCamera = _cameras!.firstWhere(
+          (c) => c.lensDirection == CameraLensDirection.back,
+          orElse: () => _cameras!.first,
+        );
+
+        _cameraController = CameraController(
+          backCamera,
+          ResolutionPreset.medium, 
+          enableAudio: false,
+          imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.yuv420 : ImageFormatGroup.bgra8888,
+        );
+
+        await _cameraController!.initialize();
+        if (!mounted) return;
         setState(() {
-          if (isNota) {
-            _fotoNotaPath = photo.path;
-          } else {
-            _fotoBarangPath = photo.path;
-          }
+          _isCameraInitialized = true;
         });
-        HapticFeedback.lightImpact(); // Umpan balik taktil saat foto berhasil ditangkap
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal mengakses modul kamera perangkat.'),
-            backgroundColor: AppTheme.merah,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      debugPrint("Error inisialisasi kamera: $e");
     }
   }
 
-  // ─── PERBAIKAN LOGIKA: MENUNGGU STATE DAN RESET FOTO ───
-  Future<void> _lanjutKeForm() async {
-    if (_fotoNotaPath != null && _fotoBarangPath != null) {
-      // Tunggu kembalian dari TransaksiScreen
-      final isDisimpan = await Navigator.push<bool>(
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final CameraController? cameraController = _cameraController;
+    if (cameraController == null || !cameraController.value.isInitialized) return;
+
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      cameraController.dispose();
+      _isCameraInitialized = false;
+    } else if (state == AppLifecycleState.resumed) {
+      _initCamera();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cameraController?.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _takePicture() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_cameraController!.value.isTakingPicture) return;
+
+    try {
+      // TASK 4.3: Taktil Haptic Feedback premium saat shutter ditekan
+      HapticFeedback.vibrate(); 
+
+      final XFile photo = await _cameraController!.takePicture();
+
+      setState(() {
+        if (_step == 0) {
+          _fotoNotaPath = photo.path;
+          _step = 1; 
+        } else if (_step == 1) {
+          _fotoBarangPath = photo.path;
+          _step = 2; 
+        }
+      });
+
+      if (_step == 2) {
+        _processAiAndNavigate();
+      }
+    } catch (e) {
+      debugPrint("Error mengambil gambar: $e");
+    }
+  }
+
+  // TASK 5.1: Pipeline Auto-Fill terarah ke TransaksiScreen
+  Future<void> _processAiAndNavigate() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3)),
+            ),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppTheme.hijauMuda, strokeWidth: 3),
+                SizedBox(height: 20),
+                Text(
+                  'ANALISIS MATRIKS CITRA...', 
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 2, decoration: TextDecoration.none),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Mengekstrak data otomatis via Edge AI', 
+                  style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w400, fontSize: 11, decoration: TextDecoration.none),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final tebakanGrade = await _pcdController.prosesTebakGrade(_fotoBarangPath!);
+
+    if (mounted) Navigator.pop(context);
+
+    if (mounted) {
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => TransaksiScreen(
             fotoNotaPath: _fotoNotaPath,
             fotoBarangPath: _fotoBarangPath,
+            gradeTebakanPcd: tebakanGrade,
           ),
         ),
       );
-
-      // Jika transaksi sukses disimpan (mengembalikan true), langsung bersihkan form kamera
-      if (isDisimpan == true && mounted) {
-        setState(() {
-          _fotoNotaPath = null;
-          _fotoBarangPath = null;
-        });
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final int fotoLengkapCount = (_fotoNotaPath != null ? 1 : 0) + (_fotoBarangPath != null ? 1 : 0);
-    final bool isLengkap = fotoLengkapCount == 2;
+    if (!_isCameraInitialized || _cameraController == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.hijauMuda)),
+      );
+    }
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
-      child: Scaffold(
-        backgroundColor: AppTheme.bgPage,
-        appBar: AppBar(
-          backgroundColor: AppTheme.bgCard,
-          foregroundColor: AppTheme.textPrimary,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          title: const Text('Dokumentasi Transaksi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.3)),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: AppTheme.border),
-          ),
-          actions: [
-            // Indikator kelengkapan foto
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(right: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isLengkap ? AppTheme.hijauSoft : const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isLengkap ? AppTheme.hijauMuda.withOpacity(0.3) : const Color(0xFFF59E0B).withOpacity(0.3)),
-                ),
-                child: Text(
-                  '$fotoLengkapCount/2 Foto',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isLengkap ? AppTheme.hijauTua : const Color(0xFF92400E),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            // --- KONTEN SCROLLABLE ---
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header Informasi
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(10)),
-                          child: const Icon(Icons.document_scanner_rounded, color: AppTheme.hijauMuda, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'Langkah 1: Bukti Autentik',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Ambil foto nota timbangan dan fisik komoditas secara jelas. Data visual ini akan digunakan untuk persiapan validasi mutu otomatis (PCD).',
-                      style: TextStyle(fontSize: 12.5, color: AppTheme.textSecond, height: 1.5),
-                    ),
-                    const SizedBox(height: 24),
+    final size = MediaQuery.of(context).size;
+    final String textInstruksi = _step == 0 ? "FOKUSKAN PADA NOTA TIMBANGAN" : "BIDIK FISIK DETAIL KOMODITAS";
+    final String subInstruksi = _step == 0 ? "Pastikan tulisan angka berat terlihat jelas" : "Pastikan pencahayaan cukup dan barang stabil";
+    final IconData iconInstruksi = _step == 0 ? Icons.analytics_outlined : Icons.center_focus_strong_rounded;
 
-                    // KOTAK 1: FOTO NOTA
-                    _buildPhotoCard(
-                      title: 'Foto Nota / Bukti Timbang',
-                      subtitle: 'Pastikan angka berat terbaca jelas',
-                      icon: Icons.receipt_long_rounded,
-                      imagePath: _fotoNotaPath,
-                      onTap: () => _ambilFoto(true),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // KOTAK 2: FOTO BARANG
-                    _buildPhotoCard(
-                      title: 'Foto Fisik Komoditas',
-                      subtitle: 'Pencahayaan terang & fokus pada tekstur',
-                      icon: Icons.grass_rounded,
-                      imagePath: _fotoBarangPath,
-                      onTap: () => _ambilFoto(false),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // --- AREA TOMBOL BAWAH (STICKY BOTTOM) ---
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: AppTheme.border)),
-                boxShadow: [BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -4))],
-              ),
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: isLengkap ? _lanjutKeForm : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.hijauMuda,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppTheme.border.withOpacity(0.6),
-                      elevation: isLengkap ? 4 : 0,
-                      shadowColor: AppTheme.hijauMuda.withOpacity(0.4),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          isLengkap ? 'Lanjut Isi Data Transaksi' : 'Lengkapi Foto Terlebih Dahulu',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800, 
-                            fontSize: 14, 
-                            color: isLengkap ? Colors.white : AppTheme.textHint,
-                          ),
-                        ),
-                        if (isLengkap) ...[
-                          const SizedBox(width: 8),
-                          const Icon(Icons.arrow_forward_rounded, size: 18),
-                        ]
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- WIDGET PEMBANGUN KARTU FOTO PREMIUM ---
-  Widget _buildPhotoCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required String? imagePath,
-    required VoidCallback onTap,
-  }) {
-    final hasImage = imagePath != null;
-
-    return Container(
-      decoration: AppTheme.cardDecoration(radius: 20),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          // Judul Kartu
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
-                  ],
+          // 1. Lensa Kamera Utama
+          CameraPreview(_cameraController!),
+
+          // 2. TASK 4.2: Pemotong Tirai dengan Animasi Glow Berdenyut
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) {
+              return CustomPaint(
+                painter: ScannerOverlayPainter(
+                  isModeNota: _step == 0,
+                  opacityGlow: _pulseAnimation.value,
                 ),
-              ),
-              // Tombol ganti foto melayang jika sudah ada gambar
-              if (hasImage)
-                GestureDetector(
-                  onTap: onTap,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppTheme.hijauSoft,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.cameraswitch_rounded, size: 13, color: AppTheme.hijauTua),
-                        SizedBox(width: 4),
-                        Text('Retake', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.hijauTua)),
-                      ],
-                    ),
+                size: Size.infinite,
+              );
+            },
+          ),
+
+          // 3. TASK 4.3: Intelligent HUD bergaya Glassmorphism premium
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16, right: 16,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.hijauMuda.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(iconInstruksi, color: AppTheme.hijauMuda, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              textInstruksi,
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              subInstruksi,
+                              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Step Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.kuning,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${_step + 1}/2',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900),
+                        ),
+                      )
+                    ],
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Area Gambar / Wadah Kamera
-          GestureDetector(
-            onTap: hasImage ? null : onTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              height: 175,
-              width: double.infinity,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: hasImage ? Colors.black : AppTheme.bgPage,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: hasImage ? AppTheme.hijauMuda : AppTheme.border,
-                  width: hasImage ? 2 : 1.5,
-                ),
-                boxShadow: hasImage 
-                    ? [BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 5))]
-                    : null,
               ),
-              child: Stack(
-                fit: StackFit.expand,
+            ),
+          ),
+
+          // 4. Tombol Kontrol Bawah
+          Positioned(
+            bottom: 40,
+            left: 0, right: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Tampilan Gambar Asli
-                  if (hasImage)
-                    Image.file(
-                      File(imagePath),
-                      fit: BoxFit.cover,
-                    )
-                  // Tampilan Placeholder belum ada foto
-                  else
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 55, height: 55,
-                          decoration: BoxDecoration(
-                            color: AppTheme.hijauSoft.withOpacity(0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.camera_alt_rounded, size: 26, color: AppTheme.hijauMuda),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text('Ketuk untuk membuka kamera', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 2),
-                        const Text('Format terkompresi otomatis', style: TextStyle(color: AppTheme.textHint, fontSize: 10.5)),
-                      ],
+                  // Tombol Keluar / Batal
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
                     ),
+                  ),
+                  
+                  // Tombol Shutter Utama dengan Feedback Visual
+                  GestureDetector(
+                    onTap: _takePicture,
+                    child: Container(
+                      height: 84, width: 84,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4),
+                        color: Colors.transparent,
+                      ),
+                      child: Center(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          height: _cameraController?.value.isTakingPicture == true ? 54 : 68,
+                          width: _cameraController?.value.isTakingPicture == true ? 54 : 68,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  // Invisible Spacer Penjaga Keseimbangan Posisi Tengah Shutter
+                  const SizedBox(width: 48),
                 ],
               ),
             ),
@@ -329,5 +330,72 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> {
         ],
       ),
     );
+  }
+}
+
+// ─── TASK 4.2: Pembuatan Guidance Overlay (CustomPainter - Anti Layar Hitam) ───
+class ScannerOverlayPainter extends CustomPainter {
+  final bool isModeNota;
+  final double opacityGlow;
+
+  ScannerOverlayPainter({required this.isModeNota, required this.opacityGlow});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // FIX UTAMA: Pakai saveLayer agar BlendMode.clear melubangi tirai secara sempurna murni transparan!
+    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
+
+    // 1. Bentangkan Tirai Gelap Semi-Transparan
+    final backgroundPaint = Paint()..color = Colors.black.withOpacity(0.65);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
+
+    // 2. Kalkulasi Dimensi Lobang Sesuai Mode Task (Nota Tinggi Memanjang, Barang Kotak Presisi)
+    final double cutoutWidth = size.width * 0.82;
+    final double cutoutHeight = isModeNota ? size.height * 0.52 : size.width * 0.82; 
+    
+    final double left = (size.width - cutoutWidth) / 2;
+    final double top = (size.height - cutoutHeight) / 2.1;
+
+    final RRect cutoutRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(left, top, cutoutWidth, cutoutHeight),
+      const Radius.circular(20),
+    );
+
+    // 3. Tusuk Lubang Tengah Menjadi Tembus Pandang Transparan Total
+    final clearPaint = Paint()..blendMode = BlendMode.clear;
+    canvas.drawRRect(cutoutRect, clearPaint);
+
+    // 4. Tutup Instruksi Lapisan Terisolasi
+    canvas.restore();
+
+    // 5. Desain Garis Siku-siku Pemandu dengan Efek Animasi Denyut Pintar (Glow Pulse)
+    final borderPaint = Paint()
+      ..color = AppTheme.hijauMuda.withOpacity(opacityGlow) // Berdenyut dinamis
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.5
+      ..strokeCap = StrokeCap.round;
+
+    final double len = 32.0; // Panjang siku-siku pemandu
+
+    // Gambar Garis Siku Kiri Atas
+    canvas.drawLine(Offset(left, top + len), Offset(left, top), borderPaint);
+    canvas.drawLine(Offset(left, top), Offset(left + len, top), borderPaint);
+    
+    // Gambar Garis Siku Kanan Atas
+    canvas.drawLine(Offset(left + cutoutWidth - len, top), Offset(left + cutoutWidth, top), borderPaint);
+    canvas.drawLine(Offset(left + cutoutWidth, top), Offset(left + cutoutWidth, top + len), borderPaint);
+    
+    // Gambar Garis Siku Kiri Bawah
+    canvas.drawLine(Offset(left, top + cutoutHeight - len), Offset(left, top + cutoutHeight), borderPaint);
+    canvas.drawLine(Offset(left, top + cutoutHeight), Offset(left + len, top + cutoutHeight), borderPaint);
+    
+    // Gambar Garis Siku Kanan Bawah
+    canvas.drawLine(Offset(left + cutoutWidth - len, top + cutoutHeight), Offset(left + cutoutWidth, top + cutoutHeight), borderPaint);
+    canvas.drawLine(Offset(left + cutoutWidth, top + cutoutHeight), Offset(left + cutoutWidth, top + cutoutHeight - len), borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant ScannerOverlayPainter oldDelegate) {
+    return oldDelegate.isModeNota != isModeNota || oldDelegate.opacityGlow != opacityGlow;
   }
 }
