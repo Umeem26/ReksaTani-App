@@ -15,6 +15,32 @@ class BerandaController {
   double get totalBerat => _svc.totalBeratHariIni;
   int get pending => _svc.jumlahPending;
 
+  double get totalPengeluaranHariIni {
+    final today = DateTime.now();
+    final userId = user.id;
+    return _hive.transaksiBox.values
+        .where((t) =>
+            t.pengepulId == userId &&
+            t.createdAt.year == today.year &&
+            t.createdAt.month == today.month &&
+            t.createdAt.day == today.day &&
+            t.statusSinkronisasi != 'pending_delete')
+        .fold(0.0, (s, t) => s + (t.totalBayar - t.nominalPotongKasbon));
+  }
+
+  double get totalPotonganKasbonHariIni {
+    final today = DateTime.now();
+    final userId = user.id;
+    return _hive.transaksiBox.values
+        .where((t) =>
+            t.pengepulId == userId &&
+            t.createdAt.year == today.year &&
+            t.createdAt.month == today.month &&
+            t.createdAt.day == today.day &&
+            t.statusSinkronisasi != 'pending_delete')
+        .fold(0.0, (s, t) => s + t.nominalPotongKasbon);
+  }
+
   List<Map<String, dynamic>> get hargaTerbaru => _svc.getDaftarHargaDisplay().take(3).toList();
   List<TransaksiHiveModel> get riwayatTerbaru => _svc.getRiwayatTransaksi().take(3).toList();
   List<PetaniHiveModel> get mitraTerbaru {

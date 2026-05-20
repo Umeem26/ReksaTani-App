@@ -110,7 +110,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 150),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     Row(
@@ -279,18 +279,6 @@ class _ManajerHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFFF59E0B),
-                child: Text(
-                  user.username.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                      color: Color(0xFF019241),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,8 +309,6 @@ class _ManajerHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              _IkonBtn(icon: Icons.sync_rounded, spinning: syncing, onTap: onSync),
-              const SizedBox(width: 8),
               ChangeNotifierProvider.value(
                 value: NotificationService(),
                 child: Consumer<NotificationService>(
@@ -366,17 +352,41 @@ class _ManajerHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              _IkonBtn(icon: Icons.logout_rounded, onTap: onLogout),
+              const SizedBox(width: 12),
+              _IkonBtn(
+                icon: Icons.logout_rounded,
+                onTap: onLogout,
+              ),
+              const SizedBox(width: 12),
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFFF59E0B),
+                child: Text(
+                  user.username.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(
+                      color: Color(0xFF019241),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: const Color(0xFF015225),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
+              border: Border.all(
+                  color: Colors.white.withOpacity(0.15),
+                  width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: const Row(
               children: [

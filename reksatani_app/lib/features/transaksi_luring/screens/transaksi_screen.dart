@@ -189,8 +189,17 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   void _showSnack(String msg, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
+        content: Row(
+          children: [
+            Icon(isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Expanded(child: Text(msg, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white))),
+          ],
+        ),
         backgroundColor: isError ? AppTheme.merah : AppTheme.hijauTua,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       ),
     );
   }
@@ -526,9 +535,7 @@ class _BannerPcd extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF019241), Color(0xFF00AE3F)],
-        ),
+        gradient: AppTheme.headerGradient,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
