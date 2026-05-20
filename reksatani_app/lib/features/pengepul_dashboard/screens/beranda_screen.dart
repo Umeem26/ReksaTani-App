@@ -13,6 +13,7 @@ import '../../../../../services/mongodb_service.dart';
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import '../../../../services/notification_service.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../../shared/widgets/transaksi_detail_sheet.dart';
 import 'notifikasi_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -780,7 +781,6 @@ class _TransaksiRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = trx.statusSinkronisasi;
-    final isPendingOrUpdate = status == 'pending' || status == 'pending_update';
     
     Color badgeBg = AppTheme.hijauSoft;
     Color badgeDot = AppTheme.hijauMuda;
@@ -799,118 +799,123 @@ class _TransaksiRow extends StatelessWidget {
       badgeText = 'Updating';
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: AppTheme.cardDecoration(radius: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(
-              color: AppTheme.hijauSoft,
-              borderRadius: BorderRadius.circular(10),
+    // 👇 GestureDetector membungkus Container utama di sini 👇
+    return GestureDetector(
+      onTap: () => TransaksiDetailSheet.show(context, trx),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: AppTheme.cardDecoration(radius: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(
+                color: AppTheme.hijauSoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                  child: Text('🌾', style: TextStyle(fontSize: 20))),
             ),
-            child: const Center(
-                child: Text('🌾', style: TextStyle(fontSize: 20))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    trx.namaPetani,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppTheme.textSecond),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
+                  _fmtRupiah(trx.totalBayar),
                   style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppTheme.hijauTua),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  trx.namaPetani,
-                  style: const TextStyle(
-                      fontSize: 11, color: AppTheme.textSecond),
+                const SizedBox(height: 4),
+                // Status badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 5, height: 5,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: badgeDot,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        badgeText,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: badgeTextCol,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                _fmtRupiah(trx.totalBayar),
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: AppTheme.hijauTua),
-              ),
-              const SizedBox(height: 4),
-              // Status badge
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: badgeBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5, height: 5,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: badgeDot,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      badgeText,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: badgeTextCol,
-                      ),
-                    ),
-                  ],
-                ),
+            // Tombol aksi muncul jika onEdit/onDelete diberikan
+            if (onEdit != null || onDelete != null) ...[
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                onSelected: (val) {
+                  if (val == 'edit') onEdit?.call();
+                  if (val == 'delete') onDelete?.call();
+                },
+                icon: const Icon(Icons.more_vert,
+                    size: 20, color: AppTheme.textSecond),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      Icon(Icons.edit_outlined, size: 18),
+                      SizedBox(width: 8),
+                      Text('Edit'),
+                    ]),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      Icon(Icons.delete_outline,
+                          size: 18, color: AppTheme.merah),
+                      SizedBox(width: 8),
+                      Text('Hapus',
+                          style: TextStyle(color: AppTheme.merah)),
+                    ]),
+                  ),
+                ],
               ),
             ],
-          ),
-          // Tombol aksi muncul jika onEdit/onDelete diberikan
-          if (onEdit != null || onDelete != null) ...[
-            const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              onSelected: (val) {
-                if (val == 'edit') onEdit?.call();
-                if (val == 'delete') onDelete?.call();
-              },
-              icon: const Icon(Icons.more_vert,
-                  size: 20, color: AppTheme.textSecond),
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(children: [
-                    Icon(Icons.edit_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Edit'),
-                  ]),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(children: [
-                    Icon(Icons.delete_outline,
-                        size: 18, color: AppTheme.merah),
-                    SizedBox(width: 8),
-                    Text('Hapus',
-                        style: TextStyle(color: AppTheme.merah)),
-                  ]),
-                ),
-              ],
-            ),
           ],
-        ],
+        ),
       ),
     );
   }

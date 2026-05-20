@@ -3,6 +3,7 @@ import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../controllers/riwayat_controller.dart';
+import '../../../../shared/widgets/transaksi_detail_sheet.dart';
 
 class RiwayatScreen extends StatefulWidget {
   const RiwayatScreen({super.key});
@@ -200,6 +201,7 @@ class _TransaksiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Variabel status aman di dalam build()
     final status = trx.statusSinkronisasi;
     
     Color badgeBg = AppTheme.hijauSoft;
@@ -224,71 +226,76 @@ class _TransaksiCard extends StatelessWidget {
       badgeText = 'Deleting';
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: AppTheme.cardDecoration(radius: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(10)),
-            child: const Center(child: Text('🌾', style: TextStyle(fontSize: 20))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    // 👇 Ini pembungkus GestureDetector yang BENAR 👇
+    return GestureDetector(
+      onTap: () => TransaksiDetailSheet.show(context, trx),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: AppTheme.cardDecoration(radius: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(10)),
+              child: const Center(child: Text('🌾', style: TextStyle(fontSize: 20))),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(trx.namaPetani, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+                  if (trx.nominalPotongKasbon > 0) ...[
+                    const SizedBox(height: 4),
+                    Text('Potong Kasbon: Rp ${_fmtRibu(trx.nominalPotongKasbon.toInt())}', style: const TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
+                  ]
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
+                Text(_fmtRupiah(trx.totalBayar), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.hijauTua)),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(20)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 5, height: 5, decoration: BoxDecoration(shape: BoxShape.circle, color: badgeDot)),
+                      const SizedBox(width: 4),
+                      Text(badgeText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: badgeTextCol)),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 2),
-                Text(trx.namaPetani, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
-                if (trx.nominalPotongKasbon > 0) ...[
-                  const SizedBox(height: 4),
-                  Text('Potong Kasbon: Rp ${_fmtRibu(trx.nominalPotongKasbon.toInt())}', style: const TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
-                ]
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(_fmtRupiah(trx.totalBayar), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.hijauTua)),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(20)),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(width: 5, height: 5, decoration: BoxDecoration(shape: BoxShape.circle, color: badgeDot)),
-                    const SizedBox(width: 4),
-                    Text(badgeText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: badgeTextCol)),
-                  ],
-                ),
+            if (onEdit != null || onDelete != null) ...[
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                onSelected: (val) {
+                  if (val == 'edit') onEdit?.call();
+                  if (val == 'delete') onDelete?.call();
+                },
+                icon: const Icon(Icons.more_vert, size: 20, color: AppTheme.textSecond),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit')])),
+                  const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppTheme.merah), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: AppTheme.merah))])),
+                ],
               ),
             ],
-          ),
-          if (onEdit != null || onDelete != null) ...[
-            const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              onSelected: (val) {
-                if (val == 'edit') onEdit?.call();
-                if (val == 'delete') onDelete?.call();
-              },
-              icon: const Icon(Icons.more_vert, size: 20, color: AppTheme.textSecond),
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit')])),
-                const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppTheme.merah), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: AppTheme.merah))])),
-              ],
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
