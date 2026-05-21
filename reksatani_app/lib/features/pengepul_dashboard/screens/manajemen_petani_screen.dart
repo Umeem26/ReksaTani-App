@@ -141,7 +141,7 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
               onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
               decoration: InputDecoration(
                 hintText: 'Cari nama mitra atau desa...',
-                hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 14),
+                hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 15),
                 prefixIcon: const Icon(Icons.search, color: AppTheme.textHint),
                 filled: true,
                 fillColor: AppTheme.bgPage,
@@ -166,7 +166,7 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
 
                 if (list.isEmpty) {
                   return const Center(
-                    child: Text('Belum ada data mitra.', style: TextStyle(color: AppTheme.textSecond)),
+                    child: Text('Belum ada data mitra.', style: TextStyle(color: AppTheme.textSecond, fontSize: 16)),
                   );
                 }
 
@@ -187,30 +187,22 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
                             style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.bold),
                           ),
                         ),
-                        title: Text(p.namaPetani, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                        subtitle: Text(p.desa, style: const TextStyle(fontSize: 12, color: AppTheme.textSecond)),
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (val) {
-                            if (val == 'edit') _tampilkanFormPetani(petani: p);
-                            if (val == 'delete') _hapusPetani(p);
-                          },
-                          icon: const Icon(Icons.more_vert, size: 20, color: AppTheme.textSecond),
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Row(children: [
-                                Icon(Icons.edit_outlined, size: 18),
-                                SizedBox(width: 8),
-                                Text('Edit'),
-                              ]),
+                        title: Text(p.namaPetani, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        subtitle: Text(p.desa, style: const TextStyle(fontSize: 14, color: AppTheme.textSecond)),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              onPressed: () => _tampilkanFormPetani(petani: p),
+                              icon: const Icon(Icons.edit_outlined, color: AppTheme.textSecond, size: 22),
+                              tooltip: 'Edit',
+                              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                             ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(children: [
-                                Icon(Icons.delete_outline, size: 18, color: AppTheme.merah),
-                                SizedBox(width: 8),
-                                Text('Hapus', style: TextStyle(color: AppTheme.merah)),
-                              ]),
+                            IconButton(
+                              onPressed: () => _hapusPetani(p),
+                              icon: const Icon(Icons.delete_outline, color: AppTheme.merah, size: 22),
+                              tooltip: 'Hapus',
+                              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                             ),
                           ],
                         ),
@@ -264,10 +256,10 @@ class _PetaniFormSheetState extends State<PetaniFormSheet> {
           children: [
             Text(
               widget.petaniLama == null ? 'Tambah Mitra Baru' : 'Edit Mitra',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            const Text('Nama Lengkap', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
+            const Text('Nama Lengkap', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _namaCtrl,
@@ -275,7 +267,7 @@ class _PetaniFormSheetState extends State<PetaniFormSheet> {
               decoration: _deco('Masukkan nama mitra'),
             ),
             const SizedBox(height: 12),
-            const Text('Desa / Asal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
+            const Text('Desa / Asal', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _desaCtrl,
@@ -298,7 +290,7 @@ class _PetaniFormSheetState extends State<PetaniFormSheet> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
-                child: const Text('Simpan Data', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text('Simpan Data', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ),
           ],
@@ -310,7 +302,7 @@ class _PetaniFormSheetState extends State<PetaniFormSheet> {
   InputDecoration _deco(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 14),
+      hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 15),
       filled: true,
       fillColor: AppTheme.bgPage,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

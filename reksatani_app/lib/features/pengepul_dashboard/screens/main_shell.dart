@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'beranda_screen.dart';
 import 'pasar_screen.dart';
-import 'riwayat_screen.dart'; 
+import 'riwayat_screen.dart';
 import 'profil_screen.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../pcd_scanner/screens/pcd_camera_screen.dart';
@@ -24,7 +24,7 @@ class MainShellState extends State<MainShell> {
   static const _screens = <Widget>[
     BerandaScreen(),
     PasarScreen(),
-    PcdCameraScreen(),                                                    
+    PcdCameraScreen(),
     RiwayatScreen(),
     ProfilScreen(),
   ];
@@ -40,6 +40,7 @@ class MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: AppTheme.bgPage,
+        extendBody: true,
         body: IndexedStack(index: _index, children: _screens),
         bottomNavigationBar: _BottomNav(
           currentIndex: _index,
@@ -57,19 +58,21 @@ class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.tabs, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppTheme.border)),
-          boxShadow: [BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -2))],
-        ),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 62,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(tabs.length, (i) {
+  Widget build(BuildContext context) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(color: Color(0x12000000), blurRadius: 20, offset: Offset(0, 4)),
+            ],
+          ),
+        child: SizedBox(
+          height: 62,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(tabs.length, (i) {
                 final tab    = tabs[i];
                 final active = currentIndex == i;
 
@@ -81,9 +84,15 @@ class _BottomNav extends StatelessWidget {
                       child: Container(
                         width: 56, height: 56,
                         decoration: BoxDecoration(
-                          color: active ? AppTheme.hijauTua : AppTheme.hijauMuda,
+                          gradient: AppTheme.headerGradient,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.4), blurRadius: 14, offset: const Offset(0, 4))],
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.hijauMuda.withOpacity(0.45),
+                              blurRadius: 16,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
                         ),
                         child: Icon(tab.activeIcon, color: Colors.white, size: 24),
                       ),
@@ -99,13 +108,17 @@ class _BottomNav extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(active ? tab.activeIcon : tab.icon,
-                            color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA), size: 22),
+                        Icon(
+                          active ? tab.activeIcon : tab.icon,
+                          color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
+                          size: 22,
+                        ),
                         const SizedBox(height: 3),
                         Text(tab.label, style: TextStyle(
-                            fontSize: 10,
-                            color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
-                            fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
+                          fontSize: 10,
+                          color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
+                          fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                        )),
                       ],
                     ),
                   ),
