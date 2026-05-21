@@ -6,7 +6,6 @@ import 'package:camera/camera.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
-import '../../pengepul_dashboard/screens/main_shell.dart';
 
 class PcdCameraScreen extends StatefulWidget {
   const PcdCameraScreen({super.key});
@@ -15,40 +14,21 @@ class PcdCameraScreen extends StatefulWidget {
   State<PcdCameraScreen> createState() => _PcdCameraScreenState();
 }
 
-// ─── TASK 4.1: Optimasi Lifecycle dengan WidgetsBindingObserver ───
-class _PcdCameraScreenState extends State<PcdCameraScreen> 
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  
+class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingObserver {
   CameraController? _cameraController;
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
 
-  // State Pemindai: 0 = Mode Nota, 1 = Mode Barang, 2 = Selesai
   int _step = 0; 
   String? _fotoNotaPath;
   String? _fotoBarangPath;
 
   final PcdController _pcdController = PcdController();
-  
-  // Kontrol Animasi untuk efek denyut bingkai (Glowing Pulse)
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
-    // Inisialisasi animasi berdenyut 0.6 sampai 1.0 balik lagi secara berkala
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    
-    _pulseAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
     _initCamera();
   }
 
@@ -63,7 +43,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
 
         _cameraController = CameraController(
           backCamera,
-          ResolutionPreset.medium, 
+          ResolutionPreset.high, 
           enableAudio: false,
           imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.yuv420 : ImageFormatGroup.bgra8888,
         );
@@ -75,7 +55,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
         });
       }
     } catch (e) {
-      // Gagal inisialisasi kamera
+      debugPrint("Error inisialisasi kamera: $e");
     }
   }
 
@@ -96,7 +76,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cameraController?.dispose();
-    _pulseController.dispose();
     super.dispose();
   }
 
@@ -105,7 +84,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
     if (_cameraController!.value.isTakingPicture) return;
 
     try {
-      // TASK 4.3: Taktil Haptic Feedback premium saat shutter ditekan
       HapticFeedback.vibrate(); 
 
       final XFile photo = await _cameraController!.takePicture();
@@ -124,11 +102,10 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
         _processAiAndNavigate();
       }
     } catch (e) {
-      // Gagal mengambil gambar
+      debugPrint("Error mengambil gambar: $e");
     }
   }
 
-  // TASK 5.1: Pipeline Auto-Fill terarah ke TransaksiScreen
   Future<void> _processAiAndNavigate() async {
     showDialog(
       context: context,
@@ -149,7 +126,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
                 CircularProgressIndicator(color: AppTheme.hijauMuda, strokeWidth: 3),
                 SizedBox(height: 20),
                 Text(
-                  'ANALISIS MATRIKS CITRA...', 
+                  'MEMPROSES CITRA...', 
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 2, decoration: TextDecoration.none),
                 ),
                 SizedBox(height: 6),
@@ -191,34 +168,24 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
       );
     }
 
-    final size = MediaQuery.of(context).size;
-    final String textInstruksi = _step == 0 ? "FOKUSKAN PADA NOTA TIMBANGAN" : "BIDIK FISIK DETAIL KOMODITAS";
-    final String subInstruksi = _step == 0 ? "Pastikan tulisan angka berat terlihat jelas" : "Pastikan pencahayaan cukup dan barang stabil";
-    final IconData iconInstruksi = _step == 0 ? Icons.analytics_outlined : Icons.center_focus_strong_rounded;
+    final String textInstruksi = _step == 0 ? "AMBIL FOTO NOTA TIMBANGAN" : "AMBIL FOTO FISIK KOMODITAS";
+    final String subInstruksi = _step == 0 ? "Posisikan kertas di area tengah layar" : "Pastikan komoditas terlihat jelas dan fokus";
+    final IconData iconInstruksi = _step == 0 ? Icons.receipt_long_rounded : Icons.grass_rounded;
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Lensa Kamera Utama
-          CameraPreview(_cameraController!),
-
-          // 2. TASK 4.2: Pemotong Tirai dengan Animasi Glow Berdenyut
-          AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (context, child) {
-              return CustomPaint(
-                painter: ScannerOverlayPainter(
-                  isModeNota: _step == 0,
-                  opacityGlow: _pulseAnimation.value,
-                ),
-                size: Size.infinite,
-              );
-            },
+          // 1. Kamera Preview Normal (Anti-Zoom, Anti-Lonjong)
+          Container(
+            color: Colors.black,
+            child: Center(
+              child: CameraPreview(_cameraController!),
+            ),
           ),
 
-          // 3. TASK 4.3: Intelligent HUD bergaya Glassmorphism premium
+          // 2. HUD Atas Melayang
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
             left: 16, right: 16,
@@ -238,10 +205,10 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: AppTheme.hijauMuda.withOpacity(0.15),
+                          color: (_step == 0 ? AppTheme.biru : AppTheme.hijauMuda).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(iconInstruksi, color: AppTheme.hijauMuda, size: 24),
+                        child: Icon(iconInstruksi, color: _step == 0 ? AppTheme.biru : AppTheme.hijauMuda, size: 24),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -260,7 +227,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
                           ],
                         ),
                       ),
-                      // Step Badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
@@ -279,24 +245,17 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
             ),
           ),
 
-          // 4. Tombol Kontrol Bawah
+          // 3. Tombol Shutter Bawah
           Positioned(
-            bottom: 150,
+            bottom: 40,
             left: 0, right: 0,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Tombol Keluar / Batal
                   GestureDetector(
-                    onTap: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      } else {
-                        MainShellState.of(context)?.changeTab(0);
-                      }
-                    },
+                    onTap: () => Navigator.pop(context),
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
@@ -304,7 +263,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
                     ),
                   ),
                   
-                  // Tombol Shutter Utama dengan Feedback Visual
                   GestureDetector(
                     onTap: _takePicture,
                     child: Container(
@@ -328,7 +286,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
                     ),
                   ),
                   
-                  // Invisible Spacer Penjaga Keseimbangan Posisi Tengah Shutter
                   const SizedBox(width: 48),
                 ],
               ),
@@ -337,72 +294,5 @@ class _PcdCameraScreenState extends State<PcdCameraScreen>
         ],
       ),
     );
-  }
-}
-
-// ─── TASK 4.2: Pembuatan Guidance Overlay (CustomPainter - Anti Layar Hitam) ───
-class ScannerOverlayPainter extends CustomPainter {
-  final bool isModeNota;
-  final double opacityGlow;
-
-  ScannerOverlayPainter({required this.isModeNota, required this.opacityGlow});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // FIX UTAMA: Pakai saveLayer agar BlendMode.clear melubangi tirai secara sempurna murni transparan!
-    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
-
-    // 1. Bentangkan Tirai Gelap Semi-Transparan
-    final backgroundPaint = Paint()..color = Colors.black.withOpacity(0.65);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
-
-    // 2. Kalkulasi Dimensi Lobang Sesuai Mode Task (Nota Tinggi Memanjang, Barang Kotak Presisi)
-    final double cutoutWidth = size.width * 0.82;
-    final double cutoutHeight = isModeNota ? size.height * 0.52 : size.width * 0.82; 
-    
-    final double left = (size.width - cutoutWidth) / 2;
-    final double top = (size.height - cutoutHeight) / 2.4;
-
-    final RRect cutoutRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(left, top, cutoutWidth, cutoutHeight),
-      const Radius.circular(20),
-    );
-
-    // 3. Tusuk Lubang Tengah Menjadi Tembus Pandang Transparan Total
-    final clearPaint = Paint()..blendMode = BlendMode.clear;
-    canvas.drawRRect(cutoutRect, clearPaint);
-
-    // 4. Tutup Instruksi Lapisan Terisolasi
-    canvas.restore();
-
-    // 5. Desain Garis Siku-siku Pemandu dengan Efek Animasi Denyut Pintar (Glow Pulse)
-    final borderPaint = Paint()
-      ..color = AppTheme.hijauMuda.withOpacity(opacityGlow) // Berdenyut dinamis
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.5
-      ..strokeCap = StrokeCap.round;
-
-    final double len = 32.0; // Panjang siku-siku pemandu
-
-    // Gambar Garis Siku Kiri Atas
-    canvas.drawLine(Offset(left, top + len), Offset(left, top), borderPaint);
-    canvas.drawLine(Offset(left, top), Offset(left + len, top), borderPaint);
-    
-    // Gambar Garis Siku Kanan Atas
-    canvas.drawLine(Offset(left + cutoutWidth - len, top), Offset(left + cutoutWidth, top), borderPaint);
-    canvas.drawLine(Offset(left + cutoutWidth, top), Offset(left + cutoutWidth, top + len), borderPaint);
-    
-    // Gambar Garis Siku Kiri Bawah
-    canvas.drawLine(Offset(left, top + cutoutHeight - len), Offset(left, top + cutoutHeight), borderPaint);
-    canvas.drawLine(Offset(left, top + cutoutHeight), Offset(left + len, top + cutoutHeight), borderPaint);
-    
-    // Gambar Garis Siku Kanan Bawah
-    canvas.drawLine(Offset(left + cutoutWidth - len, top + cutoutHeight), Offset(left + cutoutWidth, top + cutoutHeight), borderPaint);
-    canvas.drawLine(Offset(left + cutoutWidth, top + cutoutHeight), Offset(left + cutoutWidth, top + cutoutHeight - len), borderPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant ScannerOverlayPainter oldDelegate) {
-    return oldDelegate.isModeNota != isModeNota || oldDelegate.opacityGlow != opacityGlow;
   }
 }
