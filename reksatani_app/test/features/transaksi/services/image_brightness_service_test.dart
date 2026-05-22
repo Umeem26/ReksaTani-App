@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
-import 'package:reksatani_app/features/transaksi/services/image_brightness_service.dart';
+import 'package:reksatani_app/features/pcd_scanner/services/image_brightness_service.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() {

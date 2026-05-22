@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
-import '../../transaksi/services/image_brightness_service.dart';
+import '../services/image_brightness_service.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
@@ -89,8 +89,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       HapticFeedback.vibrate(); 
 
       final XFile photo = await _cameraController!.takePicture();
-      
-      // Mengoreksi pencahayaan secara otomatis
       final File adjustedPhoto = await _brightnessService.adjustBrightness(File(photo.path));
 
       setState(() {
@@ -151,12 +149,15 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     if (mounted) Navigator.pop(context);
 
     if (mounted) {
-      Navigator.pushReplacement(
-        context,
+      // Matikan controller kamera sebelum lompat halaman agar RAM langsung enteng kembali
+      _cameraController?.dispose(); 
+
+      // Buka TransaksiScreen menggunakan rootNavigator agar terbebas dari jeratan navbar bawah dashboard
+      Navigator.of(context, rootNavigator: true).pushReplacement(
         MaterialPageRoute(
           builder: (_) => TransaksiScreen(
             fotoNotaPath: _fotoNotaPath,
-            fotoBarangPath: _fotoBarangPath,
+            fotoBarangPath: _fotoBarangPath, // 👈 SINKRONISASI UTAMA: Menggunakan parameter yang valid di TransaksiScreen
             gradeTebakanPcd: tebakanGrade,
           ),
         ),
@@ -179,18 +180,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
 
     return Scaffold(
       backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Kamera Preview Normal (Anti-Zoom, Anti-Lonjong)
           Container(
             color: Colors.black,
             child: Center(
               child: CameraPreview(_cameraController!),
             ),
           ),
-
-          // 2. HUD Atas Melayang
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
             left: 16, right: 16,
@@ -249,8 +248,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               ),
             ),
           ),
-
-          // 3. Tombol Shutter Bawah
           Positioned(
             bottom: 40,
             left: 0, right: 0,
@@ -267,7 +264,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                       child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
                     ),
                   ),
-                  
                   GestureDetector(
                     onTap: _takePicture,
                     child: Container(
@@ -290,7 +286,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                       ),
                     ),
                   ),
-                  
                   const SizedBox(width: 48),
                 ],
               ),
