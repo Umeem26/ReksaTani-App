@@ -24,7 +24,7 @@ class MainShellState extends State<MainShell> {
   static const _screens = <Widget>[
     BerandaScreen(),
     PasarScreen(),
-    PcdCameraScreen(),
+    SizedBox.shrink(),
     RiwayatScreen(),
     ProfilScreen(),
   ];
@@ -78,7 +78,14 @@ class _BottomNav extends StatelessWidget {
 
                 if (tab.isCenter) {
                   return GestureDetector(
-                    onTap: () => onTap(i),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PcdCameraScreen(),
+                        ),
+                      );
+                    },
                     child: Transform.translate(
                       offset: const Offset(0, -14),
                       child: Container(
