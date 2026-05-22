@@ -3,6 +3,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import '../services/image_brightness_service.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
@@ -106,6 +109,39 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       }
     } catch (e) {
       debugPrint("Error mengambil gambar: $e");
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+      );
+
+      if (image != null) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final prefix = _step == 0 ? 'nota' : 'barang';
+        final fileName = '${prefix}_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
+        final File savedImage = await File(image.path).copy('${appDir.path}/$fileName');
+
+        setState(() {
+          if (_step == 0) {
+            _fotoNotaPath = savedImage.path;
+            _step = 1;
+          } else if (_step == 1) {
+            _fotoBarangPath = savedImage.path;
+            _step = 2;
+          }
+        });
+
+        if (_step == 2) {
+          _processAiAndNavigate();
+        }
+      }
+    } catch (e) {
+      debugPrint("Error mengambil gambar dari galeri: $e");
     }
   }
 
@@ -257,7 +293,15 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      if (_step > 0) {
+                        setState(() {
+                          _step--;
+                        });
+                      } else {
+                        Navigator.pop(context);
+                      }
+                    },
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
@@ -286,7 +330,14 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                       ),
                     ),
                   ),
-                  const SizedBox(width: 48),
+                  GestureDetector(
+                    onTap: _pickImageFromGallery,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
+                      child: const Icon(Icons.photo_library_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
                 ],
               ),
             ),
