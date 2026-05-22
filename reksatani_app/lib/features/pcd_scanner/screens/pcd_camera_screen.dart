@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
+import '../../transaksi/services/image_brightness_service.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
@@ -24,6 +25,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   String? _fotoBarangPath;
 
   final PcdController _pcdController = PcdController();
+  final ImageBrightnessService _brightnessService = ImageBrightnessService();
 
   @override
   void initState() {
@@ -87,13 +89,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       HapticFeedback.vibrate(); 
 
       final XFile photo = await _cameraController!.takePicture();
+      
+      // Mengoreksi pencahayaan secara otomatis
+      final File adjustedPhoto = await _brightnessService.adjustBrightness(File(photo.path));
 
       setState(() {
         if (_step == 0) {
-          _fotoNotaPath = photo.path;
+          _fotoNotaPath = adjustedPhoto.path;
           _step = 1; 
         } else if (_step == 1) {
-          _fotoBarangPath = photo.path;
+          _fotoBarangPath = adjustedPhoto.path;
           _step = 2; 
         }
       });
