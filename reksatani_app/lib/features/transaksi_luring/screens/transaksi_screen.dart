@@ -9,6 +9,7 @@ import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/komoditas_hive_model.dart';
 import '../controllers/transaksi_controller.dart';
 import '../../../shared/widgets/app_theme.dart';
+import '../../pcd_scanner/screens/pcd_camera_screen.dart'; 
 
 class TransaksiScreen extends StatefulWidget {
   final TransaksiHiveModel? editTrx;
@@ -57,7 +58,6 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     super.initState();
     final trx = widget.editTrx;
     if (trx != null) {
-      // --- MODE EDIT ---
       _namaPenjualCtrl.text = trx.namaPetani;
       _beratCtrl.text = trx.berat.toInt().toString();
       _hargaCtrl.text = trx.hargaBeliSatuan.toInt().toString();
@@ -70,7 +70,6 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       } catch (_) {}
       _gradeTerpilih = trx.gradeTerpilih;
     } else {
-      // --- MODE BARU (DARI KAMERA PCD) ---
       if (widget.gradeTebakanPcd != null) {
         _gradeTerpilih = widget.gradeTebakanPcd;
       }
@@ -154,36 +153,28 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => _SuksesSheet(
         totalBayar: _totalBayar,
         namaPetani: _namaPenjualCtrl.text,
         onSelesai: () {
-          Navigator.pop(context); // Tutup bottom sheet
-          Navigator.pop(context, true); // Tutup form dan kembali ke tab
+          Navigator.pop(context); 
+          Navigator.pop(context, true); 
         },
       ),
     );
   }
 
-  Future<void> _ambilFotoNota() async {
-    final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 70,
+  // 🛠️ FIX DATA RESET: Melempar sisa data foto yang valid ke dalam constructor PcdCameraScreen
+  void _panggilKameraPcdUlang() {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (_) => PcdCameraScreen(
+          initialFotoNota: _fotoNotaPath,
+          initialFotoBarang: _fotoBarangPath,
+        ),
+      ),
     );
-
-    if (image != null) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = 'nota_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
-      final savedImage = await File(image.path).copy('${appDir.path}/$fileName');
-
-      setState(() {
-        _fotoNotaPath = savedImage.path;
-      });
-    }
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -321,13 +312,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                           final h = double.tryParse(val) ?? 0;
                           if (maks > 0 && h > maks) {
                             _hargaCtrl.text = maks.toInt().toString();
-                            _hargaCtrl.selection = TextSelection.fromPosition(
-                              TextPosition(offset: _hargaCtrl.text.length),
-                            );
-                            _showSnack(
-                              'Harga disesuaikan ke batas maksimal grade $_gradeTerpilih (Rp ${_fmt(maks.toInt())})',
-                              isError: true,
-                            );
+                            _hargaCtrl.selection = TextSelection.fromPosition(TextPosition(offset: _hargaCtrl.text.length));
+                            _showSnack('Harga disesuaikan ke batas maksimal grade $_gradeTerpilih (Rp ${_fmt(maks.toInt())})', isError: true);
                           }
                           setState(() {});
                         },
@@ -344,12 +330,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                       children: [
                         const Icon(Icons.warning_amber_rounded, color: AppTheme.merah, size: 14),
                         const SizedBox(width: 5),
-                        Expanded(
-                          child: Text(
-                            'Harga melebihi batas maks grade $_gradeTerpilih: Rp ${_fmt(_hargaMaksGrade.toInt())}',
-                            style: const TextStyle(fontSize: 11, color: AppTheme.merah),
-                          ),
-                        ),
+                        Expanded(child: Text('Harga melebihi batas maks grade $_gradeTerpilih: Rp ${_fmt(_hargaMaksGrade.toInt())}', style: const TextStyle(fontSize: 11, color: AppTheme.merah))),
                       ],
                     ),
                   ),
@@ -366,10 +347,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                               children: [
                                 Text(g['grade'] as String),
                                 const SizedBox(width: 8),
-                                Text(
-                                  '(Maks Rp ${_fmt(((g['harga_maks'] as num?)?.toInt() ?? 0))})',
-                                  style: const TextStyle(fontSize: 11, color: AppTheme.textSecond),
-                                ),
+                                Text('(Maks Rp ${_fmt(((g['harga_maks'] as num?)?.toInt() ?? 0))})', style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
                               ],
                             ),
                           ))
@@ -384,6 +362,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                 ),
               ],
             ),
+            
             _FormSection(
               title: 'Lampiran Bukti Fisik',
               icon: Icons.camera_alt_outlined,
@@ -394,8 +373,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                   Stack(
                     children: [
                       Container(
-                        height: 180,
-                        width: double.infinity,
+                        height: 160, width: double.infinity,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
                           image: DecorationImage(
@@ -407,8 +385,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                         ),
                       ),
                       Positioned(
-                        right: 8,
-                        top: 8,
+                        right: 8, top: 8,
                         child: GestureDetector(
                           onTap: () => setState(() => _fotoNotaPath = null),
                           child: Container(
@@ -422,11 +399,56 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                   )
                 else
                   OutlinedButton.icon(
-                    onPressed: _ambilFotoNota,
+                    onPressed: _panggilKameraPcdUlang,
                     icon: const Icon(Icons.add_a_photo_outlined, size: 20),
-                    label: const Text('Ambil Foto Nota'),
+                    label: const Text('Ambil Ulang Foto Nota via PCD'),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: AppTheme.border),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      foregroundColor: AppTheme.textSecond,
+                    ),
+                  ),
+                  
+                const SizedBox(height: 16),
+                
+                _FieldLabel('Foto Fisik Komoditas Barang'),
+                const SizedBox(height: 4),
+                if (_fotoBarangPath != null && _fotoBarangPath!.isNotEmpty)
+                  Stack(
+                    children: [
+                      Container(
+                        height: 160, width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          image: DecorationImage(
+                            image: _fotoBarangPath!.startsWith('http') 
+                                ? NetworkImage(_fotoBarangPath!) as ImageProvider
+                                : FileImage(File(_fotoBarangPath!)),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 8, top: 8,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _fotoBarangPath = null),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle),
+                            child: const Icon(Icons.close, color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  OutlinedButton.icon(
+                    onPressed: _panggilKameraPcdUlang,
+                    icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+                    label: const Text('Ambil Ulang Foto Komoditas via PCD'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       side: const BorderSide(color: AppTheme.border),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       foregroundColor: AppTheme.textSecond,
@@ -439,21 +461,14 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
             if (_totalBayar > 0)
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.hijauSoft,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3)),
-                ),
+                decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3))),
                 child: Row(
                   children: [
                     const Icon(Icons.calculate_outlined, color: AppTheme.hijauTua, size: 20),
                     const SizedBox(width: 10),
                     const Text('Total Bayar', style: TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w600)),
                     const Spacer(),
-                    Text(
-                      'Rp ${_fmt(_totalBayar.toInt())}',
-                      style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w800, fontSize: 16),
-                    ),
+                    Text('Rp ${_fmt(_totalBayar.toInt())}', style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w800, fontSize: 16)),
                   ],
                 ),
               ),
@@ -464,12 +479,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
               height: 52,
               child: ElevatedButton(
                 onPressed: _saving ? null : _simpan,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.hijauMuda,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.hijauMuda, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                 child: _saving
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
                     : const Text('Simpan Transaksi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
@@ -487,26 +497,11 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       filled: true,
       fillColor: AppTheme.bgPage,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.border),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.hijauMuda, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.merah, width: 1.5),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppTheme.merah, width: 1.5),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.border)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.border)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.hijauMuda, width: 1.5)),
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.merah, width: 1.5)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.merah, width: 1.5)),
     );
   }
 
@@ -521,23 +516,14 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// KOMPONEN REUSABLE (Sudah Dirapikan)
-// ═══════════════════════════════════════════════════════════════
-
 class _BannerPcd extends StatelessWidget {
   final String? gradeTebakan;
-  
   const _BannerPcd({this.gradeTebakan});
-  
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: AppTheme.headerGradient,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: BoxDecoration(gradient: AppTheme.headerGradient, borderRadius: BorderRadius.circular(16)),
       child: Row(
         children: [
           const Icon(Icons.document_scanner_rounded, color: Colors.white, size: 26),
@@ -546,14 +532,8 @@ class _BannerPcd extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Hasil Pemindaian PCD',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
-                ),
-                Text(
-                  'Sistem mendeteksi kualitas: Grade ${gradeTebakan ?? "-"}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
+                const Text('Hasil Pemindaian PCD', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                Text('Sistem mendeteksi kualitas: Grade ${gradeTebakan ?? "-"}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
           ),
@@ -567,13 +547,7 @@ class _FormSection extends StatelessWidget {
   final String title;
   final IconData icon;
   final List<Widget> children;
-
-  const _FormSection({
-    required this.title,
-    required this.icon,
-    required this.children,
-  });
-
+  const _FormSection({required this.title, required this.icon, required this.children});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -586,10 +560,7 @@ class _FormSection extends StatelessWidget {
             children: [
               Icon(icon, size: 16, color: AppTheme.hijauMuda),
               const SizedBox(width: 6),
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.textPrimary),
-              ),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.textPrimary)),
             ],
           ),
           const SizedBox(height: 12),
@@ -604,17 +575,12 @@ class _FormSection extends StatelessWidget {
 
 class _FieldLabel extends StatelessWidget {
   final String label;
-  
   const _FieldLabel(this.label);
-
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecond),
-      ),
+      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
     );
   }
 }
@@ -628,16 +594,7 @@ class _ReksaField extends StatelessWidget {
   final void Function(String)? onChanged;
   final bool isError;
 
-  const _ReksaField({
-    required this.ctrl,
-    required this.label,
-    required this.hint,
-    this.type = TextInputType.text,
-    this.formatters,
-    this.validator,
-    this.onChanged,
-    this.isError = false,
-  });
+  const _ReksaField({required this.ctrl, required this.label, required this.hint, this.type = TextInputType.text, this.formatters, this.validator, this.onChanged, this.isError = false});
 
   @override
   Widget build(BuildContext context) {
@@ -657,32 +614,11 @@ class _ReksaField extends StatelessWidget {
             filled: true,
             fillColor: AppTheme.bgPage,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppTheme.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(
-                color: isError ? AppTheme.merah : AppTheme.border,
-                width: isError ? 1.5 : 1,
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(
-                color: isError ? AppTheme.merah : AppTheme.hijauMuda,
-                width: 1.5,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppTheme.merah, width: 1.5),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppTheme.merah, width: 1.5),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isError ? AppTheme.merah : AppTheme.border, width: isError ? 1.5 : 1)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isError ? AppTheme.merah : AppTheme.hijauMuda, width: 1.5)),
+            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.merah, width: 1.5)),
+            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.merah, width: 1.5)),
           ),
         ),
       ],
@@ -692,9 +628,7 @@ class _ReksaField extends StatelessWidget {
 
 class _KasbonInfo extends StatelessWidget {
   final double sisa;
-  
   const _KasbonInfo({required this.sisa});
-
   String _fmt(int angka) {
     final s = angka.toString();
     final buf = StringBuffer();
@@ -704,28 +638,18 @@ class _KasbonInfo extends StatelessWidget {
     }
     return buf.toString();
   }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEF3C7),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppTheme.kuning.withOpacity(0.4)),
-        ),
+        decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppTheme.kuning.withOpacity(0.4))),
         child: Row(
           children: [
             const Icon(Icons.info_outline_rounded, color: AppTheme.kuning, size: 16),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Petani ini memiliki sisa kasbon Rp ${_fmt(sisa.toInt())} yang akan dipotong.',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF92400E)),
-              ),
-            ),
+            Expanded(child: Text('Petani ini memiliki sisa kasbon Rp ${_fmt(sisa.toInt())} yang akan dipotong.', style: const TextStyle(fontSize: 12, color: Color(0xFF92400E)))),
           ],
         ),
       ),
@@ -737,13 +661,7 @@ class _SuksesSheet extends StatelessWidget {
   final double totalBayar;
   final String namaPetani;
   final VoidCallback onSelesai;
-
-  const _SuksesSheet({
-    required this.totalBayar,
-    required this.namaPetani,
-    required this.onSelesai,
-  });
-
+  const _SuksesSheet({required this.totalBayar, required this.namaPetani, required this.onSelesai});
   String _fmt(int angka) {
     final s = angka.toString();
     final buf = StringBuffer();
@@ -753,7 +671,6 @@ class _SuksesSheet extends StatelessWidget {
     }
     return buf.toString();
   }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -762,38 +679,25 @@ class _SuksesSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 72,
-            height: 72,
+            width: 72, height: 72,
             decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.hijauSoft),
             child: const Icon(Icons.check_circle_rounded, color: AppTheme.hijauMuda, size: 42),
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Transaksi Berhasil Disimpan!',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-          ),
+          const Text('Transaksi Berhasil Disimpan!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          const Text(
-            'Tersimpan di perangkat · Pending Sync ke server',
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecond),
-          ),
+          const Text('Tersimpan di perangkat · Pending Sync ke server', style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.bgPage,
-              borderRadius: BorderRadius.circular(14),
-            ),
+            decoration: BoxDecoration(color: AppTheme.bgPage, borderRadius: BorderRadius.circular(14)),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Petani', style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
-                    Text(
-                      namaPetani,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
-                    ),
+                    Text(namaPetani, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -801,10 +705,7 @@ class _SuksesSheet extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Total Bayar', style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
-                    Text(
-                      'Rp ${_fmt(totalBayar.toInt())}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.hijauTua),
-                    ),
+                    Text('Rp ${_fmt(totalBayar.toInt())}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.hijauTua)),
                   ],
                 ),
               ],
@@ -816,12 +717,7 @@ class _SuksesSheet extends StatelessWidget {
             height: 52,
             child: ElevatedButton(
               onPressed: onSelesai,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.hijauMuda,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.hijauMuda, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
               child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             ),
           ),
