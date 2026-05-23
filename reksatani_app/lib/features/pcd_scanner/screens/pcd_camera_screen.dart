@@ -188,21 +188,22 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       ),
     );
 
-    // ─── 🛠️ FIX UTAMA: MENYALAKAN MESIN MODUL 6 & MODUL 7 ───
-    
-    // 1. Eksekusi Modul 6: Pelurusan (Warping) Nota
+    // 1. Jalankan Modul 6 (Warping Nota)
     String finalNotaPath = _fotoNotaPath!;
     if (_fotoNotaPath != null) {
       finalNotaPath = await _pcdController.prosesWarpingNota(_fotoNotaPath!);
     }
 
-    // 2. Eksekusi Modul 7: Pemotongan Latar Belakang Komoditas
+    // 2. Jalankan Modul 7 (Segmentasi Latar Belakang Komoditas)
     String finalBarangPath = _fotoBarangPath!;
     if (_fotoBarangPath != null) {
       finalBarangPath = await _pcdController.prosesSegmentasiBarang(_fotoBarangPath!);
     }
 
-    // 3. Eksekusi Modul 8: Tebak Grade (Saat ini masih statis 'A')
+    // 3. 🛠️ Jalankan Modul 8: Scan OCR & Filter Angka via Regex pada Nota yang sudah lurus
+    final dataHasilOcr = await _pcdController.prosesOcrNota(finalNotaPath);
+
+    // 4. Jalankan Modul 8 Part B: Deteksi Kualitas Grade Komoditas
     final tebakanGrade = await _pcdController.prosesTebakGrade(finalBarangPath);
 
     if (mounted) Navigator.pop(context); // Tutup dialog loading
@@ -210,13 +211,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     if (mounted) {
       _cameraController?.dispose(); 
 
-      // Pindah ke form dengan mengirimkan foto HASIL OLAHAN AI, bukan mentahannya lagi!
+      // Pindah ke form dengan mengirimkan data aslinya + hasil auto-fill angka OCR!
       Navigator.of(context, rootNavigator: true).pushReplacement(
         MaterialPageRoute(
           builder: (_) => TransaksiScreen(
-            fotoNotaPath: finalNotaPath,       // 👈 Mengirim nota yang sudah diluruskan
-            fotoBarangPath: finalBarangPath,   // 👈 Mengirim komoditas yang latarnya sudah diputihkan
+            fotoNotaPath: finalNotaPath,
+            fotoBarangPath: finalBarangPath,
             gradeTebakanPcd: tebakanGrade,
+            // 👇 KITA LEMPAR DATA HASIL OCR KE DALAM FORM TRANSAKSI 👇
+            initialBeratOcr: dataHasilOcr['berat'],
+            initialHargaOcr: dataHasilOcr['harga'],
           ),
         ),
       );

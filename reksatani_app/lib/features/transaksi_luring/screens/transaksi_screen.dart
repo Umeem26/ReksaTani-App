@@ -16,6 +16,8 @@ class TransaksiScreen extends StatefulWidget {
   final String? fotoNotaPath;
   final String? fotoBarangPath;
   final String? gradeTebakanPcd;
+  final String? initialBeratOcr; 
+  final String? initialHargaOcr; 
 
   const TransaksiScreen({
     super.key,
@@ -23,6 +25,8 @@ class TransaksiScreen extends StatefulWidget {
     this.fotoNotaPath,
     this.fotoBarangPath,
     this.gradeTebakanPcd,
+    this.initialBeratOcr, 
+    this.initialHargaOcr, 
   });
 
   @override
@@ -74,6 +78,14 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         _gradeTerpilih = widget.gradeTebakanPcd;
       }
     }
+
+      if (widget.initialBeratOcr != null && widget.initialBeratOcr!.isNotEmpty) {
+        _beratCtrl.text = widget.initialBeratOcr!;
+      }
+      if (widget.initialHargaOcr != null && widget.initialHargaOcr!.isNotEmpty) {
+        _hargaCtrl.text = widget.initialHargaOcr!;
+      }
+      
     _fotoNotaPath = widget.fotoNotaPath;
     _fotoBarangPath = widget.fotoBarangPath;
     
