@@ -1,30 +1,38 @@
 import 'dart:async';
 import 'dart:io';
 import '../services/document_warping_service.dart';
+import '../services/image_segmentation_service.dart'; // 👈 Daftarkan service Modul 7
 
 class PcdController {
   final DocumentWarpingService _warpingService = DocumentWarpingService();
+  final ImageSegmentationService _segmentationService = ImageSegmentationService(); // 👈 Inisialisasi
 
-  // ─── MODUL 6: Eksekusi Warping Nota ───
+  // ─── MODUL 6: Eksekusi Pelurusan Sudut Nota ───
   Future<String> prosesWarpingNota(String imagePath) async {
     try {
       final fileNotaAsli = File(imagePath);
-      // Proses pelurusan sudut nota berjalan di sini
       final fileNotaLurus = await _warpingService.warpNota(fileNotaAsli);
-      
       return fileNotaLurus.path;
     } catch (e) {
-      // Jika error, amankan dengan mengembalikan foto aslinya
       return imagePath; 
+    }
+  }
+
+  // ─── MODUL 7: Eksekusi Pemotongan Latar Belakang Komoditas ───
+  Future<String> prosesSegmentasiBarang(String imagePath) async {
+    try {
+      final fileBarangAsli = File(imagePath);
+      // Memotong objek non-hijau di latar belakang komoditas
+      final fileBarangMurni = await _segmentationService.segmenLatarKomoditas(fileBarangAsli);
+      return fileBarangMurni.path;
+    } catch (e) {
+      return imagePath;
     }
   }
 
   // ─── MODUL 8: (Akan Dikerjakan Nanti) ───
   Future<String> prosesTebakGrade(String imagePath) async {
-    // Simulasi waktu loading pemrosesan ML (2 detik)
     await Future.delayed(const Duration(seconds: 2));
-    
-    // Anggap saja algoritma PCD mu mendeteksi komoditas ini kualitasnya A
     return 'A'; 
   }
 }

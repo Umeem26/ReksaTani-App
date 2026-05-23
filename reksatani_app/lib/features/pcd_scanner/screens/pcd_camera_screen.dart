@@ -173,12 +173,12 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                 CircularProgressIndicator(color: AppTheme.hijauMuda, strokeWidth: 3),
                 SizedBox(height: 20),
                 Text(
-                  'SEDANG MEMPROSES FOTO...', // 👈 REVISI BAHASA: Sangat dimengerti oleh Pengepul
+                  'SEDANG MEMPROSES FOTO...',
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.5, decoration: TextDecoration.none),
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'Mohon tunggu, sistem sedang membaca data otomatis', // 👈 REVISI BAHASA Sederhana
+                  'Mohon tunggu, sistem sedang membaca data otomatis',
                   style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w400, fontSize: 11, decoration: TextDecoration.none),
                 ),
               ],
@@ -188,18 +188,34 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       ),
     );
 
-    final tebakanGrade = await _pcdController.prosesTebakGrade(_fotoBarangPath!);
+    // ─── 🛠️ FIX UTAMA: MENYALAKAN MESIN MODUL 6 & MODUL 7 ───
+    
+    // 1. Eksekusi Modul 6: Pelurusan (Warping) Nota
+    String finalNotaPath = _fotoNotaPath!;
+    if (_fotoNotaPath != null) {
+      finalNotaPath = await _pcdController.prosesWarpingNota(_fotoNotaPath!);
+    }
 
-    if (mounted) Navigator.pop(context);
+    // 2. Eksekusi Modul 7: Pemotongan Latar Belakang Komoditas
+    String finalBarangPath = _fotoBarangPath!;
+    if (_fotoBarangPath != null) {
+      finalBarangPath = await _pcdController.prosesSegmentasiBarang(_fotoBarangPath!);
+    }
+
+    // 3. Eksekusi Modul 8: Tebak Grade (Saat ini masih statis 'A')
+    final tebakanGrade = await _pcdController.prosesTebakGrade(finalBarangPath);
+
+    if (mounted) Navigator.pop(context); // Tutup dialog loading
 
     if (mounted) {
       _cameraController?.dispose(); 
 
+      // Pindah ke form dengan mengirimkan foto HASIL OLAHAN AI, bukan mentahannya lagi!
       Navigator.of(context, rootNavigator: true).pushReplacement(
         MaterialPageRoute(
           builder: (_) => TransaksiScreen(
-            fotoNotaPath: _fotoNotaPath,
-            fotoBarangPath: _fotoBarangPath,
+            fotoNotaPath: finalNotaPath,       // 👈 Mengirim nota yang sudah diluruskan
+            fotoBarangPath: finalBarangPath,   // 👈 Mengirim komoditas yang latarnya sudah diputihkan
             gradeTebakanPcd: tebakanGrade,
           ),
         ),
