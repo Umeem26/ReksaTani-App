@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import '../services/image_brightness_service.dart';
+import '../services/confidence_validator.dart'; // 👈 Modul 10
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
@@ -288,26 +289,295 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     }
 
     final dataHasilOcr = await _pcdController.prosesOcrNota(finalNotaPath);
-    final tebakanGrade = await _pcdController.prosesTebakGrade(finalBarangPath);
 
-    if (mounted) Navigator.pop(context);
+    // ─── MODUL 10: Gunakan prosesGradingLengkap untuk mendapat confidence ───
+    final hasilGrading = await _pcdController.prosesGradingLengkap(finalBarangPath);
+    final tebakanGrade = hasilGrading['grade'] as String;
+    final confidence = (hasilGrading['confidence'] as num?)?.toDouble() ?? 0.0;
 
-    if (mounted) {
-      _stopLiveStream();
-      _cameraController?.dispose(); 
+    if (mounted) Navigator.pop(context); // Tutup dialog loading
 
-      Navigator.of(context, rootNavigator: true).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => TransaksiScreen(
-            fotoNotaPath: finalNotaPath,
-            fotoBarangPath: finalBarangPath,
-            gradeTebakanPcd: tebakanGrade,
-            initialBeratOcr: dataHasilOcr['berat'],
-            initialHargaOcr: dataHasilOcr['harga'],
-          ),
-        ),
+    // ─── MODUL 10: Validasi Confidence Sweeper ───
+    final confidenceResult = _pcdController.confidenceValidator.validate(
+      confidence: confidence,
+      grade: tebakanGrade,
+    );
+
+    if (confidenceResult.state == ConfidenceState.accepted) {
+      // Confidence tinggi → langsung navigate ke TransaksiScreen
+      _navigateKeTransaksi(
+        finalNotaPath: finalNotaPath,
+        finalBarangPath: finalBarangPath,
+        tebakanGrade: tebakanGrade,
+        dataHasilOcr: dataHasilOcr,
       );
+    } else {
+      // Confidence rendah → tampilkan Confidence Sweeper Bottom Sheet
+      if (mounted) {
+        _showConfidenceSweeperSheet(
+          confidenceResult: confidenceResult,
+          finalNotaPath: finalNotaPath,
+          finalBarangPath: finalBarangPath,
+          dataHasilOcr: dataHasilOcr,
+        );
+      }
     }
+  }
+
+  /// Navigasi langsung ke TransaksiScreen. Dipanggil jika confidence accepted
+  /// atau user memilih "Gunakan Hasil Manual" dari sweeper sheet.
+  void _navigateKeTransaksi({
+    required String finalNotaPath,
+    required String finalBarangPath,
+    required String tebakanGrade,
+    required Map<String, String> dataHasilOcr,
+  }) {
+    if (!mounted) return;
+    _stopLiveStream();
+    _cameraController?.dispose();
+
+    Navigator.of(context, rootNavigator: true).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => TransaksiScreen(
+          fotoNotaPath: finalNotaPath,
+          fotoBarangPath: finalBarangPath,
+          gradeTebakanPcd: tebakanGrade,
+          initialBeratOcr: dataHasilOcr['berat'],
+          initialHargaOcr: dataHasilOcr['harga'],
+        ),
+      ),
+    );
+  }
+
+  // ─── MODUL 10: Bottom Sheet Confidence Sweeper ───
+  void _showConfidenceSweeperSheet({
+    required ConfidenceResult confidenceResult,
+    required String finalNotaPath,
+    required String finalBarangPath,
+    required Map<String, String> dataHasilOcr,
+  }) {
+    final isManualOverride = confidenceResult.state == ConfidenceState.manualOverride;
+    final percent = confidenceResult.confidencePercent;
+
+    // Warna dinamis berdasarkan confidence level
+    Color barColor;
+    Color barBgColor;
+    IconData statusIcon;
+    String statusLabel;
+    if (percent >= 75) {
+      barColor = AppTheme.hijauMuda;
+      barBgColor = AppTheme.hijauMuda.withOpacity(0.15);
+      statusIcon = Icons.check_circle_rounded;
+      statusLabel = 'Keyakinan Tinggi';
+    } else if (percent >= 50) {
+      barColor = AppTheme.kuning;
+      barBgColor = AppTheme.kuning.withOpacity(0.15);
+      statusIcon = Icons.warning_amber_rounded;
+      statusLabel = 'Keyakinan Sedang';
+    } else {
+      barColor = AppTheme.merah;
+      barBgColor = AppTheme.merah.withOpacity(0.15);
+      statusIcon = Icons.error_outline_rounded;
+      statusLabel = 'Keyakinan Rendah';
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 36),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // ─── Header: Icon + Status ───
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: barBgColor,
+              ),
+              child: Icon(statusIcon, color: barColor, size: 34),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              statusLabel,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: barColor,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              confidenceResult.label,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ─── Confidence Bar Visual ───
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.bgPage,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Skor Keyakinan ML',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecond),
+                      ),
+                      Text(
+                        '$percent%',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: barColor),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Progress Bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      height: 12,
+                      child: LinearProgressIndicator(
+                        value: confidenceResult.confidence.clamp(0.0, 1.0),
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: AlwaysStoppedAnimation<Color>(barColor),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Threshold: ${(confidenceResult.thresholdUsed * 100).round()}%',
+                        style: const TextStyle(fontSize: 11, color: AppTheme.textHint),
+                      ),
+                      Text(
+                        'Percobaan: ${confidenceResult.retryCount}/${confidenceResult.maxRetry}',
+                        style: const TextStyle(fontSize: 11, color: AppTheme.textHint),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ─── Warning Banner jika Manual Override ───
+            if (isManualOverride)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.kuning.withOpacity(0.4)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: AppTheme.kuning, size: 18),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Batas percobaan foto ulang telah habis.\nSilakan lanjutkan dengan input manual.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ─── Action Buttons ───
+            // Tombol Retry (hanya tampil jika state = needsRetry)
+            if (!isManualOverride)
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx); // Tutup bottom sheet
+                    // Reset langkah ke foto komoditas & buka kamera ulang
+                    setState(() {
+                      _step = 1;
+                      _fotoBarangPath = null;
+                      _showLiveCamera = true;
+                    });
+                    _startLiveStream();
+                  },
+                  icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                  label: Text(
+                    'Foto Ulang (Percobaan ${confidenceResult.retryCount}/${confidenceResult.maxRetry})',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.hijauMuda,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            if (!isManualOverride) const SizedBox(height: 10),
+
+            // Tombol Gunakan Hasil Manual (selalu tampil)
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx); // Tutup bottom sheet
+                  _pcdController.confidenceValidator.reset();
+                  _navigateKeTransaksi(
+                    finalNotaPath: finalNotaPath,
+                    finalBarangPath: finalBarangPath,
+                    tebakanGrade: confidenceResult.grade,
+                    dataHasilOcr: dataHasilOcr,
+                  );
+                },
+                icon: const Icon(Icons.edit_rounded, size: 20),
+                label: Text(
+                  isManualOverride ? 'Lanjut Input Manual' : 'Gunakan Hasil Ini',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.textPrimary,
+                  side: const BorderSide(color: AppTheme.border, width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
