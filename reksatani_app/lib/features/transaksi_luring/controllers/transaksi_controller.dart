@@ -171,6 +171,51 @@ class TransaksiController {
     await Future.delayed(const Duration(milliseconds: 400));
   }
 
+  Future<void> simpanKasbonMurni({
+    required PetaniHiveModel petaniTerpilih,
+    required String nominalKasbonText,
+  }) async {
+    final user = _hive.usersBox.get('currentUser')!;
+    final now  = DateTime.now();
+    final double nominalKasbon = double.tryParse(nominalKasbonText) ?? 0.0;
+
+    // Ambil koordinat GPS murni luring untuk mencatat lokasi pencairan uang
+    final koordinat = await _getKoordinatGPS();
+
+    // 1. Catat kasbon ke riwayat transaksi sebagai bukti pengeluaran kas luring
+    final trx = TransaksiHiveModel(
+      idLokal: 'kasbon_${user.id}_${now.millisecondsSinceEpoch}',
+      pengepulId: user.id,
+      petaniId: petaniTerpilih.id,
+      namaPengepul: user.username,
+      namaPetani: petaniTerpilih.namaPetani.trim(),
+      namaKomoditas: 'Pencairan Kasbon Baru', // Label penanda jenis transaksi keuangan
+      gradeTerpilih: '-',
+      berat: 0,
+      hargaBeliSatuan: 0,
+      nominalPotongKasbon: 0, // 0 karena ini menambah hutang, bukan memotong/melunasi hasil panen
+      totalBayar: nominalKasbon,
+      fotoFisikBarang: '',
+      fotoNota: '',
+      latitude: koordinat['lat'] ?? 0.0,
+      longitude: koordinat['lng'] ?? 0.0,
+      statusSinkronisasi: 'pending',
+      createdAt: now,
+    );
+
+    await _hive.saveTransaksi(trx);
+
+    // 2. Tambahkan nominal kasbon baru ke akumulasi sisa hutang petani di Hive
+    petaniTerpilih.sisaHutangKasbon += nominalKasbon;
+    await petaniTerpilih.save();
+
+    // 3. Potong langsung dari kas Saldo Uang Jalan milik pengepul saat ini
+    user.sisaUangJalan -= nominalKasbon;
+    await user.save();
+
+    await Future.delayed(const Duration(milliseconds: 400));
+  }
+
   Future<void> deleteTransaksi(TransaksiHiveModel trx) async {
     if (trx.statusSinkronisasi == 'pending') {
       await _hive.transaksiBox.delete(trx.idLokal);

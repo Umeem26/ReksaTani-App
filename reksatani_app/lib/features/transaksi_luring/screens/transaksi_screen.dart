@@ -18,6 +18,7 @@ class TransaksiScreen extends StatefulWidget {
   final String? gradeTebakanPcd;
   final String? initialBeratOcr; 
   final String? initialHargaOcr; 
+  final bool isMurniKasbon; 
 
   const TransaksiScreen({
     super.key,
@@ -27,6 +28,7 @@ class TransaksiScreen extends StatefulWidget {
     this.gradeTebakanPcd,
     this.initialBeratOcr, 
     this.initialHargaOcr, 
+    this.isMurniKasbon = false, 
   });
 
   @override
@@ -41,6 +43,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   final _desaCtrl = TextEditingController();
   final _beratCtrl = TextEditingController();
   final _hargaCtrl = TextEditingController();
+  final _nominalKasbonCtrl = TextEditingController(); 
 
   PetaniHiveModel? _petaniTerpilih;
   KomoditasHiveModel? _komoditasTerpilih;
@@ -79,12 +82,12 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       }
     }
 
-      if (widget.initialBeratOcr != null && widget.initialBeratOcr!.isNotEmpty) {
-        _beratCtrl.text = widget.initialBeratOcr!;
-      }
-      if (widget.initialHargaOcr != null && widget.initialHargaOcr!.isNotEmpty) {
-        _hargaCtrl.text = widget.initialHargaOcr!;
-      }
+    if (widget.initialBeratOcr != null && widget.initialBeratOcr!.isNotEmpty) {
+      _beratCtrl.text = widget.initialBeratOcr!;
+    }
+    if (widget.initialHargaOcr != null && widget.initialHargaOcr!.isNotEmpty) {
+      _hargaCtrl.text = widget.initialHargaOcr!;
+    }
       
     _fotoNotaPath = widget.fotoNotaPath;
     _fotoBarangPath = widget.fotoBarangPath;
@@ -101,16 +104,36 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     _desaCtrl.dispose();
     _beratCtrl.dispose();
     _hargaCtrl.dispose();
+    _nominalKasbonCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_hargaMelebihi) {
-      _showSnack(
-        'Harga melebihi batas maksimal grade $_gradeTerpilih (Rp ${_fmt(_hargaMaksGrade.toInt())})!',
-        isError: true,
+
+    if (widget.isMurniKasbon) {
+      if (_petaniTerpilih == null) {
+        _showSnack('Wajib memilih mitra petani terdaftar untuk pencairan kasbon!', isError: true);
+        return;
+      }
+      final double dipinjam = double.tryParse(_nominalKasbonCtrl.text) ?? 0.0;
+      if (_controller.sisaUangJalan < dipinjam) {
+        _showSnack('Gagal! Saldo Uang Jalan Anda tidak cukup. Sisa: Rp ${_fmt(_controller.sisaUangJalan.toInt())}', isError: true);
+        return;
+      }
+
+      setState(() => _saving = true);
+      await _controller.simpanKasbonMurni(
+        petaniTerpilih: _petaniTerpilih!,
+        nominalKasbonText: _nominalKasbonCtrl.text,
       );
+      setState(() => _saving = false);
+      _showSuksesSheet();
+      return;
+    }
+
+    if (_hargaMelebihi) {
+      _showSnack('Harga melebihi batas maksimal grade $_gradeTerpilih (Rp ${_fmt(_hargaMaksGrade.toInt())})!', isError: true);
       return;
     }
 
@@ -119,15 +142,11 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     final uangTunaiKeluar = _totalBayar - potongan;
 
     if (_controller.sisaUangJalan < uangTunaiKeluar) {
-      _showSnack(
-        'Saldo Uang Jalan tidak mencukupi! Sisa: Rp ${_fmt(_controller.sisaUangJalan.toInt())}',
-        isError: true,
-      );
+      _showSnack('Saldo Uang Jalan tidak mencukupi! Sisa: Rp ${_fmt(_controller.sisaUangJalan.toInt())}', isError: true);
       return;
     }
 
     setState(() => _saving = true);
-
     if (_isEditMode) {
       await _controller.updateTransaksi(
         widget.editTrx!,
@@ -154,21 +173,25 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         fotoBarangPath: _fotoBarangPath ?? '',
       );
     }
-
     if (!mounted) return;
     setState(() => _saving = false);
     _showSuksesSheet();
   }
 
   void _showSuksesSheet() {
+    final double tampilNominal = widget.isMurniKasbon 
+        ? (double.tryParse(_nominalKasbonCtrl.text) ?? 0) 
+        : _totalBayar;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => _SuksesSheet(
-        totalBayar: _totalBayar,
-        namaPetani: _namaPenjualCtrl.text,
+        totalBayar: tampilNominal,
+        namaPetani: _petaniTerpilih?.namaPetani ?? _namaPenjualCtrl.text,
+        isKasbonTitle: widget.isMurniKasbon,
         onSelesai: () {
           Navigator.pop(context); 
           Navigator.pop(context, true); 
@@ -177,7 +200,6 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     );
   }
 
-  // 🛠️ FIX DATA RESET: Melempar sisa data foto yang valid ke dalam constructor PcdCameraScreen
   void _panggilKameraPcdUlang() {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
@@ -213,10 +235,12 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       backgroundColor: AppTheme.bgPage,
       appBar: AppBar(
         backgroundColor: AppTheme.bgCard,
-        foregroundColor: AppTheme.textPrimary,
+        foregroundColor: AppTheme.textPrimary, // 👈 FIX: Typo AppThemePrimary sudah diperbaiki
         elevation: 0,
         title: Text(
-          _isEditMode ? 'Edit Transaksi' : 'Input Transaksi',
+          widget.isMurniKasbon 
+              ? 'Pencairan Kasbon Baru' 
+              : (_isEditMode ? 'Edit Transaksi' : 'Input Transaksi'),
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
         leading: IconButton(
@@ -233,268 +257,307 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (!_isEditMode) _BannerPcd(gradeTebakan: widget.gradeTebakanPcd),
-            if (!_isEditMode) const SizedBox(height: 16),
+            if (!_isEditMode && !widget.isMurniKasbon) _BannerPcd(gradeTebakan: widget.gradeTebakanPcd),
+            if (!_isEditMode && !widget.isMurniKasbon) const SizedBox(height: 16),
             
             _FormSection(
-              title: 'Data Penjual',
+              title: 'Data Penerima Kasbon / Penjual',
               icon: Icons.person_outline_rounded,
               children: [
-                if (_daftarPetani.isNotEmpty) ...[
-                  _FieldLabel('Pilih Petani (opsional)'),
-                  DropdownButtonFormField<PetaniHiveModel>(
-                    value: _petaniTerpilih,
+                _FieldLabel(widget.isMurniKasbon ? 'Pilih Mitra Petani (Wajib)' : 'Pilih Petani (opsional)'),
+                DropdownButtonFormField<PetaniHiveModel>(
+                  value: _petaniTerpilih,
+                  decoration: _dropDeco(),
+                  hint: const Text('Pilih dari daftar petani'),
+                  validator: (v) => widget.isMurniKasbon && v == null ? 'Petani wajib dipilih' : null,
+                  items: _daftarPetani
+                      .map((p) => DropdownMenuItem(value: p, child: Text(p.namaPetani)))
+                      .toList(),
+                  onChanged: (p) => setState(() {
+                    _petaniTerpilih = p;
+                    if (p != null) {
+                      _namaPenjualCtrl.text = p.namaPetani;
+                      _desaCtrl.text = p.desa;
+                    }
+                  }),
+                ),
+                if (!widget.isMurniKasbon) ...[
+                  const SizedBox(height: 12),
+                  _ReksaField(
+                    ctrl: _namaPenjualCtrl,
+                    label: 'Nama Penjual',
+                    hint: 'Masukkan nama penjual',
+                    validator: (v) => (v?.isEmpty ?? true) ? 'Wajib diisi' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  _ReksaField(
+                    ctrl: _desaCtrl,
+                    label: 'Desa / Asal',
+                    hint: 'Masukkan asal desa',
+                    validator: (v) => (v?.isEmpty ?? true) ? 'Wajib diisi' : null,
+                  ),
+                ],
+                if (_petaniTerpilih != null)
+                  _KasbonInfo(sisa: _petaniTerpilih!.sisaHutangKasbon, isNewLoanMode: widget.isMurniKasbon),
+              ],
+            ),
+            const SizedBox(height: 14),
+            
+            if (widget.isMurniKasbon) ...[
+              _FormSection(
+                title: 'Nominal Kasbon Pinjaman Baru',
+                icon: Icons.payments_outlined,
+                children: [
+                  _ReksaField(
+                    ctrl: _nominalKasbonCtrl,
+                    label: 'Jumlah Kasbon yang Diberikan (Rp)',
+                    hint: 'Masukkan nominal rupiah pinjaman',
+                    type: TextInputType.number,
+                    formatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (_) => setState(() {}),
+                    validator: (v) => (v?.isEmpty ?? true || (double.tryParse(v!) ?? 0) <= 0) ? 'Masukkan nilai nominal yang valid' : null,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+            ] else ...[
+              _FormSection(
+                title: 'Data Komoditas',
+                icon: Icons.grass_rounded,
+                children: [
+                  _FieldLabel('Jenis Komoditas'),
+                  DropdownButtonFormField<KomoditasHiveModel>(
+                    value: _komoditasTerpilih,
                     decoration: _dropDeco(),
-                    hint: const Text('Pilih dari daftar petani'),
-                    items: _daftarPetani
-                        .map((p) => DropdownMenuItem(value: p, child: Text(p.namaPetani)))
+                    hint: const Text('Pilih komoditas'),
+                    items: _daftarKomoditas
+                        .map((k) => DropdownMenuItem(value: k, child: Text(k.namaKomoditas)))
                         .toList(),
-                    onChanged: (p) => setState(() {
-                      _petaniTerpilih = p;
-                      if (p != null) {
-                        _namaPenjualCtrl.text = p.namaPetani;
-                        _desaCtrl.text = p.desa;
-                      }
+                    validator: (_) => _komoditasTerpilih == null ? 'Pilih komoditas' : null,
+                    onChanged: (k) => setState(() {
+                      _komoditasTerpilih = k;
+                      _gradeTerpilih = widget.gradeTebakanPcd;
+                      _hargaCtrl.clear();
                     }),
                   ),
                   const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ReksaField(
+                          ctrl: _beratCtrl,
+                          label: 'Jumlah Berat (kg)',
+                          hint: '0',
+                          type: TextInputType.number,
+                          formatters: [FilteringTextInputFormatter.digitsOnly],
+                          onChanged: (_) => setState(() {}),
+                          validator: (v) => (v?.isEmpty ?? true) ? 'Wajib' : null,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ReksaField(
+                          ctrl: _hargaCtrl,
+                          label: 'Harga / kg (Rp)',
+                          hint: '0',
+                          type: TextInputType.number,
+                          formatters: [FilteringTextInputFormatter.digitsOnly],
+                          onChanged: (val) {
+                            final maks = _hargaMaksGrade;
+                            final h = double.tryParse(val) ?? 0;
+                            if (maks > 0 && h > maks) {
+                              _hargaCtrl.text = maks.toInt().toString();
+                              _hargaCtrl.selection = TextSelection.fromPosition(TextPosition(offset: _hargaCtrl.text.length));
+                              _showSnack('Harga disesuaikan ke batas maksimal grade $_gradeTerpilih (Rp ${_fmt(maks.toInt())})', isError: true);
+                            }
+                            setState(() {});
+                          },
+                          validator: (v) => (v?.isEmpty ?? true) ? 'Wajib' : null,
+                          isError: _hargaMelebihi,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_hargaMelebihi)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: AppTheme.merah, size: 14),
+                          const SizedBox(width: 5),
+                          Expanded(child: Text('Harga melebihi batas maks grade $_gradeTerpilih: Rp ${_fmt(_hargaMaksGrade.toInt())}', style: const TextStyle(fontSize: 11, color: AppTheme.merah))),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  _FieldLabel('Kualitas'),
+                  DropdownButtonFormField<String>(
+                    value: _gradeTerpilih,
+                    decoration: _dropDeco(),
+                    hint: const Text('Pilih kualitas'),
+                    items: _daftarGrade
+                        .map((g) => DropdownMenuItem<String>(
+                              value: g['grade'] as String,
+                              child: Row(
+                                children: [
+                                  Text(g['grade'] as String),
+                                  const SizedBox(width: 8),
+                                  Text('(Maks Rp ${_fmt(((g['harga_maks'] as num?)?.toInt() ?? 0))})', style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                    validator: (_) => _gradeTerpilih == null ? 'Pilih kualitas' : null,
+                    onChanged: (g) => setState(() {
+                      _gradeTerpilih = g;
+                      final hMaks = (_daftarGrade.firstWhere((x) => x['grade'] == g, orElse: () => {})['harga_maks'] as num?)?.toInt() ?? 0;
+                      if (hMaks > 0) _hargaCtrl.text = '$hMaks';
+                      setState(() {});
+                    }),
+                  ),
                 ],
-                _ReksaField(
-                  ctrl: _namaPenjualCtrl,
-                  label: 'Nama Penjual',
-                  hint: 'Masukkan nama penjual',
-                  validator: (v) => (v?.isEmpty ?? true) ? 'Wajib diisi' : null,
-                ),
-                const SizedBox(height: 12),
-                _ReksaField(
-                  ctrl: _desaCtrl,
-                  label: 'Desa / Asal',
-                  hint: 'Masukkan asal desa',
-                  validator: (v) => (v?.isEmpty ?? true) ? 'Wajib diisi' : null,
-                ),
-                if (_petaniTerpilih != null && _petaniTerpilih!.sisaHutangKasbon > 0)
-                  _KasbonInfo(sisa: _petaniTerpilih!.sisaHutangKasbon),
-              ],
-            ),
-            const SizedBox(height: 14),
-            
-            _FormSection(
-              title: 'Data Komoditas',
-              icon: Icons.grass_rounded,
-              children: [
-                _FieldLabel('Jenis Komoditas'),
-                DropdownButtonFormField<KomoditasHiveModel>(
-                  value: _komoditasTerpilih,
-                  decoration: _dropDeco(),
-                  hint: const Text('Pilih komoditas'),
-                  items: _daftarKomoditas
-                      .map((k) => DropdownMenuItem(value: k, child: Text(k.namaKomoditas)))
-                      .toList(),
-                  validator: (_) => _komoditasTerpilih == null ? 'Pilih komoditas' : null,
-                  onChanged: (k) => setState(() {
-                    _komoditasTerpilih = k;
-                    _gradeTerpilih = widget.gradeTebakanPcd;
-                    _hargaCtrl.clear();
-                  }),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ReksaField(
-                        ctrl: _beratCtrl,
-                        label: 'Jumlah Berat (kg)',
-                        hint: '0',
-                        type: TextInputType.number,
-                        formatters: [FilteringTextInputFormatter.digitsOnly],
-                        onChanged: (_) => setState(() {}),
-                        validator: (v) => (v?.isEmpty ?? true) ? 'Wajib' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ReksaField(
-                        ctrl: _hargaCtrl,
-                        label: 'Harga / kg (Rp)',
-                        hint: '0',
-                        type: TextInputType.number,
-                        formatters: [FilteringTextInputFormatter.digitsOnly],
-                        onChanged: (val) {
-                          final maks = _hargaMaksGrade;
-                          final h = double.tryParse(val) ?? 0;
-                          if (maks > 0 && h > maks) {
-                            _hargaCtrl.text = maks.toInt().toString();
-                            _hargaCtrl.selection = TextSelection.fromPosition(TextPosition(offset: _hargaCtrl.text.length));
-                            _showSnack('Harga disesuaikan ke batas maksimal grade $_gradeTerpilih (Rp ${_fmt(maks.toInt())})', isError: true);
-                          }
-                          setState(() {});
-                        },
-                        validator: (v) => (v?.isEmpty ?? true) ? 'Wajib' : null,
-                        isError: _hargaMelebihi,
-                      ),
-                    ),
-                  ],
-                ),
-                if (_hargaMelebihi)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.warning_amber_rounded, color: AppTheme.merah, size: 14),
-                        const SizedBox(width: 5),
-                        Expanded(child: Text('Harga melebihi batas maks grade $_gradeTerpilih: Rp ${_fmt(_hargaMaksGrade.toInt())}', style: const TextStyle(fontSize: 11, color: AppTheme.merah))),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                _FieldLabel('Kualitas'),
-                DropdownButtonFormField<String>(
-                  value: _gradeTerpilih,
-                  decoration: _dropDeco(),
-                  hint: const Text('Pilih kualitas'),
-                  items: _daftarGrade
-                      .map((g) => DropdownMenuItem<String>(
-                            value: g['grade'] as String,
-                            child: Row(
-                              children: [
-                                Text(g['grade'] as String),
-                                const SizedBox(width: 8),
-                                Text('(Maks Rp ${_fmt(((g['harga_maks'] as num?)?.toInt() ?? 0))})', style: const TextStyle(fontSize: 11, color: AppTheme.textSecond)),
-                              ],
-                            ),
-                          ))
-                      .toList(),
-                  validator: (_) => _gradeTerpilih == null ? 'Pilih kualitas' : null,
-                  onChanged: (g) => setState(() {
-                    _gradeTerpilih = g;
-                    final hMaks = (_daftarGrade.firstWhere((x) => x['grade'] == g, orElse: () => {})['harga_maks'] as num?)?.toInt() ?? 0;
-                    if (hMaks > 0) _hargaCtrl.text = '$hMaks';
-                    setState(() {});
-                  }),
-                ),
-              ],
-            ),
-            
-            _FormSection(
-              title: 'Lampiran Bukti Fisik',
-              icon: Icons.camera_alt_outlined,
-              children: [
-                _FieldLabel('Foto Nota / Kwitansi'),
-                const SizedBox(height: 4),
-                if (_fotoNotaPath != null && _fotoNotaPath!.isNotEmpty)
-                  Stack(
-                    children: [
-                      Container(
-                        height: 160, width: double.infinity,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          image: DecorationImage(
-                            image: _fotoNotaPath!.startsWith('http') 
-                                ? NetworkImage(_fotoNotaPath!) as ImageProvider
-                                : FileImage(File(_fotoNotaPath!)),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 8, top: 8,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _fotoNotaPath = null),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, color: Colors.white, size: 16),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  OutlinedButton.icon(
-                    onPressed: _panggilKameraPcdUlang,
-                    icon: const Icon(Icons.add_a_photo_outlined, size: 20),
-                    label: const Text('Ambil Ulang Foto Nota via PCD'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: const BorderSide(color: AppTheme.border),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      foregroundColor: AppTheme.textSecond,
-                    ),
-                  ),
-                  
-                const SizedBox(height: 16),
-                
-                _FieldLabel('Foto Fisik Komoditas Barang'),
-                const SizedBox(height: 4),
-                if (_fotoBarangPath != null && _fotoBarangPath!.isNotEmpty)
-                  Stack(
-                    children: [
-                      Container(
-                        height: 160, width: double.infinity,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          image: DecorationImage(
-                            image: _fotoBarangPath!.startsWith('http') 
-                                ? NetworkImage(_fotoBarangPath!) as ImageProvider
-                                : FileImage(File(_fotoBarangPath!)),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 8, top: 8,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _fotoBarangPath = null),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, color: Colors.white, size: 16),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  OutlinedButton.icon(
-                    onPressed: _panggilKameraPcdUlang,
-                    icon: const Icon(Icons.add_a_photo_outlined, size: 20),
-                    label: const Text('Ambil Ulang Foto Komoditas via PCD'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: const BorderSide(color: AppTheme.border),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      foregroundColor: AppTheme.textSecond,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            
-            if (_totalBayar > 0)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3))),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calculate_outlined, color: AppTheme.hijauTua, size: 20),
-                    const SizedBox(width: 10),
-                    const Text('Total Bayar', style: TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w600)),
-                    const Spacer(),
-                    Text('Rp ${_fmt(_totalBayar.toInt())}', style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w800, fontSize: 16)),
-                  ],
-                ),
               ),
-            if (_totalBayar > 0) const SizedBox(height: 14),
+              const SizedBox(height: 14),
+              
+              _FormSection(
+                title: 'Lampiran Bukti Fisik',
+                icon: Icons.camera_alt_outlined,
+                children: [
+                  _FieldLabel('Foto Nota / Kwitansi'),
+                  const SizedBox(height: 4),
+                  if (_fotoNotaPath != null && _fotoNotaPath!.isNotEmpty)
+                    Stack(
+                      children: [
+                        Container(
+                          height: 160, width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            image: DecorationImage(
+                              image: _fotoNotaPath!.startsWith('http') 
+                                  ? NetworkImage(_fotoNotaPath!) as ImageProvider
+                                  : FileImage(File(_fotoNotaPath!)),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 8, top: 8,
+                          child: GestureDetector(
+                            onTap: () => setState(() => _fotoNotaPath = null),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle),
+                              child: const Icon(Icons.close, color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: _panggilKameraPcdUlang,
+                      icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+                      label: const Text('Ambil Ulang Foto Nota via PCD'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: AppTheme.border),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        foregroundColor: AppTheme.textSecond,
+                      ),
+                    ),
+                    
+                  const SizedBox(height: 16),
+                  
+                  _FieldLabel('Foto Fisik Komoditas Barang'),
+                  const SizedBox(height: 4),
+                  if (_fotoBarangPath != null && _fotoBarangPath!.isNotEmpty)
+                    Stack(
+                      children: [
+                        Container(
+                          height: 160, width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            image: DecorationImage(
+                              image: _fotoBarangPath!.startsWith('http') 
+                                  ? NetworkImage(_fotoBarangPath!) as ImageProvider
+                                  : FileImage(File(_fotoBarangPath!)),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 8, top: 8,
+                          child: GestureDetector(
+                            onTap: () => setState(() => _fotoBarangPath = null),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle),
+                              child: const Icon(Icons.close, color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: _panggilKameraPcdUlang,
+                      icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+                      label: const Text('Ambil Ulang Foto Komoditas via PCD'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: AppTheme.border),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        foregroundColor: AppTheme.textSecond,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+            ],
+            
+            Builder(
+              builder: (context) {
+                final double hitungTotal = widget.isMurniKasbon 
+                    ? (double.tryParse(_nominalKasbonCtrl.text) ?? 0.0)
+                    : _totalBayar;
+                
+                if (hitungTotal <= 0) return const SizedBox();
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: widget.isMurniKasbon ? const Color(0xFFFEF3C7) : AppTheme.hijauSoft, 
+                    borderRadius: BorderRadius.circular(14), 
+                    border: Border.all(color: (widget.isMurniKasbon ? AppTheme.kuning : AppTheme.hijauMuda).withOpacity(0.3))
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calculate_outlined, color: widget.isMurniKasbon ? const Color(0xFFB45309) : AppTheme.hijauTua, size: 20),
+                      const SizedBox(width: 10),
+                      Text(widget.isMurniKasbon ? 'Total Uang Keluar (Kasbon)' : 'Total Bayar', style: TextStyle(color: widget.isMurniKasbon ? const Color(0xFFB45309) : AppTheme.hijauTua, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Text('Rp ${_fmt(hitungTotal.toInt())}', style: TextStyle(color: widget.isMurniKasbon ? const Color(0xFFB45309) : AppTheme.hijauTua, fontWeight: FontWeight.w800, fontSize: 16)),
+                    ],
+                  ),
+                );
+              }
+            ),
+            const SizedBox(height: 14),
             
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
                 onPressed: _saving ? null : _simpan,
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.hijauMuda, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: widget.isMurniKasbon ? const Color(0xFFF59E0B) : AppTheme.hijauMuda, 
+                  foregroundColor: Colors.white, 
+                  elevation: 0, 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))
+                ),
                 child: _saving
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                    : const Text('Simpan Transaksi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    : Text(widget.isMurniKasbon ? 'Cairkan Pinjaman Kasbon' : 'Simpan Transaksi', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ),
             const SizedBox(height: 40),
@@ -630,7 +693,7 @@ class _ReksaField extends StatelessWidget {
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isError ? AppTheme.merah : AppTheme.border, width: isError ? 1.5 : 1)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isError ? AppTheme.merah : AppTheme.hijauMuda, width: 1.5)),
             errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.merah, width: 1.5)),
-            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.merah, width: 1.5)),
+            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.merah, width: 1.5)), // 👈 FIX: Typo BoxColor sudah diperbaiki
           ),
         ),
       ],
@@ -640,7 +703,9 @@ class _ReksaField extends StatelessWidget {
 
 class _KasbonInfo extends StatelessWidget {
   final double sisa;
-  const _KasbonInfo({required this.sisa});
+  final bool isNewLoanMode; 
+  const _KasbonInfo({required this.sisa, this.isNewLoanMode = false});
+
   String _fmt(int angka) {
     final s = angka.toString();
     final buf = StringBuffer();
@@ -650,18 +715,30 @@ class _KasbonInfo extends StatelessWidget {
     }
     return buf.toString();
   }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppTheme.kuning.withOpacity(0.4))),
+        decoration: BoxDecoration(
+          color: isNewLoanMode ? const Color(0xFFEFF6FF) : const Color(0xFFFEF3C7), 
+          borderRadius: BorderRadius.circular(10), 
+          border: Border.all(color: (isNewLoanMode ? Colors.blue : AppTheme.kuning).withOpacity(0.4))
+        ),
         child: Row(
           children: [
-            const Icon(Icons.info_outline_rounded, color: AppTheme.kuning, size: 16),
+            Icon(isNewLoanMode ? Icons.account_balance_wallet_rounded : Icons.info_outline_rounded, color: isNewLoanMode ? Colors.blue : AppTheme.kuning, size: 16),
             const SizedBox(width: 8),
-            Expanded(child: Text('Petani ini memiliki sisa kasbon Rp ${_fmt(sisa.toInt())} yang akan dipotong.', style: const TextStyle(fontSize: 12, color: Color(0xFF92400E)))),
+            Expanded(
+              child: Text(
+                isNewLoanMode 
+                    ? 'Hutang Kasbon Petani Saat Ini: Rp ${_fmt(sisa.toInt())}. Pencairan baru akan menambahkan akumulasi total hutang ini.'
+                    : 'Petani ini memiliki sisa kasbon Rp ${_fmt(sisa.toInt())} yang akan dipotong otomatis dari total hasil panen.', 
+                style: TextStyle(fontSize: 12, color: isNewLoanMode ? const Color(0xFF1E40AF) : const Color(0xFF92400E))
+              )
+            ),
           ],
         ),
       ),
@@ -672,8 +749,11 @@ class _KasbonInfo extends StatelessWidget {
 class _SuksesSheet extends StatelessWidget {
   final double totalBayar;
   final String namaPetani;
+  final bool isKasbonTitle;
   final VoidCallback onSelesai;
-  const _SuksesSheet({required this.totalBayar, required this.namaPetani, required this.onSelesai});
+  
+  const _SuksesSheet({required this.totalBayar, required this.namaPetani, this.isKasbonTitle = false, required this.onSelesai});
+
   String _fmt(int angka) {
     final s = angka.toString();
     final buf = StringBuffer();
@@ -683,6 +763,7 @@ class _SuksesSheet extends StatelessWidget {
     }
     return buf.toString();
   }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -692,11 +773,11 @@ class _SuksesSheet extends StatelessWidget {
         children: [
           Container(
             width: 72, height: 72,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.hijauSoft),
-            child: const Icon(Icons.check_circle_rounded, color: AppTheme.hijauMuda, size: 42),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: isKasbonTitle ? const Color(0xFFFEF3C7) : AppTheme.hijauSoft),
+            child: Icon(isKasbonTitle ? Icons.payments_rounded : Icons.check_circle_rounded, color: isKasbonTitle ? const Color(0xFFD97706) : AppTheme.hijauMuda, size: 42),
           ),
           const SizedBox(height: 16),
-          const Text('Transaksi Berhasil Disimpan!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(isKasbonTitle ? 'Kasbon Berhasil Dicairkan!' : 'Transaksi Berhasil Disimpan!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           const Text('Tersimpan di perangkat · Pending Sync ke server', style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
           const SizedBox(height: 20),
@@ -708,7 +789,7 @@ class _SuksesSheet extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Petani', style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
+                    const Text('Nama Petani', style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
                     Text(namaPetani, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
                   ],
                 ),
@@ -716,8 +797,8 @@ class _SuksesSheet extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Total Bayar', style: TextStyle(fontSize: 13, color: AppTheme.textSecond)),
-                    Text('Rp ${_fmt(totalBayar.toInt())}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.hijauTua)),
+                    Text(isKasbonTitle ? 'Nominal Kasbon' : 'Total Bayar', style: const TextStyle(fontSize: 13, color: AppTheme.textSecond)),
+                    Text('Rp ${_fmt(totalBayar.toInt())}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: isKasbonTitle ? const Color(0xFFB45309) : AppTheme.hijauTua)),
                   ],
                 ),
               ],
@@ -729,7 +810,7 @@ class _SuksesSheet extends StatelessWidget {
             height: 52,
             child: ElevatedButton(
               onPressed: onSelesai,
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.hijauMuda, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+              style: ElevatedButton.styleFrom(backgroundColor: isKasbonTitle ? const Color(0xFFF59E0B) : AppTheme.hijauMuda, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
               child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             ),
           ),

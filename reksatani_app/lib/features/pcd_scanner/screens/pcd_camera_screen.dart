@@ -312,6 +312,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
+    // --- MODE PILIHAN FORM AWAL (SEBELUM KAMERA PREVIEW AKTIF) ---
     if (!_showLiveCamera) {
       return Scaffold(
         backgroundColor: AppTheme.bgPage,
@@ -325,8 +326,10 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 32, 20, 20),
           children: [
-            const Text('TAHAPAN AMBIL FOTO', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: AppTheme.textSecond, letterSpacing: 1)),
-            const SizedBox(height: 20),
+            const Text('TAHAPAN AMBIL FOTO TRANSAKSI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: AppTheme.textSecond, letterSpacing: 1)),
+            const SizedBox(height: 16),
+            
+            // FORM INPUT 1: FOTO NOTA
             _buildSelectionFormItem(
               title: 'Foto Nota Timbangan',
               subtitle: 'Ambil foto nota kertas hasil timbangan dari galeri atau kamera',
@@ -337,7 +340,9 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                 _startLiveStream(); 
               },
             ),
-            const SizedBox(height: 28), 
+            const SizedBox(height: 20), 
+            
+            // FORM INPUT 2: FOTO KOMODITAS BARANG
             _buildSelectionFormItem(
               title: 'Foto Sayur / Komoditas',
               subtitle: 'Ambil foto fisik barang hasil panen petani untuk dicek kualitasnya',
@@ -348,7 +353,61 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                 _startLiveStream(); 
               },
             ),
-            const SizedBox(height: 48),
+            
+            // ─── 🛠️ INOVASI BARU: TOMBOL SKIP FOTO UNTUK KASBON MURNI ───
+            const SizedBox(height: 28),
+            const Text('OPSI KHUSUS PETANI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: AppTheme.textSecond, letterSpacing: 1)),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () {
+                _stopLiveStream();
+                _cameraController?.dispose();
+                // Langsung lompat ke form input dengan membawa penanda Kasbon Baru
+                Navigator.of(context, rootNavigator: true).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const TransaksiScreen(
+                      fotoNotaPath: '',
+                      fotoBarangPath: '',
+                      gradeTebakanPcd: '-',
+                      isMurniKasbon: true, // 👈 Mengirim indikator kasbon murni
+                    ),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF59E0B), width: 1.5), // Berwarna amber khas kasbon
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))]
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+                      child: const Icon(Icons.payments_outlined, color: Color(0xFFD97706), size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Pencairan Kasbon Baru', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textPrimary)),
+                          SizedBox(height: 4),
+                          Text('Petani ingin meminjam uang jalan (Skip ambil foto nota & komoditas)', style: TextStyle(fontSize: 11, color: AppTheme.textSecond, height: 1.3)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFFD97706)),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 40),
             if (_fotoNotaPath != null && _fotoBarangPath != null)
               SizedBox(
                 height: 52, width: double.infinity,
