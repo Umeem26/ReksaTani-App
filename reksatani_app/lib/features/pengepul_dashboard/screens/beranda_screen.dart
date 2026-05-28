@@ -31,18 +31,15 @@ class _BerandaScreenState extends State<BerandaScreen> {
   @override
   void initState() {
     super.initState();
-    // Tambahkan listener agar beranda "dengar" kalau sync selesai
     MasterDataService().addListener(_onDataMasterChanged);
   }
 
   void _onDataMasterChanged() {
-    // Fungsi ini dipanggil otomatis setiap MasterDataService selesai syncAll()
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    // Wajib hapus listener saat layar ditutup agar tidak memory leak
     MasterDataService().removeListener(_onDataMasterChanged);
     super.dispose();
   }
@@ -50,10 +47,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
   Future<void> _refresh() async {
     setState(() => _syncing = true);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Memulai sinkronisasi data...'),
-        duration: Duration(seconds: 1),
-      ),
+      const SnackBar(content: Text('Memulai sinkronisasi data...'), duration: Duration(seconds: 1)),
     );
 
     await _controller.syncData();
@@ -82,7 +76,10 @@ class _BerandaScreenState extends State<BerandaScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24), 
+          side: const BorderSide(color: AppTheme.border, width: 1.5), // FIX ERROR
+        ),
         title: const Row(
           children: [
             Icon(Icons.logout_rounded, color: AppTheme.merah),
@@ -117,10 +114,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
     if (konfirmasi == true && mounted) {
       await _controller.logout();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => AppRouter.getGatekeeper()),
-      );
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AppRouter.getGatekeeper()));
     }
   }
 
@@ -131,16 +125,17 @@ class _BerandaScreenState extends State<BerandaScreen> {
     final mitra = _controller.mitraTerbaru;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: SystemUiOverlayStyle.dark, // Teks status bar gelap karena header putih
       child: Scaffold(
-        backgroundColor: AppTheme.bgPage,
+        backgroundColor: AppTheme.bgPage, // Background abu-abu sangat muda (High contrast)
         body: RefreshIndicator(
           color: AppTheme.hijauMuda,
+          backgroundColor: Colors.white,
           onRefresh: _refresh,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              // ── 1. HEADER REVOLUSIONER ──
+              // ── 1. HEADER "OVERLAPPING CARD" (OUTDOOR FRIENDLY) ──
               SliverToBoxAdapter(
                 child: _HeaderModern(controller: _controller),
               ),
@@ -151,7 +146,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     
-                    // STAT CARD ALA BENTO GRID
+                    // STAT CARD ALA BENTO GRID (Solid & Clean)
                     _BentoStatRow(
                       jumlahTransaksi: _controller.jumlahTransaksi,
                       totalBerat: _controller.totalBerat,
@@ -160,46 +155,32 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     const SizedBox(height: 36),
 
                     // ── SECTION: MITRA ──
-                    _SectionHeaderModern(
+                    _SectionHeader(
                       title: 'Daftar Mitra',
                       icon: Icons.people_alt_rounded,
                       actionLabel: 'Lihat Semua',
-                      onAction: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ManajemenPetaniScreen()),
-                      ).then((_) => setState(() {})),
+                      onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManajemenPetaniScreen())).then((_) => setState(() {})),
                     ),
                     const SizedBox(height: 16),
                     if (mitra.isEmpty)
-                      const _EmptyStateBento(
-                        icon: Icons.person_add_disabled_rounded,
-                        msg: 'Belum ada data mitra.\nTambahkan mitra baru untuk mulai transaksi.',
-                      )
+                      const _EmptyStateBento(icon: Icons.person_add_disabled_rounded, msg: 'Belum ada data mitra.\nTambahkan mitra baru.')
                     else
-                      ...mitra.map((p) => _MitraRowModern(
+                      ...mitra.map((p) => _MitraRow(
                             data: p,
                             onEdit: () {
                               showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.white,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-                                ),
+                                context: context, isScrollControlled: true, backgroundColor: Colors.white,
+                                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
                                 builder: (_) => PetaniFormSheet(
                                   petaniLama: p,
                                   onSimpan: (nama, desa) async {
-                                    p.namaPetani = nama;
-                                    p.desa = desa;
+                                    p.namaPetani = nama; p.desa = desa;
                                     await p.save();
                                     try {
                                       final col = MongoDatabase.getCollection('petani');
                                       await col.updateOne(where.eq('_id', p.id), modify.set('nama_petani', nama).set('desa', desa));
                                     } catch (_) {}
-                                    if (mounted) {
-                                      Navigator.pop(context);
-                                      setState(() {});
-                                    }
+                                    if (mounted) { Navigator.pop(context); setState(() {}); }
                                   },
                                 ),
                               );
@@ -211,12 +192,9 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                   backgroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                   title: const Text('Hapus Petani', style: TextStyle(fontWeight: FontWeight.w800)),
-                                  content: Text('Yakin ingin menghapus ${p.namaPetani} dari daftar mitra?'),
+                                  content: Text('Yakin ingin menghapus ${p.namaPetani}?'),
                                   actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond)),
-                                    ),
+                                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond))),
                                     ElevatedButton(
                                       onPressed: () async {
                                         final idHapus = p.id;
@@ -225,10 +203,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                           final col = MongoDatabase.getCollection('petani');
                                           await col.deleteOne(where.eq('_id', idHapus));
                                         } catch (_) {}
-                                        if (mounted) {
-                                          Navigator.pop(context);
-                                          setState(() {});
-                                        }
+                                        if (mounted) { Navigator.pop(context); setState(() {}); }
                                       },
                                       style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
                                       child: const Text('Hapus'),
@@ -241,7 +216,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     const SizedBox(height: 36),
 
                     // ── SECTION: HARGA PASAR ──
-                    _SectionHeaderModern(
+                    _SectionHeader(
                       title: 'Harga Pasar Terkini',
                       icon: Icons.storefront_rounded,
                       actionLabel: 'Lihat Semua',
@@ -249,16 +224,13 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     ),
                     const SizedBox(height: 16),
                     if (harga.isEmpty)
-                      const _EmptyStateBento(
-                        icon: Icons.price_change_outlined,
-                        msg: 'Belum ada data harga.\nTarik ke bawah untuk sync dari server.',
-                      )
+                      const _EmptyStateBento(icon: Icons.price_change_outlined, msg: 'Belum ada data harga.\nTarik ke bawah untuk sync.')
                     else
-                      ...harga.map((h) => _HargaRowModern(data: h)),
+                      ...harga.map((h) => _HargaRow(data: h)),
                     const SizedBox(height: 36),
 
                     // ── SECTION: TRANSAKSI TERAKHIR ──
-                    _SectionHeaderModern(
+                    _SectionHeader(
                       title: 'Transaksi Terakhir',
                       icon: Icons.history_rounded,
                       actionLabel: 'Lihat Semua',
@@ -266,19 +238,13 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     ),
                     const SizedBox(height: 16),
                     if (riwayat.isEmpty)
-                      const _EmptyStateBento(
-                        icon: Icons.receipt_long_rounded,
-                        msg: 'Belum ada riwayat transaksi.\nTekan tombol kamera di bawah untuk memulai.',
-                      )
+                      const _EmptyStateBento(icon: Icons.receipt_long_rounded, msg: 'Belum ada riwayat transaksi.')
                     else
-                      ...riwayat.map((t) => _TransaksiRowModern(
+                      ...riwayat.map((t) => _TransaksiRow(
                             trx: t,
                             onEdit: t.statusSinkronisasi != 'pending_delete'
                                 ? () async {
-                                    final changed = await Navigator.push<bool>(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: t)),
-                                    );
+                                    final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: t)));
                                     if (changed == true && mounted) setState(() {});
                                   }
                                 : null,
@@ -290,12 +256,9 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                         backgroundColor: Colors.white,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                         title: const Text('Hapus Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.merah)),
-                                        content: const Text('Transaksi ini akan dihapus permanen dari perangkat. Lanjutkan?'),
+                                        content: const Text('Transaksi ini akan dihapus permanen. Lanjutkan?'),
                                         actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context, false),
-                                            child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond)),
-                                          ),
+                                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond))),
                                           ElevatedButton(
                                             onPressed: () => Navigator.pop(context, true),
                                             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
@@ -323,10 +286,10 @@ class _BerandaScreenState extends State<BerandaScreen> {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// ─── KOMPONEN UI INOVATIF (BERBEDA 180 DERAJAT DARI SEBELUMNYA) ─────────
+// ─── KOMPONEN UI "OUTDOOR FRIENDLY" (HIGH CONTRAST & CLEAN) ───────────
 // ────────────────────────────────────────────────────────────────────────
 
-// ── 1. HEADER MODERN (Deep Dark Forest + Glowing Wallet) ──
+// ── 1. HEADER SOLID WHITE (Background Bersih khas Reference) ──
 class _HeaderModern extends StatelessWidget {
   final BerandaController controller;
 
@@ -346,182 +309,168 @@ class _HeaderModern extends StatelessWidget {
     final top = MediaQuery.of(context).padding.top;
 
     return Container(
-      // Latar belakang sangat gelap agar kartu di atasnya terlihat menyala (Pop-out)
       decoration: const BoxDecoration(
-        color: Color(0xFF042F1A), // Dark Forest Green
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+        color: Colors.white, // Background Putih Bersih (Outdoor Friendly)
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
-      child: Stack(
+      padding: EdgeInsets.fromLTRB(20, top + 16, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Ornamen Lingkaran Abstrak di Belakang
-          Positioned(
-            top: -50, right: -40,
-            child: Container(width: 180, height: 180, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.04))),
+          // ── BARIS GREETING & PROFIL (Teks Gelap agar Terbaca) ──
+          Row(
+            children: [
+              // Logo Kiri
+              Container(
+                width: 45, height: 45, padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppTheme.border)),
+                child: Image.asset('assets/logo.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.eco, size: 24, color: AppTheme.hijauTua)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getGreeting(),
+                      style: const TextStyle(color: AppTheme.textSecond, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.username,
+                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Notifikasi Badge
+              ChangeNotifierProvider.value(
+                value: NotificationService(),
+                child: Consumer<NotificationService>(
+                  builder: (context, svc, _) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotifikasiScreen())),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(color: AppTheme.hijauSoft, shape: BoxShape.circle),
+                          child: const Icon(Icons.notifications_none_rounded, color: AppTheme.hijauTua, size: 24),
+                        ),
+                      ),
+                      if (svc.unreadCount > 0)
+                        Positioned(
+                          right: -4, top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                            constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+                            child: Text('${svc.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900), textAlign: TextAlign.center),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              
+              // Avatar Profil
+              Container(
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppTheme.border, width: 2)),
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: AppTheme.kuning,
+                  child: Text(user.username.substring(0, 1).toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+                ),
+              ),
+            ],
           ),
-          Positioned(
-            bottom: 20, left: -30,
-            child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.03))),
-          ),
-          
-          Padding(
-            padding: EdgeInsets.fromLTRB(24, top + 16, 24, 32),
+          const SizedBox(height: 28),
+
+          // ── KARTU SALDO (Distinct, green gradient highlight card ala Reference) ──
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: AppTheme.headerGradient, // Gradasi Hijau Terang (AppTheme)
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                // Bayangan jatuh tebal untuk efek highlight maksumum
+                BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.35), blurRadius: 25, offset: const Offset(0, 12)),
+              ],
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── BARIS GREETING & PROFIL ──
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                          child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('Saldo Uang Jalan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)), // Teks putih untuk kontras maksumum
+                      ],
+                    ),
+                    // Pill Badge Status Sync
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: controller.pending > 0 ? const Color(0xFFFEF3C7) : Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(controller.pending > 0 ? Icons.sync_problem_rounded : Icons.cloud_done_rounded, color: controller.pending > 0 ? const Color(0xFFD97706) : Colors.white, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            controller.pending > 0 ? '${controller.pending} Pending' : 'Tersinkron',
+                            style: TextStyle(color: controller.pending > 0 ? const Color(0xFFD97706) : Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  _fmtRupiah(user.sisaUangJalan),
+                  style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -1.0), // Teks putih untuk kontras maksumum
+                ),
+                const SizedBox(height: 24),
+                Container(height: 1, color: Colors.white.withOpacity(0.2)),
+                const SizedBox(height: 16),
+                
+                // Rincian bawah kartu: Daily summariesside-by-side ala buttons ala Reference
                 Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            _getGreeting(),
-                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.5),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user.username,
-                            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5),
-                          ),
+                          const Text('Pengeluaran Hari Ini', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          Text(_fmtRupiah(controller.totalPengeluaranHariIni), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
                         ],
                       ),
                     ),
-                    
-                    // Notifikasi Badge
-                    ChangeNotifierProvider.value(
-                      value: NotificationService(),
-                      child: Consumer<NotificationService>(
-                        builder: (context, svc, _) => Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            GestureDetector(
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotifikasiScreen())),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), shape: BoxShape.circle),
-                                child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 24),
-                              ),
-                            ),
-                            if (svc.unreadCount > 0)
-                              Positioned(
-                                right: -2, top: -2,
-                                child: Container(
-                                  padding: const EdgeInsets.all(5),
-                                  decoration: BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle, border: Border.all(color: const Color(0xFF042F1A), width: 2.5)),
-                                  constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
-                                  child: Text('${svc.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900), textAlign: TextAlign.center),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    
-                    // Avatar Profil
-                    Container(
-                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.3), width: 2)),
-                      child: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: const Color(0xFFF59E0B), // Amber nyala
-                        child: Text(user.username.substring(0, 1).toUpperCase(), style: const TextStyle(color: Color(0xFF042F1A), fontWeight: FontWeight.w900, fontSize: 20)),
+                    Container(width: 1, height: 40, color: Colors.white.withOpacity(0.2)),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Potongan Kasbon', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          Text(_fmtRupiah(controller.totalPotonganKasbonHariIni), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                        ],
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 32),
-
-                // ── KARTU SALDO GLOSSY (HIGHLIGHT UTAMA) ──
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF00C853), Color(0xFF017A35)], // Terbalik agar lebih pop-out
-                    ),
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      // Efek bayangan pendar hijau
-                      BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.45), blurRadius: 25, offset: const Offset(0, 12)),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(10)),
-                                child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
-                              ),
-                              const SizedBox(width: 12),
-                              Text('Saldo Uang Jalan', style: TextStyle(color: Colors.white.withOpacity(0.95), fontWeight: FontWeight.w600, fontSize: 15)),
-                            ],
-                          ),
-                          // Pill Badge Status Sync
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: controller.pending > 0 ? const Color(0xFFF59E0B) : Colors.white.withOpacity(0.25),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(controller.pending > 0 ? Icons.sync_problem_rounded : Icons.cloud_done_rounded, color: Colors.white, size: 14),
-                                const SizedBox(width: 6),
-                                Text(
-                                  controller.pending > 0 ? '${controller.pending} Pending' : 'Tersinkron',
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        _fmtRupiah(user.sisaUangJalan),
-                        style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -1.0),
-                      ),
-                      const SizedBox(height: 24),
-                      Container(height: 1, color: Colors.white.withOpacity(0.25)),
-                      const SizedBox(height: 20),
-                      
-                      // Rincian bawah kartu
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Pengeluaran Hari Ini', style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                Text(_fmtRupiah(controller.totalPengeluaranHariIni), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-                              ],
-                            ),
-                          ),
-                          Container(width: 1, height: 40, color: Colors.white.withOpacity(0.25)),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Potongan Kasbon', style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                Text(_fmtRupiah(controller.totalPotonganKasbonHariIni), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -542,7 +491,7 @@ class _HeaderModern extends StatelessWidget {
   }
 }
 
-// ── 2. BENTO STAT ROW ──
+// ── 2. BENTO STAT ROW (Solid & Clean ala Bento Design) ──
 class _BentoStatRow extends StatelessWidget {
   final int jumlahTransaksi, pending;
   final double totalBerat;
@@ -553,11 +502,11 @@ class _BentoStatRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _BentoCard(label: 'Transaksi', value: '$jumlahTransaksi', icon: Icons.receipt_long_rounded, color: const Color(0xFF3B82F6)), // Biru
+        _BentoCard(label: 'Transaksi', value: '$jumlahTransaksi', icon: Icons.receipt_long_rounded, color: AppTheme.biru),
         const SizedBox(width: 14),
         _BentoCard(label: 'Total Berat', value: '${totalBerat.toStringAsFixed(0)} kg', icon: Icons.scale_rounded, color: AppTheme.hijauMuda),
         const SizedBox(width: 14),
-        _BentoCard(label: 'Pending', value: '$pending', icon: Icons.cloud_upload_rounded, color: const Color(0xFFF59E0B)), // Amber
+        _BentoCard(label: 'Pending', value: '$pending', icon: Icons.cloud_upload_rounded, color: AppTheme.kuning),
       ],
     );
   }
@@ -574,23 +523,23 @@ class _BentoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(24), // Melengkung ekstrem ala Bento
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6))],
+          borderRadius: BorderRadius.circular(24), 
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
               child: Icon(icon, color: color, size: 22),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary, letterSpacing: -0.5)),
             const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+            Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -598,68 +547,81 @@ class _BentoCard extends StatelessWidget {
   }
 }
 
-// ── 3. SECTION HEADER MODERN ──
-class _SectionHeaderModern extends StatelessWidget {
+// ── 3. SECTION HEADER DENGAN AKSEN ──
+class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
   final String actionLabel;
   final VoidCallback onAction;
 
-  const _SectionHeaderModern({required this.title, required this.icon, required this.actionLabel, required this.onAction});
+  const _SectionHeader({required this.title, required this.icon, required this.actionLabel, required this.onAction});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: AppTheme.hijauMuda, size: 22),
-            const SizedBox(width: 8),
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.5)),
-          ],
-        ),
-        InkWell(
-          onTap: onAction,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(color: AppTheme.hijauMuda.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-            child: Text(actionLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppTheme.hijauTua)),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: AppTheme.hijauMuda, size: 20),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+            ],
           ),
-        ),
-      ],
+          InkWell(
+            onTap: onAction,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(20)),
+              child: Text(actionLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.hijauTua)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ── 4. LIST ITEMS DENGAN DESAIN "ELEVATED MODERN" ──
-BoxDecoration _itemDecorationModern() => BoxDecoration(
-  color: Colors.white,
-  borderRadius: BorderRadius.circular(20),
-  border: Border.all(color: AppTheme.border.withOpacity(0.5)),
-  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-);
+// ── WIDGET INTI: KARTU LIST ITEM SOLID & BERSIH ──
+class _CleanCard extends StatelessWidget {
+  final Widget child;
 
-// ROW MITRA
-class _MitraRowModern extends StatelessWidget {
-  final PetaniHiveModel data;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
-  
-  const _MitraRowModern({required this.data, this.onEdit, this.onDelete});
+  const _CleanCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
-      decoration: _itemDecorationModern(),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: child,
+    );
+  }
+}
+
+// ── 4. LIST ITEMS ──
+class _MitraRow extends StatelessWidget {
+  final PetaniHiveModel data;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  
+  const _MitraRow({required this.data, this.onEdit, this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return _CleanCard(
       child: Row(
         children: [
           Container(
             width: 48, height: 48,
-            decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)),
+            decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)),
             child: Center(
               child: Text(data.namaPetani.substring(0, 1).toUpperCase(), style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w900, fontSize: 18)),
             ),
@@ -684,9 +646,10 @@ class _MitraRowModern extends StatelessWidget {
           if (onEdit != null || onDelete != null)
             PopupMenuButton<String>(
               onSelected: (val) { if (val == 'edit') onEdit?.call(); if (val == 'delete') onDelete?.call(); },
-              icon: const Icon(Icons.more_vert_rounded, size: 24, color: AppTheme.textHint),
+              icon: const Icon(Icons.more_vert_rounded, size: 24, color: AppTheme.textSecond),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               color: Colors.white,
+              elevation: 10,
               itemBuilder: (_) => [
                 const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width: 10), Text('Edit Mitra', style: TextStyle(fontWeight: FontWeight.w600))])),
                 const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: AppTheme.merah), SizedBox(width: 10), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
@@ -698,10 +661,9 @@ class _MitraRowModern extends StatelessWidget {
   }
 }
 
-// ROW HARGA
-class _HargaRowModern extends StatelessWidget {
+class _HargaRow extends StatelessWidget {
   final Map<String, dynamic> data;
-  const _HargaRowModern({required this.data});
+  const _HargaRow({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -712,15 +674,12 @@ class _HargaRowModern extends StatelessWidget {
 
     final gradeColor = switch (grade) { 'A' => AppTheme.hijauMuda, 'B' => const Color(0xFFF59E0B), _ => AppTheme.merah };
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: _itemDecorationModern(),
+    return _CleanCard(
       child: Row(
         children: [
           Container(
             width: 48, height: 48,
-            decoration: BoxDecoration(color: AppTheme.bgPage, borderRadius: BorderRadius.circular(14)),
+            decoration: BoxDecoration(color: AppTheme.bgPage, borderRadius: BorderRadius.circular(16)),
             child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22))),
           ),
           const SizedBox(width: 14),
@@ -732,7 +691,7 @@ class _HargaRowModern extends StatelessWidget {
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: gradeColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: gradeColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
                   child: Text('Grade $grade', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: gradeColor)),
                 ),
               ],
@@ -762,13 +721,12 @@ class _HargaRowModern extends StatelessWidget {
   }
 }
 
-// ROW TRANSAKSI (Sesuai Logika Original 100%)
-class _TransaksiRowModern extends StatelessWidget {
+class _TransaksiRow extends StatelessWidget {
   final TransaksiHiveModel trx;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
-  const _TransaksiRowModern({required this.trx, this.onEdit, this.onDelete});
+  const _TransaksiRow({required this.trx, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -786,15 +744,12 @@ class _TransaksiRowModern extends StatelessWidget {
     return GestureDetector(
       onTap: () => TransaksiDetailSheet.show(context, trx),
       behavior: HitTestBehavior.opaque,      
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: _itemDecorationModern(),
+      child: _CleanCard(
         child: Row(
           children: [
             Container(
               width: 48, height: 48,
-              decoration: BoxDecoration(color: isKasbonMurni ? const Color(0xFFFEF3C7) : AppTheme.bgPage, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(color: isKasbonMurni ? const Color(0xFFFEF3C7) : AppTheme.bgPage, borderRadius: BorderRadius.circular(16)),
               child: Center(child: isKasbonMurni ? const Icon(Icons.payments_rounded, color: Color(0xFFF59E0B), size: 24) : const Text('🌾', style: TextStyle(fontSize: 22))),
             ),
             const SizedBox(width: 14),
@@ -810,7 +765,7 @@ class _TransaksiRowModern extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.person_outline_rounded, color: AppTheme.textHint, size: 14),
+                      const Icon(Icons.person_outline_rounded, color: AppTheme.textSecond, size: 14),
                       const SizedBox(width: 4),
                       Expanded(child: Text(trx.namaPetani, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
                     ],
@@ -845,9 +800,10 @@ class _TransaksiRowModern extends StatelessWidget {
               const SizedBox(width: 4),
               PopupMenuButton<String>(
                 onSelected: (val) { if (val == 'edit') onEdit?.call(); if (val == 'delete') onDelete?.call(); },
-                icon: const Icon(Icons.more_vert_rounded, size: 24, color: AppTheme.textHint),
+                icon: const Icon(Icons.more_vert_rounded, size: 24, color: AppTheme.textSecond),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 color: Colors.white,
+                elevation: 10,
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width: 10), Text('Edit', style: TextStyle(fontWeight: FontWeight.w600))])),
                   const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: AppTheme.merah), SizedBox(width: 10), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
@@ -871,7 +827,7 @@ class _TransaksiRowModern extends StatelessWidget {
   }
 }
 
-// ── 5. EMPTY STATE BENTO ──
+// ── 5. EMPTY STATE SOLID BENTO CARD ──
 class _EmptyStateBento extends StatelessWidget {
   final String msg;
   final IconData icon;
@@ -886,7 +842,7 @@ class _EmptyStateBento extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.border.withOpacity(0.6)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Center(
         child: Column(
