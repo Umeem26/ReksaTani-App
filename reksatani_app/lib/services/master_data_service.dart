@@ -128,8 +128,8 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
           latitude: (d['latitude'] ?? 0).toDouble(),
           longitude: (d['longitude'] ?? 0).toDouble(),
           statusSinkronisasi: d['status_sinkronisasi']?.toString() ?? 'synced',
-          createdAt: _parseDateTime(d['created_at']),
-          waktuDisinkron: _parseDateTimeNullable(d['waktu_disinkron']),
+          createdAt: parseDateTime(d['created_at']),
+          waktuDisinkron: parseDateTimeNullable(d['waktu_disinkron']),
         );
         await _hive.transaksiBox.put(m.idLokal, m);
         countBaru++;
@@ -140,13 +140,13 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
     return countBaru;
   }
 
-  DateTime _parseDateTime(dynamic val) {
+  DateTime parseDateTime(dynamic val) {
     if (val == null) return DateTime.now();
     if (val is DateTime) return val;
     return DateTime.tryParse(val.toString()) ?? DateTime.now();
   }
 
-  DateTime? _parseDateTimeNullable(dynamic val) {
+  DateTime? parseDateTimeNullable(dynamic val) {
     if (val == null) return null;
     if (val is DateTime) return val;
     return DateTime.tryParse(val.toString());
