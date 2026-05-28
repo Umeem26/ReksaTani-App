@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../../../services/notification_service.dart';
@@ -11,136 +12,153 @@ class NotifikasiScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: NotificationService(),
-      child: Scaffold(
-        backgroundColor: AppTheme.bgPage,
-        appBar: AppBar(
-          title: const Text('Notifikasi', 
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-          backgroundColor: Colors.white,
-          foregroundColor: AppTheme.textPrimary,
-          elevation: 0.5,
-          actions: [
-            Consumer<NotificationService>(
-              builder: (context, svc, _) => TextButton(
-                onPressed: () => svc.markAllAsRead(),
-                child: const Text('Baca Semua', 
-                  style: TextStyle(color: AppTheme.hijauMuda, fontWeight: FontWeight.w600, fontSize: 16)),
-              ),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: AppTheme.bgPage,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            foregroundColor: AppTheme.textPrimary,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            title: const Text('Notifikasi', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: -0.5)),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
             ),
-          ],
-        ),
-        body: Consumer<NotificationService>(
-          builder: (context, svc, _) {
-            final list = svc.allNotifications;
-            
-            if (list.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.notifications_none_rounded, 
-                      size: 64, color: AppTheme.textSecond.withOpacity(0.3)),
-                    const SizedBox(height: 16),
-                    const Text('Belum ada notifikasi', 
-                      style: TextStyle(color: AppTheme.textSecond, fontSize: 16)),
-                  ],
-                ),
-              );
-            }
+            actions: [
+              Consumer<NotificationService>(
+                builder: (context, svc, _) => svc.unreadCount > 0 
+                  ? Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: TextButton.icon(
+                        onPressed: () => svc.markAllAsRead(),
+                        icon: const Icon(Icons.done_all_rounded, size: 18, color: AppTheme.hijauTua),
+                        label: const Text('Baca Semua', style: TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w700, fontSize: 13)),
+                        style: TextButton.styleFrom(backgroundColor: AppTheme.hijauSoft, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+          body: Consumer<NotificationService>(
+            builder: (context, svc, _) {
+              final list = svc.allNotifications;
+              
+              if (list.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]),
+                        child: const Icon(Icons.notifications_off_rounded, size: 48, color: AppTheme.textHint),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text('Belum Ada Notifikasi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+                      const SizedBox(height: 6),
+                      const Text('Notifikasi sistem dan info sinkronisasi\nakan muncul di sini.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
+                    ],
+                  ),
+                );
+              }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: list.length,
-              itemBuilder: (context, index) {
-                final notif = list[index];
-                return _NotifTile(notif: notif);
-              },
-            );
-          },
+              return ListView.builder(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+                itemCount: list.length,
+                itemBuilder: (_, i) => _NotifCard(notif: list[i], svc: svc),
+              );
+            },
+          ),
         ),
       ),
     );
   }
 }
 
-class _NotifTile extends StatelessWidget {
+class _NotifCard extends StatelessWidget {
   final NotifikasiHiveModel notif;
-  const _NotifTile({required this.notif});
+  final NotificationService svc;
+
+  const _NotifCard({required this.notif, required this.svc});
 
   @override
   Widget build(BuildContext context) {
-    final svc = NotificationService();
-    
-    IconData iconData;
-    Color color;
-    
-    switch (notif.tipe) {
-      case 'sync':
-        iconData = Icons.sync_rounded;
-        color = AppTheme.hijauMuda;
-        break;
-      case 'saldo':
-        iconData = Icons.account_balance_wallet_rounded;
-        color = Colors.orange;
-        break;
-      case 'harga':
-        iconData = Icons.local_offer_rounded;
-        color = Colors.blue;
-        break;
-      default:
-        iconData = Icons.notifications_rounded;
-        color = AppTheme.textSecond;
-    }
-
     return GestureDetector(
-      onTap: () => svc.markAsRead(notif.id),
+      onTap: () {
+        if (!notif.isRead) svc.markAsRead(notif.id);
+      },
+      behavior: HitTestBehavior.opaque,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: AppTheme.cardDecoration(radius: 14).copyWith(
-          color: notif.isRead ? Colors.white : const Color(0xFFF0F9FF),
-          border: notif.isRead ? null : Border.all(color: Colors.blue.withOpacity(0.3)),
+        decoration: BoxDecoration(
+          color: notif.isRead ? Colors.white : AppTheme.hijauSoft.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: notif.isRead ? AppTheme.border.withOpacity(0.5) : AppTheme.hijauMuda.withOpacity(0.3)),
+          boxShadow: notif.isRead ? [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))] : [],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Ikon Kiri
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: notif.isRead ? AppTheme.bgPage : Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(iconData, color: color, size: 22),
+              child: Icon(
+                notif.judul.toLowerCase().contains('gagal') ? Icons.error_rounded : Icons.notifications_active_rounded, 
+                color: notif.judul.toLowerCase().contains('gagal') ? AppTheme.merah : AppTheme.hijauTua,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 14),
+            
+            // Konten Teks
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(notif.judul, 
-                        style: TextStyle(
-                          fontWeight: notif.isRead ? FontWeight.w600 : FontWeight.w800,
-                          fontSize: 16,
-                          color: AppTheme.textPrimary,
-                        )),
-                      Text(_fmtWaktu(notif.waktu), 
-                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecond)),
+                      Expanded(
+                        child: Text(
+                          notif.judul, 
+                          style: TextStyle(fontWeight: notif.isRead ? FontWeight.w700 : FontWeight.w900, fontSize: 15, color: AppTheme.textPrimary, letterSpacing: -0.3),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _fmtWaktu(notif.waktu), 
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: notif.isRead ? AppTheme.textHint : AppTheme.hijauTua),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(notif.pesan, 
-                    style: TextStyle(
-                      fontSize: 14, 
-                      color: AppTheme.textSecond,
-                      height: 1.4,
-                      fontWeight: notif.isRead ? FontWeight.normal : FontWeight.w500,
-                    )),
+                  const SizedBox(height: 6),
+                  Text(
+                    notif.pesan, 
+                    style: TextStyle(fontSize: 13, color: notif.isRead ? AppTheme.textSecond : AppTheme.textPrimary, height: 1.4, fontWeight: notif.isRead ? FontWeight.w500 : FontWeight.w600),
+                  ),
                 ],
               ),
             ),
+            
+            // Titik Unread
+            if (!notif.isRead) ...[
+              const SizedBox(width: 8),
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                width: 10, height: 10,
+                decoration: const BoxDecoration(color: AppTheme.kuning, shape: BoxShape.circle),
+              )
+            ]
           ],
         ),
       ),
@@ -152,6 +170,6 @@ class _NotifTile extends StatelessWidget {
     final diff = now.difference(dt);
     if (diff.inMinutes < 60) return '${diff.inMinutes}m lalu';
     if (diff.inHours < 24) return '${diff.inHours}j lalu';
-    return '${dt.day}/${dt.month}';
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
   }
 }
