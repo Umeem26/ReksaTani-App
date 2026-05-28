@@ -17,7 +17,6 @@ import '../../../../../shared/widgets/transaksi_detail_sheet.dart';
 import 'notifikasi_screen.dart';
 import 'package:provider/provider.dart';
 
-
 class BerandaScreen extends StatefulWidget {
   const BerandaScreen({super.key});
 
@@ -62,9 +61,17 @@ class _BerandaScreenState extends State<BerandaScreen> {
     if (mounted) {
       setState(() => _syncing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Data berhasil disinkronkan!'),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Data berhasil disinkronkan!', style: TextStyle(fontWeight: FontWeight.w600)),
+            ],
+          ),
           backgroundColor: AppTheme.hijauMuda,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -74,17 +81,24 @@ class _BerandaScreenState extends State<BerandaScreen> {
     final konfirmasi = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Keluar Aplikasi',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: AppTheme.merah),
+            SizedBox(width: 8),
+            Text('Keluar Aplikasi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppTheme.textPrimary)),
+          ],
+        ),
         content: const Text(
-            'Kamu yakin ingin logout?\nData luring tetap tersimpan di perangkat.',
-            style: TextStyle(fontSize: 13, height: 1.5)),
+          'Kamu yakin ingin logout?\nData luring tetap tersimpan dengan aman di perangkat ini.',
+          style: TextStyle(fontSize: 14, color: AppTheme.textSecond, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal',
-                style: TextStyle(color: AppTheme.textSecond)),
+            child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w700)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -92,11 +106,10 @@ class _BerandaScreenState extends State<BerandaScreen> {
               backgroundColor: AppTheme.merah,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Logout',
-                style: TextStyle(fontWeight: FontWeight.w700)),
+            child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -113,9 +126,9 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final harga   = _controller.hargaTerbaru;
+    final harga = _controller.hargaTerbaru;
     final riwayat = _controller.riwayatTerbaru;
-    final mitra   = _controller.mitraTerbaru;
+    final mitra = _controller.mitraTerbaru;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -127,170 +140,177 @@ class _BerandaScreenState extends State<BerandaScreen> {
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              // ── Header ────────────────────────────────────────
+              // ── 1. HEADER REVOLUSIONER ──
               SliverToBoxAdapter(
-                child: _Header(
-                  controller: _controller,
-                ),
+                child: _HeaderModern(controller: _controller),
               ),
 
-              // ── Body ──────────────────────────────────────────
+              // ── 2. BODY CONTENT (BENTO GRID & LISTS) ──
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 160),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 160),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-
-                    // Stat cards
-                    _StatRow(
+                    
+                    // STAT CARD ALA BENTO GRID
+                    _BentoStatRow(
                       jumlahTransaksi: _controller.jumlahTransaksi,
                       totalBerat: _controller.totalBerat,
                       pending: _controller.pending,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 36),
 
-                    _SectionHeader(
+                    // ── SECTION: MITRA ──
+                    _SectionHeaderModern(
                       title: 'Daftar Mitra',
+                      icon: Icons.people_alt_rounded,
                       actionLabel: 'Lihat Semua',
                       onAction: () => Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const ManajemenPetaniScreen()),
                       ).then((_) => setState(() {})),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     if (mitra.isEmpty)
-                      const _EmptyCard(msg: 'Belum ada data mitra.\nTambahkan mitra baru.')
+                      const _EmptyStateBento(
+                        icon: Icons.person_add_disabled_rounded,
+                        msg: 'Belum ada data mitra.\nTambahkan mitra baru untuk mulai transaksi.',
+                      )
                     else
-                      ...mitra.map((p) => _MitraRow(
-                        data: p,
-                        onEdit: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.white,
-                            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                            builder: (_) => PetaniFormSheet(
-                              petaniLama: p,
-                              onSimpan: (nama, desa) async {
-                                p.namaPetani = nama;
-                                p.desa = desa;
-                                await p.save();
-                                try {
-                                  final col = MongoDatabase.getCollection('petani');
-                                  await col.updateOne(where.eq('_id', p.id), modify.set('nama_petani', nama).set('desa', desa));
-                                } catch (_) {}
-                                if (mounted) { Navigator.pop(context); setState((){}); }
-                              },
-                            ),
-                          );
-                        },
-                        onDelete: () {
-                          showDialog(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              title: const Text('Hapus Petani', style: TextStyle(fontWeight: FontWeight.bold)),
-                              content: Text('Yakin ingin menghapus ${p.namaPetani}?'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond)),
+                      ...mitra.map((p) => _MitraRowModern(
+                            data: p,
+                            onEdit: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.white,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                                 ),
-                                ElevatedButton(
-                                  onPressed: () async {
-                                    final idHapus = p.id;
-                                    await p.delete();
+                                builder: (_) => PetaniFormSheet(
+                                  petaniLama: p,
+                                  onSimpan: (nama, desa) async {
+                                    p.namaPetani = nama;
+                                    p.desa = desa;
+                                    await p.save();
                                     try {
                                       final col = MongoDatabase.getCollection('petani');
-                                      await col.deleteOne(where.eq('_id', idHapus));
+                                      await col.updateOne(where.eq('_id', p.id), modify.set('nama_petani', nama).set('desa', desa));
                                     } catch (_) {}
-                                    if (mounted) { Navigator.pop(context); setState((){}); }
+                                    if (mounted) {
+                                      Navigator.pop(context);
+                                      setState(() {});
+                                    }
                                   },
-                                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
-                                  child: const Text('Hapus'),
                                 ),
-                              ],
-                            ),
-                          );
-                        },
-                      )),
-                    const SizedBox(height: 24),
+                              );
+                            },
+                            onDelete: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  backgroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                  title: const Text('Hapus Petani', style: TextStyle(fontWeight: FontWeight.w800)),
+                                  content: Text('Yakin ingin menghapus ${p.namaPetani} dari daftar mitra?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond)),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () async {
+                                        final idHapus = p.id;
+                                        await p.delete();
+                                        try {
+                                          final col = MongoDatabase.getCollection('petani');
+                                          await col.deleteOne(where.eq('_id', idHapus));
+                                        } catch (_) {}
+                                        if (mounted) {
+                                          Navigator.pop(context);
+                                          setState(() {});
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
+                                      child: const Text('Hapus'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          )),
+                    const SizedBox(height: 36),
 
-                    // Harga pasar preview
-                    _SectionHeader(
+                    // ── SECTION: HARGA PASAR ──
+                    _SectionHeaderModern(
                       title: 'Harga Pasar Terkini',
+                      icon: Icons.storefront_rounded,
                       actionLabel: 'Lihat Semua',
-                      onAction: () =>
-                          MainShellState.of(context)?.changeTab(1),
+                      onAction: () => MainShellState.of(context)?.changeTab(1),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     if (harga.isEmpty)
-                      _EmptyCard(
-                          msg:
-                              'Belum ada data harga.\nTarik ke bawah untuk sync dari server.')
+                      const _EmptyStateBento(
+                        icon: Icons.price_change_outlined,
+                        msg: 'Belum ada data harga.\nTarik ke bawah untuk sync dari server.',
+                      )
                     else
-                      ...harga.map((h) => _HargaRow(data: h)),
-                    const SizedBox(height: 24),
+                      ...harga.map((h) => _HargaRowModern(data: h)),
+                    const SizedBox(height: 36),
 
-                    // Riwayat transaksi preview
-                    _SectionHeader(
+                    // ── SECTION: TRANSAKSI TERAKHIR ──
+                    _SectionHeaderModern(
                       title: 'Transaksi Terakhir',
+                      icon: Icons.history_rounded,
                       actionLabel: 'Lihat Semua',
-                      onAction: () =>
-                          MainShellState.of(context)?.changeTab(3),
+                      onAction: () => MainShellState.of(context)?.changeTab(3),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     if (riwayat.isEmpty)
-                      _EmptyCard(
-                          msg:
-                              'Belum ada transaksi.\nTekan tombol kamera untuk mulai.')
+                      const _EmptyStateBento(
+                        icon: Icons.receipt_long_rounded,
+                        msg: 'Belum ada riwayat transaksi.\nTekan tombol kamera di bawah untuk memulai.',
+                      )
                     else
-                      ...riwayat.map((t) => _TransaksiRow(
-                        trx: t,
-                        onEdit: t.statusSinkronisasi != 'pending_delete'
-                            ? () async {
-                                final changed = await Navigator.push<bool>(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TransaksiScreen(editTrx: t),
-                                  ),
-                                );
-                                if (changed == true && mounted) setState(() {});
-                              }
-                            : null,
-                        onDelete: t.statusSinkronisasi != 'pending_delete'
-                            ? () async {
-                                final ok = await showDialog<bool>(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16)),
-                                    title: const Text('Hapus Transaksi',
-                                        style: TextStyle(fontWeight: FontWeight.w700)),
-                                    content: const Text(
-                                        'Transaksi ini akan dihapus dari perangkat. Lanjutkan?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context, false),
-                                        child: const Text('Batal'),
+                      ...riwayat.map((t) => _TransaksiRowModern(
+                            trx: t,
+                            onEdit: t.statusSinkronisasi != 'pending_delete'
+                                ? () async {
+                                    final changed = await Navigator.push<bool>(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: t)),
+                                    );
+                                    if (changed == true && mounted) setState(() {});
+                                  }
+                                : null,
+                            onDelete: t.statusSinkronisasi != 'pending_delete'
+                                ? () async {
+                                    final ok = await showDialog<bool>(
+                                      context: context,
+                                      builder: (_) => AlertDialog(
+                                        backgroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                        title: const Text('Hapus Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.merah)),
+                                        content: const Text('Transaksi ini akan dihapus permanen dari perangkat. Lanjutkan?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context, false),
+                                            child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond)),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () => Navigator.pop(context, true),
+                                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
+                                            child: const Text('Hapus Permanen'),
+                                          ),
+                                        ],
                                       ),
-                                      ElevatedButton(
-                                        onPressed: () => Navigator.pop(context, true),
-                                        style: ElevatedButton.styleFrom(
-                                            backgroundColor: AppTheme.merah,
-                                            foregroundColor: Colors.white,
-                                            elevation: 0),
-                                        child: const Text('Hapus'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (ok == true && mounted) {
-                                  await _controller.hapusTransaksi(t);
-                                  setState(() {});
-                                }
-                              }
-                            : null,
-                      )),
+                                    );
+                                    if (ok == true && mounted) {
+                                      await _controller.hapusTransaksi(t);
+                                      setState(() {});
+                                    }
+                                  }
+                                : null,
+                          )),
                   ]),
                 ),
               ),
@@ -302,201 +322,206 @@ class _BerandaScreenState extends State<BerandaScreen> {
   }
 }
 
-// ── Header bergradien ────────────────────────────────────────────
-class _Header extends StatelessWidget {
+// ────────────────────────────────────────────────────────────────────────
+// ─── KOMPONEN UI INOVATIF (BERBEDA 180 DERAJAT DARI SEBELUMNYA) ─────────
+// ────────────────────────────────────────────────────────────────────────
+
+// ── 1. HEADER MODERN (Deep Dark Forest + Glowing Wallet) ──
+class _HeaderModern extends StatelessWidget {
   final BerandaController controller;
 
-  const _Header({
-    required this.controller,
-  });
+  const _HeaderModern({required this.controller});
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 11) return 'Selamat Pagi,';
+    if (hour < 15) return 'Selamat Siang,';
+    if (hour < 18) return 'Selamat Sore,';
+    return 'Selamat Malam,';
+  }
 
   @override
   Widget build(BuildContext context) {
     final user = controller.user;
     final top = MediaQuery.of(context).padding.top;
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppTheme.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-      ),
-      padding: EdgeInsets.fromLTRB(20, top + 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Row: greeting + notification + avatar
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Selamat siang,',
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      user.username,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
-              ),
-              ChangeNotifierProvider.value(
-                value: NotificationService(),
-                child: Consumer<NotificationService>(
-                  builder: (context, svc, _) => Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      _IkonBtn(
-                        icon: Icons.notifications_outlined,
-                        iconSize: 26,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const NotifikasiScreen()),
-                        ),
-                      ),
-                      if (svc.unreadCount > 0)
-                        Positioned(
-                          right: -2,
-                          top: -2,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: AppTheme.merah,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 18,
-                              minHeight: 18,
-                            ),
-                            child: Text(
-                              '${svc.unreadCount}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFFF59E0B),
-                child: Text(
-                  user.username.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                      color: Color(0xFF019241),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 20),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
 
-          // Saldo / Balancing card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF015225),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                  color: Colors.white.withOpacity(0.15),
-                  width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
+    return Container(
+      // Latar belakang sangat gelap agar kartu di atasnya terlihat menyala (Pop-out)
+      decoration: const BoxDecoration(
+        color: Color(0xFF042F1A), // Dark Forest Green
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+      ),
+      child: Stack(
+        children: [
+          // Ornamen Lingkaran Abstrak di Belakang
+          Positioned(
+            top: -50, right: -40,
+            child: Container(width: 180, height: 180, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.04))),
+          ),
+          Positioned(
+            bottom: 20, left: -30,
+            child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.03))),
+          ),
+          
+          Padding(
+            padding: EdgeInsets.fromLTRB(24, top + 16, 24, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── BARIS GREETING & PROFIL ──
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(children: [
-                      const Icon(
-                        Icons.account_balance_wallet_outlined,
-                        color: Colors.white,
-                        size: 20,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _getGreeting(),
+                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            user.username,
+                            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Saldo Uang Jalan Saat Ini',
-                        style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15),
+                    ),
+                    
+                    // Notifikasi Badge
+                    ChangeNotifierProvider.value(
+                      value: NotificationService(),
+                      child: Consumer<NotificationService>(
+                        builder: (context, svc, _) => Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            GestureDetector(
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotifikasiScreen())),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), shape: BoxShape.circle),
+                                child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 24),
+                              ),
+                            ),
+                            if (svc.unreadCount > 0)
+                              Positioned(
+                                right: -2, top: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(color: AppTheme.merah, shape: BoxShape.circle, border: Border.all(color: const Color(0xFF042F1A), width: 2.5)),
+                                  constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+                                  child: Text('${svc.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900), textAlign: TextAlign.center),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ]),
-                    // Badge status sinkronisasi kas
+                    ),
+                    const SizedBox(width: 12),
+                    
+                    // Avatar Profil
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: controller.pending > 0 ? const Color(0xFFF59E0B) : AppTheme.hijauMuda,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        controller.pending > 0 ? '${controller.pending} Pending' : 'Tersinkron',
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.3), width: 2)),
+                      child: CircleAvatar(
+                        radius: 24,
+                        backgroundColor: const Color(0xFFF59E0B), // Amber nyala
+                        child: Text(user.username.substring(0, 1).toUpperCase(), style: const TextStyle(color: Color(0xFF042F1A), fontWeight: FontWeight.w900, fontSize: 20)),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  _fmtRupiah(user.sisaUangJalan),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
+                const SizedBox(height: 32),
+
+                // ── KARTU SALDO GLOSSY (HIGHLIGHT UTAMA) ──
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF00C853), Color(0xFF017A35)], // Terbalik agar lebih pop-out
+                    ),
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      // Efek bayangan pendar hijau
+                      BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.45), blurRadius: 25, offset: const Offset(0, 12)),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                Container(height: 1, color: Colors.white.withOpacity(0.15)),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Pengeluaran Hari Ini', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
-                          const SizedBox(height: 4),
-                          Text(_fmtRupiah(controller.totalPengeluaranHariIni), style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(10)),
+                                child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Text('Saldo Uang Jalan', style: TextStyle(color: Colors.white.withOpacity(0.95), fontWeight: FontWeight.w600, fontSize: 15)),
+                            ],
+                          ),
+                          // Pill Badge Status Sync
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: controller.pending > 0 ? const Color(0xFFF59E0B) : Colors.white.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(controller.pending > 0 ? Icons.sync_problem_rounded : Icons.cloud_done_rounded, color: Colors.white, size: 14),
+                                const SizedBox(width: 6),
+                                Text(
+                                  controller.pending > 0 ? '${controller.pending} Pending' : 'Tersinkron',
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                    Container(width: 1, height: 30, color: Colors.white.withOpacity(0.15)),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 18),
+                      Text(
+                        _fmtRupiah(user.sisaUangJalan),
+                        style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -1.0),
+                      ),
+                      const SizedBox(height: 24),
+                      Container(height: 1, color: Colors.white.withOpacity(0.25)),
+                      const SizedBox(height: 20),
+                      
+                      // Rincian bawah kartu
+                      Row(
                         children: [
-                          Text('Potongan Kasbon', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
-                          const SizedBox(height: 4),
-                          Text(_fmtRupiah(controller.totalPotonganKasbonHariIni), style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Pengeluaran Hari Ini', style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 6),
+                                Text(_fmtRupiah(controller.totalPengeluaranHariIni), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                              ],
+                            ),
+                          ),
+                          Container(width: 1, height: 40, color: Colors.white.withOpacity(0.25)),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Potongan Kasbon', style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 6),
+                                Text(_fmtRupiah(controller.totalPotonganKasbonHariIni), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -505,369 +530,290 @@ class _Header extends StatelessWidget {
       ),
     );
   }
+
+  String _fmtRupiah(double angka) {
+    final s = angka.toInt().toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return 'Rp ${buf.toString()}';
+  }
 }
 
-class _IkonBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool spinning;
-  final double iconSize;
-
-  const _IkonBtn(
-      {required this.icon,
-      required this.onTap,
-      this.spinning = false,
-      this.iconSize = 22});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: spinning
-              ? SizedBox(
-                  width: iconSize,
-                  height: iconSize,
-                  child: const CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2))
-              : Icon(icon, color: Colors.white, size: iconSize),
-        ),
-      );
-}
-
-// ── Stat Row ─────────────────────────────────────────────────────
-class _StatRow extends StatelessWidget {
+// ── 2. BENTO STAT ROW ──
+class _BentoStatRow extends StatelessWidget {
   final int jumlahTransaksi, pending;
   final double totalBerat;
 
-  const _StatRow(
-      {required this.jumlahTransaksi,
-      required this.totalBerat,
-      required this.pending});
+  const _BentoStatRow({required this.jumlahTransaksi, required this.totalBerat, required this.pending});
 
   @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          _StatCard(
-            label: 'Transaksi',
-            value: '$jumlahTransaksi',
-            icon: Icons.receipt_long_outlined,
-            color: const Color(0xFF3B82F6),
-          ),
-          const SizedBox(width: 10),
-          _StatCard(
-            label: 'Berat Hari Ini',
-            value: '${totalBerat.toStringAsFixed(0)} kg',
-            icon: Icons.scale_outlined,
-            color: AppTheme.hijauMuda,
-          ),
-          const SizedBox(width: 10),
-          _StatCard(
-            label: 'Pending Sync',
-            value: '$pending',
-            icon: Icons.cloud_upload_outlined,
-            color: const Color(0xFFF59E0B),
-          ),
-        ],
-      );
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _BentoCard(label: 'Transaksi', value: '$jumlahTransaksi', icon: Icons.receipt_long_rounded, color: const Color(0xFF3B82F6)), // Biru
+        const SizedBox(width: 14),
+        _BentoCard(label: 'Total Berat', value: '${totalBerat.toStringAsFixed(0)} kg', icon: Icons.scale_rounded, color: AppTheme.hijauMuda),
+        const SizedBox(width: 14),
+        _BentoCard(label: 'Pending', value: '$pending', icon: Icons.cloud_upload_rounded, color: const Color(0xFFF59E0B)), // Amber
+      ],
+    );
+  }
 }
 
-class _StatCard extends StatelessWidget {
+class _BentoCard extends StatelessWidget {
   final String label, value;
   final IconData icon;
   final Color color;
 
-  const _StatCard(
-      {required this.label,
-      required this.value,
-      required this.icon,
-      required this.color});
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: AppTheme.cardDecoration(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              const SizedBox(height: 10),
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary)),
-              const SizedBox(height: 2),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ),
-      );
-}
-
-// ── Section Header ───────────────────────────────────────────────
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  const _SectionHeader(
-      {required this.title, this.actionLabel, this.onAction});
-
-  @override
-  Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary)),
-          if (actionLabel != null)
-            GestureDetector(
-              onTap: onAction,
-              child: Text(actionLabel!,
-                  style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.hijauMuda)),
-            ),
-        ],
-      );
-}
-
-// ── Harga Row ────────────────────────────────────────────────────
-class _HargaRow extends StatelessWidget {
-  final Map<String, dynamic> data;
-  const _HargaRow({required this.data});
+  const _BentoCard({required this.label, required this.value, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    final grade    = data['grade'] as String;
-    final harga    = data['hargaMaks'] as double;
-    final satuan   = data['unitSatuan'] as String;
-    final komoditas= data['namaKomoditas'] as String;
-
-    final gradeColor = switch (grade) {
-      'A' => AppTheme.hijauMuda,
-      'B' => const Color(0xFFF59E0B),
-      _   => const Color(0xFFEF4444),
-    };
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: AppTheme.cardDecoration(radius: 12),
-      child: Row(
-        children: [
-          // Ikon komoditas
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(
-              color: AppTheme.hijauSoft,
-              borderRadius: BorderRadius.circular(10),
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24), // Melengkung ekstrem ala Bento
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6))],
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 22),
             ),
-            child: const Center(
-                child: Text('🌾', style: TextStyle(fontSize: 20))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(komoditas,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 17)),
-                const SizedBox(height: 3),
-                // Grade badge
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: gradeColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(
-                        color: gradeColor.withOpacity(0.3)),
-                  ),
-                  child: Text('Grade $grade',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: gradeColor)),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            'Rp ${_fmtRibu(harga.toInt())}/$satuan',
-            style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 16),
-          ),
-        ],
+            const SizedBox(height: 14),
+            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _MitraRow extends StatelessWidget {
+// ── 3. SECTION HEADER MODERN ──
+class _SectionHeaderModern extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  const _SectionHeaderModern({required this.title, required this.icon, required this.actionLabel, required this.onAction});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: AppTheme.hijauMuda, size: 22),
+            const SizedBox(width: 8),
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+          ],
+        ),
+        InkWell(
+          onTap: onAction,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(color: AppTheme.hijauMuda.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+            child: Text(actionLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppTheme.hijauTua)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── 4. LIST ITEMS DENGAN DESAIN "ELEVATED MODERN" ──
+BoxDecoration _itemDecorationModern() => BoxDecoration(
+  color: Colors.white,
+  borderRadius: BorderRadius.circular(20),
+  border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+);
+
+// ROW MITRA
+class _MitraRowModern extends StatelessWidget {
   final PetaniHiveModel data;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   
-  const _MitraRow({
-    required this.data,
-    this.onEdit,
-    this.onDelete,
-  });
+  const _MitraRowModern({required this.data, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: AppTheme.cardDecoration(radius: 12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: _itemDecorationModern(),
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: AppTheme.hijauSoft,
-            child: Text(
-              data.namaPetani.substring(0, 1).toUpperCase(),
-              style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.bold),
+          Container(
+            width: 48, height: 48,
+            decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)),
+            child: Center(
+              child: Text(data.namaPetani.substring(0, 1).toUpperCase(), style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w900, fontSize: 18)),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  data.namaPetani,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  data.desa,
-                  style: const TextStyle(fontSize: 14, color: AppTheme.textSecond),
+                Text(data.namaPetani, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.textPrimary)),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_rounded, color: AppTheme.textHint, size: 14),
+                    const SizedBox(width: 4),
+                    Text(data.desa, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+                  ],
                 ),
               ],
             ),
           ),
-          if (onEdit != null || onDelete != null) ...[
-            const SizedBox(width: 4),
+          if (onEdit != null || onDelete != null)
             PopupMenuButton<String>(
-              onSelected: (val) {
-                if (val == 'edit') onEdit?.call();
-                if (val == 'delete') onDelete?.call();
-              },
-              icon: const Icon(Icons.more_vert, size: 20, color: AppTheme.textSecond),
+              onSelected: (val) { if (val == 'edit') onEdit?.call(); if (val == 'delete') onDelete?.call(); },
+              icon: const Icon(Icons.more_vert_rounded, size: 24, color: AppTheme.textHint),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              color: Colors.white,
               itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(children: [
-                    Icon(Icons.edit_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Edit'),
-                  ]),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(children: [
-                    Icon(Icons.delete_outline, size: 18, color: AppTheme.merah),
-                    SizedBox(width: 8),
-                    Text('Hapus', style: TextStyle(color: AppTheme.merah)),
-                  ]),
-                ),
+                const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width: 10), Text('Edit Mitra', style: TextStyle(fontWeight: FontWeight.w600))])),
+                const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: AppTheme.merah), SizedBox(width: 10), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
               ],
             ),
-          ],
         ],
       ),
     );
   }
 }
 
-// ── Transaksi Row ────────────────────────────────────────────────
-class _TransaksiRow extends StatelessWidget {
+// ROW HARGA
+class _HargaRowModern extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _HargaRowModern({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final grade = data['grade'] as String;
+    final harga = data['hargaMaks'] as double;
+    final satuan = data['unitSatuan'] as String;
+    final komoditas = data['namaKomoditas'] as String;
+
+    final gradeColor = switch (grade) { 'A' => AppTheme.hijauMuda, 'B' => const Color(0xFFF59E0B), _ => AppTheme.merah };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: _itemDecorationModern(),
+      child: Row(
+        children: [
+          Container(
+            width: 48, height: 48,
+            decoration: BoxDecoration(color: AppTheme.bgPage, borderRadius: BorderRadius.circular(14)),
+            child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22))),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(komoditas, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.textPrimary)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: gradeColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                  child: Text('Grade $grade', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: gradeColor)),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('Rp ${_fmtRibu(harga.toInt())}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.hijauTua)),
+              const SizedBox(height: 2),
+              Text('/ $satuan', style: const TextStyle(fontSize: 12, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  String _fmtRibu(int angka) {
+    final s = angka.toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+}
+
+// ROW TRANSAKSI (Sesuai Logika Original 100%)
+class _TransaksiRowModern extends StatelessWidget {
   final TransaksiHiveModel trx;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
-  const _TransaksiRow({
-    required this.trx,
-    this.onEdit,
-    this.onDelete,
-  });
+  const _TransaksiRowModern({required this.trx, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
     final status = trx.statusSinkronisasi;
+    final isKasbonMurni = trx.namaKomoditas.toLowerCase().contains('pencairan kasbon');
     
     Color badgeBg = AppTheme.hijauSoft;
     Color badgeDot = AppTheme.hijauMuda;
     Color badgeTextCol = AppTheme.hijauTua;
     String badgeText = 'Synced';
 
-    if (status == 'pending') {
-      badgeBg = const Color(0xFFFEF3C7);
-      badgeDot = const Color(0xFFF59E0B);
-      badgeTextCol = const Color(0xFF92400E);
-      badgeText = 'Pending';
-    } else if (status == 'pending_update') {
-      badgeBg = const Color(0xFFDBEAFE);
-      badgeDot = const Color(0xFF3B82F6);
-      badgeTextCol = const Color(0xFF1E3A8A);
-      badgeText = 'Updating';
-    }
+    if (status == 'pending') { badgeBg = const Color(0xFFFEF3C7); badgeDot = const Color(0xFFF59E0B); badgeTextCol = const Color(0xFF92400E); badgeText = 'Pending'; } 
+    else if (status == 'pending_update') { badgeBg = const Color(0xFFDBEAFE); badgeDot = const Color(0xFF3B82F6); badgeTextCol = const Color(0xFF1E3A8A); badgeText = 'Updating'; }
 
-    // 👇 GestureDetector membungkus Container utama di sini 👇
     return GestureDetector(
       onTap: () => TransaksiDetailSheet.show(context, trx),
-      behavior: HitTestBehavior.opaque,      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: AppTheme.cardDecoration(radius: 12),
+      behavior: HitTestBehavior.opaque,      
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: _itemDecorationModern(),
         child: Row(
           children: [
             Container(
-              width: 42, height: 42,
-              decoration: BoxDecoration(
-                color: AppTheme.hijauSoft,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Center(
-                  child: Text('🌾', style: TextStyle(fontSize: 20))),
+              width: 48, height: 48,
+              decoration: BoxDecoration(color: isKasbonMurni ? const Color(0xFFFEF3C7) : AppTheme.bgPage, borderRadius: BorderRadius.circular(14)),
+              child: Center(child: isKasbonMurni ? const Icon(Icons.payments_rounded, color: Color(0xFFF59E0B), size: 24) : const Text('🌾', style: TextStyle(fontSize: 22))),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 16),
+                    isKasbonMurni ? 'Pencairan Kasbon' : '${trx.namaKomoditas} · ${trx.berat.toInt()} kg',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: isKasbonMurni ? const Color(0xFFB45309) : AppTheme.textPrimary),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    trx.namaPetani,
-                    style: const TextStyle(
-                        fontSize: 13, color: AppTheme.textSecond),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.person_outline_rounded, color: AppTheme.textHint, size: 14),
+                      const SizedBox(width: 4),
+                      Expanded(child: Text(trx.namaPetani, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                    ],
                   ),
                 ],
               ),
@@ -878,73 +824,33 @@ class _TransaksiRow extends StatelessWidget {
               children: [
                 Text(
                   _fmtRupiah(trx.totalBayar),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      color: AppTheme.hijauTua),
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: isKasbonMurni ? const Color(0xFFB45309) : AppTheme.hijauTua),
                 ),
-                const SizedBox(height: 4),
-                // Status badge
+                const SizedBox(height: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: badgeBg,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(12)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 5, height: 5,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: badgeDot,
-                        ),
-                      ),
+                      Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: badgeDot)),
                       const SizedBox(width: 4),
-                      Text(
-                        badgeText,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: badgeTextCol,
-                        ),
-                      ),
+                      Text(badgeText, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: badgeTextCol)),
                     ],
                   ),
                 ),
               ],
             ),
-            // Tombol aksi muncul jika onEdit/onDelete diberikan
             if (onEdit != null || onDelete != null) ...[
               const SizedBox(width: 4),
               PopupMenuButton<String>(
-                onSelected: (val) {
-                  if (val == 'edit') onEdit?.call();
-                  if (val == 'delete') onDelete?.call();
-                },
-                icon: const Icon(Icons.more_vert,
-                    size: 20, color: AppTheme.textSecond),
+                onSelected: (val) { if (val == 'edit') onEdit?.call(); if (val == 'delete') onDelete?.call(); },
+                icon: const Icon(Icons.more_vert_rounded, size: 24, color: AppTheme.textHint),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                color: Colors.white,
                 itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(children: [
-                      Icon(Icons.edit_outlined, size: 18),
-                      SizedBox(width: 8),
-                      Text('Edit'),
-                    ]),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Icon(Icons.delete_outline,
-                          size: 18, color: AppTheme.merah),
-                      SizedBox(width: 8),
-                      Text('Hapus',
-                          style: TextStyle(color: AppTheme.merah)),
-                    ]),
-                  ),
+                  const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width: 10), Text('Edit', style: TextStyle(fontWeight: FontWeight.w600))])),
+                  const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: AppTheme.merah), SizedBox(width: 10), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
                 ],
               ),
             ],
@@ -953,46 +859,48 @@ class _TransaksiRow extends StatelessWidget {
       ),
     );
   }
+
+  String _fmtRupiah(double angka) {
+    final s = angka.toInt().toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return 'Rp ${buf.toString()}';
+  }
 }
 
-// ── Empty card ───────────────────────────────────────────────────
-class _EmptyCard extends StatelessWidget {
+// ── 5. EMPTY STATE BENTO ──
+class _EmptyStateBento extends StatelessWidget {
   final String msg;
-  const _EmptyCard({required this.msg});
+  final IconData icon;
+  
+  const _EmptyStateBento({required this.msg, required this.icon});
 
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(20),
-        decoration: AppTheme.cardDecoration(radius: 12),
-        child: Center(
-          child: Text(msg,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 15,
-                  color: AppTheme.textSecond,
-                  height: 1.5)),
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.border.withOpacity(0.6)),
+      ),
+      child: Center(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: AppTheme.bgPage, shape: BoxShape.circle),
+              child: Icon(icon, color: AppTheme.textHint, size: 36),
+            ),
+            const SizedBox(height: 16),
+            Text(msg, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.5)),
+          ],
         ),
-      );
-}
-
-// ── Format helpers ───────────────────────────────────────────────
-String _fmtRupiah(double angka) {
-  final s = angka.toInt().toString();
-  final buf = StringBuffer();
-  for (int i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-    buf.write(s[i]);
+      ),
+    );
   }
-  return 'Rp ${buf.toString()}';
-}
-
-String _fmtRibu(int angka) {
-  final s = angka.toString();
-  final buf = StringBuffer();
-  for (int i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-    buf.write(s[i]);
-  }
-  return buf.toString();
 }
