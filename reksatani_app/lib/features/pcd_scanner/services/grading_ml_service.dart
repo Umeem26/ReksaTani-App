@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -78,8 +79,8 @@ class GradingMlService {
     try {
       final bytes = await imageFile.readAsBytes();
 
-      // Eksekusi preprocessing citra (decode, resize, normalize) di background isolate menggunakan compute()
-      final inputTensor = await compute(_preprocessImage, bytes);
+      // Eksekusi preprocessing citra terakselerasi native dengan fallback ke pure Dart
+      final inputTensor = await _preprocessImage(bytes);
 
       List<double> scores;
 
@@ -139,34 +140,96 @@ class GradingMlService {
     debugPrint("🧹 [GradingMlService] Sumber daya interpreter berhasil dibersihkan.");
   }
 
-  /// Fungsi Preprocessing yang berjalan di background isolate.
-  /// Mengubah bytes gambar asli menjadi tensor input berukuran [1, 224, 224, 3] ternormalisasi.
-  static List<List<List<List<double>>>> _preprocessImage(Uint8List bytes) {
+  /// Melakukan preprocessing citra secara efisien.
+  /// Mencoba menggunakan akselerasi native dart:ui terlebih dahulu,
+  /// dan melakukan fallback ke pure Dart (di background isolate) jika gagal.
+  Future<List<List<List<List<double>>>>> _preprocessImage(Uint8List bytes) async {
+    try {
+      // Coba native decoding & resizing (sangat cepat, berjalan di background thread native engine)
+      return await _preprocessImageNative(bytes);
+    } catch (e) {
+      debugPrint("⚠️ [GradingMlService] Native image preprocessing gagal: $e. Fallback ke pure Dart di background isolate...");
+      return await compute(_preprocessImagePureDart, bytes);
+    }
+  }
+
+  /// Preprocessing citra menggunakan API native `dart:ui`.
+  /// Ini berjalan sangat cepat karena memanfaatkan engine C++ dari Flutter untuk mendecode dan meresize gambar.
+  Future<List<List<List<List<double>>>>> _preprocessImageNative(Uint8List bytes) async {
+    final codec = await ui.instantiateImageCodec(
+      bytes,
+      targetWidth: 224,
+      targetHeight: 224,
+    );
+    final frame = await codec.getNextFrame();
+    final uiImage = frame.image;
+
+    final int actualWidth = uiImage.width;
+    final int actualHeight = uiImage.height;
+
+    final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (byteData == null) {
+      throw Exception("Gagal mendapatkan byte data dari ui.Image");
+    }
+
+    final Uint8List rgbaBytes = byteData.buffer.asUint8List();
+
+    // Buat format List<List<List<List<double>>>> secara efisien sesuai dimensi aktual
+    final input = List.generate(
+      1,
+      (_) => List.generate(
+        actualHeight,
+        (y) => List.generate(
+          actualWidth,
+          (x) {
+            final int offset = (y * actualWidth + x) * 4;
+            return [
+              rgbaBytes[offset] / 255.0,     // R
+              rgbaBytes[offset + 1] / 255.0, // G
+              rgbaBytes[offset + 2] / 255.0, // B
+            ];
+          },
+        ),
+      ),
+    );
+
+    return input;
+  }
+
+  /// Fungsi Preprocessing pure Dart sebagai fallback, berjalan di background isolate.
+  /// Menggunakan iterator untuk performa iterasi piksel yang lebih optimal dibandingkan getPixel(x, y).
+  static List<List<List<List<double>>>> _preprocessImagePureDart(Uint8List bytes) {
     final image = img.decodeImage(bytes);
     if (image == null) {
       throw Exception("Gagal mendekode berkas gambar untuk preprocessing ML.");
     }
 
-    // Resize citra secara efisien ke ukuran 224x224 (dimensi standar model klasifikasi)
     final resized = img.copyResize(image, width: 224, height: 224);
 
-    // Konversi warna dan lakukan normalisasi RGB ke skala [0.0, 1.0]
-    final input = List.generate(
+    final input = List<List<List<List<double>>>>.generate(
       1,
-      (_) => List.generate(
-        224,
-        (y) => List.generate(
-          224,
-          (x) {
-            final pixel = resized.getPixel(x, y);
-            return [
-              pixel.r / 255.0,
-              pixel.g / 255.0,
-              pixel.b / 255.0,
-            ];
-          },
-        ),
-      ),
+      (_) {
+        final List<List<List<double>>> grid = [];
+        final iterator = resized.iterator;
+        
+        for (int y = 0; y < 224; y++) {
+          final List<List<double>> row = [];
+          for (int x = 0; x < 224; x++) {
+            if (iterator.moveNext()) {
+              final pixel = iterator.current;
+              row.add([
+                pixel.r / 255.0,
+                pixel.g / 255.0,
+                pixel.b / 255.0,
+              ]);
+            } else {
+              row.add([0.0, 0.0, 0.0]);
+            }
+          }
+          grid.add(row);
+        }
+        return grid;
+      },
     );
 
     return input;
