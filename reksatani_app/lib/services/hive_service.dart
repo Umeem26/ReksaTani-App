@@ -1,4 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter/foundation.dart';
 import '../models/hive/user_hive_model.dart';
 import '../models/hive/petani_hive_model.dart';
 import '../models/hive/komoditas_hive_model.dart';
@@ -18,8 +19,12 @@ class HiveService {
   // 1. Tambahkan nama box khusus pengaturan/sesi
   static const String _settingsBoxName = 'settingsBox';
 
-  Future<void> init() async {
-    await Hive.initFlutter();
+  Future<void> init({String? testPath}) async {
+    if (testPath != null) {
+      Hive.init(testPath);
+    } else {
+      await Hive.initFlutter();
+    }
 
     if (!Hive.isAdapterRegistered(0)) {
       Hive.registerAdapter(UserHiveModelAdapter());
@@ -102,5 +107,27 @@ class HiveService {
     await petaniBox.clear();
     await komoditasBox.clear();
     await transaksiBox.clear();
+    await notifikasiBox.clear();
+    await settingsBox.clear();
+  }
+
+  Future<void> repairBoxes() async {
+    try {
+      await init();
+    } catch (e) {
+      debugPrint("🚨 [HiveService] Gagal merepair box: $e");
+      await Hive.deleteBoxFromDisk(_transaksiBoxName);
+      await init();
+    }
+  }
+
+  List<Map<String, dynamic>> exportTransaksiToJson() {
+    return transaksiBox.values.map((t) => {
+      'idLokal': t.idLokal,
+      'petani': t.namaPetani,
+      'komoditas': t.namaKomoditas,
+      'total': t.totalBayar,
+      'status': t.statusSinkronisasi,
+    }).toList();
   }
 }

@@ -61,6 +61,12 @@ class TransaksiHiveModel extends HiveObject {
   @HiveField(18)
   DateTime? waktuDisinkron;
 
+  @HiveField(19)
+  double? skorKeyakinan;
+
+  @HiveField(20)
+  bool isManualGrading;
+
   TransaksiHiveModel({
     required this.idLokal,
     this.id,
@@ -81,5 +87,7 @@ class TransaksiHiveModel extends HiveObject {
     required this.statusSinkronisasi,
     required this.createdAt,
     this.waktuDisinkron,
+    this.skorKeyakinan,
+    this.isManualGrading = false,
   });
 }

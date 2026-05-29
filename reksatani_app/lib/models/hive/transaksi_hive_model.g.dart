@@ -36,13 +36,15 @@ class TransaksiHiveModelAdapter extends TypeAdapter<TransaksiHiveModel> {
       statusSinkronisasi: fields[16] as String,
       createdAt: fields[17] as DateTime,
       waktuDisinkron: fields[18] as DateTime?,
+      skorKeyakinan: fields[19] as double?,
+      isManualGrading: fields[20] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, TransaksiHiveModel obj) {
     writer
-      ..writeByte(19)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.idLokal)
       ..writeByte(1)
@@ -80,7 +82,11 @@ class TransaksiHiveModelAdapter extends TypeAdapter<TransaksiHiveModel> {
       ..writeByte(17)
       ..write(obj.createdAt)
       ..writeByte(18)
-      ..write(obj.waktuDisinkron);
+      ..write(obj.waktuDisinkron)
+      ..writeByte(19)
+      ..write(obj.skorKeyakinan)
+      ..writeByte(20)
+      ..write(obj.isManualGrading);
   }
 
   @override
