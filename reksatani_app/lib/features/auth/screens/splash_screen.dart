@@ -5,6 +5,7 @@ import '../../../shared/widgets/app_theme.dart';
 import '../../../services/hive_service.dart';
 import '../../../core/routing/app_router.dart';
 import 'onboarding_screen.dart';
+import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -50,17 +51,33 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     await Future.delayed(const Duration(milliseconds: 3000));
     if (!mounted) return;
 
-    final hive = HiveService();
-    Widget screenLanjut = hive.isFirstTime() ? const OnboardingScreen() : AppRouter.getGatekeeper();
+    try {
+      final hive = HiveService();
+      Widget screenLanjut = hive.isFirstTime() ? const OnboardingScreen() : AppRouter.getGatekeeper();
 
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => screenLanjut,
-        transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 800),
-      ),
-    );
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => screenLanjut,
+          transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 800),
+        ),
+      );
+    } catch (e, stackTrace) {
+      debugPrint("🚨 ERROR SAAT PINDAH LAYAR SPLASH: $e\n$stackTrace");
+      // Fallback: Jika terjadi error saat memuat Hive/Gatekeeper, coba bersihkan/repair box dan paksa ke LoginScreen
+      try {
+        await HiveService().repairBoxes();
+      } catch (repairError) {
+        debugPrint("🚨 Gagal memperbaiki Hive box: $repairError");
+      }
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+      }
+    }
   }
 
   @override

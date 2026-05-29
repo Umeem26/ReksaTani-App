@@ -24,7 +24,7 @@ void main() async {
   }
 
   try {
-    await MongoDatabase.connect();
+    await MongoDatabase.connect().timeout(const Duration(seconds: 3));
   } catch (e) {
     debugPrint("🌐 Peringatan Jaringan: Gagal terhubung ke MongoDB Atlas. Aplikasi mode Offline. Error: $e");
   }
