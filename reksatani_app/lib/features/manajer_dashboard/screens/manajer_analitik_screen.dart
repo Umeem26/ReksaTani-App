@@ -40,8 +40,7 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
           children: [
             Icon(Icons.cloud_done_rounded, color: Colors.white, size: 18),
             SizedBox(width: 10),
-            Text('Data berhasil disinkronisasi',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+            Text('Data berhasil disinkronisasi', style: TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
         backgroundColor: AppTheme.hijauTua,
@@ -58,111 +57,108 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
     final totalTransaksi = _ctrl.semuaTransaksi.length;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
+      value: SystemUiOverlayStyle.dark, // Status bar teks gelap
       child: Scaffold(
         backgroundColor: AppTheme.bgPage,
         body: RefreshIndicator(
           color: AppTheme.hijauMuda,
+          backgroundColor: Colors.white,
           onRefresh: _onSync,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              // ── App Bar ────────────────────────────────────────
+              // ── App Bar Premium ────────────────────────────────────────
               SliverAppBar(
                 pinned: true,
-                backgroundColor: AppTheme.bgCard,
+                backgroundColor: Colors.white,
                 surfaceTintColor: Colors.transparent,
                 elevation: 0,
                 title: const Text(
                   'Analitik Detail',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17,
-                      color: AppTheme.textPrimary),
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppTheme.textPrimary, letterSpacing: -0.5),
                 ),
                 centerTitle: false,
                 actions: [
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
                     child: _ctrl.syncing
-                        ? const Padding(
-                            key: ValueKey('loading'),
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppTheme.hijauMuda),
-                            ),
+                        ? Container(
+                            key: const ValueKey('loading'),
+                            margin: const EdgeInsets.only(right: 16),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(color: AppTheme.hijauSoft, shape: BoxShape.circle),
+                            child: const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppTheme.hijauTua)),
                           )
-                        : IconButton(
+                        : Container(
                             key: const ValueKey('sync'),
-                            icon: const Icon(Icons.sync_rounded,
-                                color: AppTheme.hijauMuda),
-                            onPressed: _onSync,
-                            tooltip: 'Sinkronisasi data',
+                            margin: const EdgeInsets.only(right: 16),
+                            child: IconButton(
+                              icon: const Icon(Icons.sync_rounded, color: AppTheme.hijauTua, size: 24),
+                              style: IconButton.styleFrom(backgroundColor: AppTheme.hijauSoft),
+                              onPressed: _onSync,
+                              tooltip: 'Sinkronisasi data',
+                            ),
                           ),
                   ),
-                  const SizedBox(width: 4),
                 ],
-                bottom: const PreferredSize(
-                  preferredSize: Size.fromHeight(1),
-                  child: Divider(height: 1, color: AppTheme.border),
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(1),
+                  child: Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
                 ),
               ),
 
-              // ── Body ───────────────────────────────────────────
+              // ── Body Bento Cards ───────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 150),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 150),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
 
-                    // ── Progress Sinkronisasi (dari overview beranda) ──
+                    // ── Progress Sinkronisasi Bento Widget ──
                     _SyncDetailCard(
                       persen: _ctrl.persenSynced,
                       synced: _ctrl.jumlahSynced,
                       pending: _ctrl.jumlahPending,
                       total: totalTransaksi,
                     ),
-                    const SizedBox(height: 20),
-
-
+                    const SizedBox(height: 36),
 
                     // ── Stok per Komoditas ─────────────────────────
-                    _SectionHeader(
+                    const _SectionHeaderModern(
                       title: 'Stok per Komoditas',
                       subtitle: 'Distribusi berat & nilai tiap jenis hasil tani',
+                      icon: Icons.inventory_2_rounded,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     if (_ctrl.stokPerKomoditas.isEmpty)
                       const _EmptyCard(msg: 'Belum ada data komoditas.')
                     else
                       ..._ctrl.stokPerKomoditas.map((d) => _KomoditasRow(
-                          data: d, totalKg: _ctrl.totalStokKg,
-                          totalNilai: _ctrl.totalNilai)),
-                    const SizedBox(height: 20),
+                          data: d, totalKg: _ctrl.totalStokKg, totalNilai: _ctrl.totalNilai)),
+                    const SizedBox(height: 36),
 
                     // ── Breakdown Grade Kualitas ───────────────────
-                    _SectionHeader(
-                      title: 'Breakdown Grade Kualitas',
-                      subtitle: 'Proporsi kualitas komoditas yang masuk',
+                    const _SectionHeaderModern(
+                      title: 'Breakdown Grade',
+                      subtitle: 'Proporsi kualitas komoditas masuk',
+                      icon: Icons.star_rounded,
+                      iconColor: Color(0xFFF59E0B),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     if (_ctrl.stokPerGrade.isEmpty)
                       const _EmptyCard(msg: 'Belum ada data grade.')
                     else
                       _GradeBreakdownCard(
-                          grades: _ctrl.stokPerGrade,
-                          totalKg: _ctrl.totalStokKg),
-                    const SizedBox(height: 20),
+                          grades: _ctrl.stokPerGrade, totalKg: _ctrl.totalStokKg),
+                    const SizedBox(height: 36),
 
                     // ── Distribusi Transaksi per Komoditas ─────────
-                    _SectionHeader(
+                    const _SectionHeaderModern(
                       title: 'Distribusi Transaksi',
                       subtitle: 'Jumlah transaksi per jenis komoditas',
+                      icon: Icons.pie_chart_rounded,
+                      iconColor: Color(0xFF3B82F6),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     if (_ctrl.distribusiTransaksi.isEmpty)
                       const _EmptyCard(msg: 'Belum ada data transaksi.')
                     else
@@ -181,7 +177,9 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
   }
 }
 
-// ── Sync Detail Card ─────────────────────────────────────────────
+// ── KOMPONEN UI MODERN BERGAYA BENTO ──
+
+// ── Sync Detail Card (Bento Widget) ────────────────────────────────
 class _SyncDetailCard extends StatelessWidget {
   final double persen;
   final int synced, pending, total;
@@ -194,140 +192,97 @@ class _SyncDetailCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: AppTheme.cardDecoration(radius: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.hijauMuda.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+  Widget build(BuildContext context) {
+    final bool isComplete = persen >= 1.0;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 8))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: isComplete ? AppTheme.hijauSoft : const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(10)),
+                    child: Icon(isComplete ? Icons.cloud_done_rounded : Icons.cloud_sync_rounded, color: isComplete ? AppTheme.hijauTua : const Color(0xFFD97706), size: 20),
                   ),
-                  child: const Icon(Icons.cloud_sync_outlined,
-                      color: AppTheme.hijauMuda, size: 18),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Status Sinkronisasi',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: AppTheme.textPrimary)),
-                      SizedBox(height: 2),
-                      Text('Progres upload data ke server',
-                          style: TextStyle(
-                              fontSize: 11, color: AppTheme.textSecond)),
-                    ],
-                  ),
-                ),
-                Text(
-                  '${(persen * 100).toInt()}%',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 22,
-                      color: AppTheme.hijauMuda),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: persen,
-                minHeight: 10,
-                backgroundColor: AppTheme.hijauSoft,
-                valueColor:
-                    const AlwaysStoppedAnimation(AppTheme.hijauMuda),
+                  const SizedBox(width: 12),
+                  const Text('Sinkronisasi Server', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+                ],
               ),
+              Text('${(persen * 100).toInt()}%', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: isComplete ? AppTheme.hijauTua : const Color(0xFFD97706))),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: LinearProgressIndicator(
+              value: persen,
+              minHeight: 12,
+              backgroundColor: AppTheme.bgPage,
+              valueColor: AlwaysStoppedAnimation(isComplete ? AppTheme.hijauMuda : const Color(0xFFF59E0B)),
             ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                _SyncChip(
-                  label: 'Synced',
-                  count: synced,
-                  color: AppTheme.hijauMuda,
-                  icon: Icons.cloud_done_outlined,
-                ),
-                const SizedBox(width: 8),
-                _SyncChip(
-                  label: 'Pending',
-                  count: pending,
-                  color: const Color(0xFFF59E0B),
-                  icon: Icons.cloud_off_outlined,
-                ),
-                const SizedBox(width: 8),
-                _SyncChip(
-                  label: 'Total',
-                  count: total,
-                  color: const Color(0xFF3B82F6),
-                  icon: Icons.receipt_long_outlined,
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              _SyncChip(label: 'Tersinkron', count: synced, color: AppTheme.hijauTua, bgColor: AppTheme.hijauSoft, icon: Icons.cloud_done_rounded),
+              const SizedBox(width: 12),
+              _SyncChip(label: 'Tertunda', count: pending, color: const Color(0xFFB45309), bgColor: const Color(0xFFFEF3C7), icon: Icons.cloud_off_rounded),
+              const SizedBox(width: 12),
+              _SyncChip(label: 'Total Trx', count: total, color: const Color(0xFF1D4ED8), bgColor: const Color(0xFFDBEAFE), icon: Icons.receipt_long_rounded),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SyncChip extends StatelessWidget {
   final String label;
   final int count;
   final Color color;
+  final Color bgColor;
   final IconData icon;
 
-  const _SyncChip({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.icon,
-  });
+  const _SyncChip({required this.label, required this.count, required this.color, required this.bgColor, required this.icon});
 
   @override
   Widget build(BuildContext context) => Expanded(
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withOpacity(0.2)),
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(16)),
           child: Column(
             children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(height: 4),
-              Text('$count',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: color)),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 10, color: AppTheme.textSecond)),
+              Icon(icon, color: color, size: 20),
+              const SizedBox(height: 8),
+              Text('$count', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: color)),
+              const SizedBox(height: 2),
+              Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color.withOpacity(0.8))),
             ],
           ),
         ),
       );
 }
 
-
-
-// ── Komoditas Row ────────────────────────────────────────────────
+// ── Komoditas Row (Bento Card) ───────────────────────────────────
 class _KomoditasRow extends StatelessWidget {
   final Map<String, dynamic> data;
   final double totalKg;
   final double totalNilai;
 
-  const _KomoditasRow(
-      {required this.data, required this.totalKg, required this.totalNilai});
+  const _KomoditasRow({required this.data, required this.totalKg, required this.totalNilai});
 
   @override
   Widget build(BuildContext context) {
@@ -337,61 +292,56 @@ class _KomoditasRow extends StatelessWidget {
     final persenNilai = totalNilai > 0 ? nilai / totalNilai : 0.0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: AppTheme.cardDecoration(radius: 14),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 6))],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppTheme.hijauSoft,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child:
-                    const Center(child: Text('🌾', style: TextStyle(fontSize: 16))),
+                width: 48, height: 48,
+                decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)),
+                child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22))),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
-                child: Text(data['nama'] as String,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14,
-                        color: AppTheme.textPrimary)),
+                child: Text(data['nama'] as String, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppTheme.textPrimary, letterSpacing: -0.3)),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('${kg.toInt()} kg',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                          color: AppTheme.hijauTua)),
-                  Text(_fmtRupiah(nilai),
-                      style: const TextStyle(
-                          fontSize: 11, color: AppTheme.textSecond)),
-                ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: AppTheme.bgPage, borderRadius: BorderRadius.circular(20)),
+                child: Text('${(persenKg * 100).toInt()}% dari total', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textSecond)),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // Volume bar
-          _BarRow(
-            label: 'Volume',
-            persen: persenKg,
-            color: AppTheme.hijauMuda,
-            suffix: '${(persenKg * 100).toInt()}%',
-          ),
-          const SizedBox(height: 6),
-          // Nilai bar
-          _BarRow(
-            label: 'Nilai',
-            persen: persenNilai,
-            color: const Color(0xFF3B82F6),
-            suffix: '${(persenNilai * 100).toInt()}%',
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _BarColumn(
+                  label: 'Volume (kg)',
+                  value: '${kg.toInt()} kg',
+                  persen: persenKg,
+                  color: AppTheme.hijauMuda,
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: _BarColumn(
+                  label: 'Valuasi (Rp)',
+                  value: _fmtRupiah(nilai),
+                  persen: persenNilai,
+                  color: const Color(0xFF3B82F6),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -399,44 +349,30 @@ class _KomoditasRow extends StatelessWidget {
   }
 }
 
-class _BarRow extends StatelessWidget {
-  final String label, suffix;
+class _BarColumn extends StatelessWidget {
+  final String label, value;
   final double persen;
   final Color color;
 
-  const _BarRow({
-    required this.label,
-    required this.persen,
-    required this.color,
-    required this.suffix,
-  });
+  const _BarColumn({required this.label, required this.value, required this.persen, required this.color});
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 38,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 10, color: AppTheme.textSecond)),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: persen,
-                minHeight: 7,
-                backgroundColor: color.withOpacity(0.1),
-                valueColor: AlwaysStoppedAnimation(color),
-              ),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: persen,
+              minHeight: 8,
+              backgroundColor: color.withOpacity(0.15),
+              valueColor: AlwaysStoppedAnimation(color),
             ),
           ),
-          const SizedBox(width: 8),
-          Text(suffix,
-              style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: color)),
         ],
       );
 }
@@ -462,80 +398,59 @@ class _GradeBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: AppTheme.cardDecoration(radius: 14),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 6))],
+        ),
         child: Column(
           children: grades.map((g) {
             final grade = g['grade'] as String;
             final kg = g['totalKg'] as double;
             final persen = totalKg > 0 ? kg / totalKg : 0.0;
             final color = _gradeColor[grade] ?? AppTheme.hijauMuda;
-            final desc = _gradeDesc[grade] ?? '';
+            final desc = _gradeDesc[grade] ?? 'Tidak diketahui';
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.only(bottom: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
                       Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: color.withOpacity(0.3)),
-                        ),
-                        child: Center(
-                          child: Text(grade,
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: color)),
-                        ),
+                        width: 42, height: 42,
+                        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3))),
+                        child: Center(child: Text(grade, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: color))),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Grade $grade',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: color)),
-                            Text(desc,
-                                style: const TextStyle(
-                                    fontSize: 10,
-                                    color: AppTheme.textSecond)),
+                            Text('Grade $grade', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+                            Text(desc, style: const TextStyle(fontSize: 12, color: AppTheme.textSecond, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('${kg.toInt()} kg',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: AppTheme.textPrimary)),
-                          Text('${(persen * 100).toInt()}%',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: color)),
+                          Text('${kg.toInt()} kg', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppTheme.textPrimary)),
+                          Text('${(persen * 100).toInt()}%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
                         ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                     child: LinearProgressIndicator(
                       value: persen,
-                      minHeight: 8,
-                      backgroundColor: color.withOpacity(0.1),
+                      minHeight: 10,
+                      backgroundColor: color.withOpacity(0.15),
                       valueColor: AlwaysStoppedAnimation(color),
                     ),
                   ),
@@ -565,8 +480,13 @@ class _DistribusiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: AppTheme.cardDecoration(radius: 14),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 6))],
+        ),
         child: Column(
           children: data.asMap().entries.map((entry) {
             final i = entry.key;
@@ -577,50 +497,33 @@ class _DistribusiCard extends StatelessWidget {
             final color = _colors[i % _colors.length];
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.only(bottom: 16),
               child: Row(
                 children: [
                   Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
+                    width: 12, height: 12,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Expanded(
-                              child: Text(nama,
-                                  style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.textPrimary)),
-                            ),
-                            Text('$jumlah trx',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: color)),
+                            Expanded(child: Text(nama, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimary))),
+                            Text('$jumlah trx', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: color)),
                             const SizedBox(width: 6),
-                            Text('(${(persen * 100).toInt()}%)',
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppTheme.textSecond)),
+                            Text('(${persen > 0 ? (persen * 100).toStringAsFixed(1) : 0}%)', style: const TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
                           ],
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                           child: LinearProgressIndicator(
                             value: persen,
-                            minHeight: 6,
-                            backgroundColor: color.withOpacity(0.1),
+                            minHeight: 8,
+                            backgroundColor: color.withOpacity(0.15),
                             valueColor: AlwaysStoppedAnimation(color),
                           ),
                         ),
@@ -635,27 +538,34 @@ class _DistribusiCard extends StatelessWidget {
       );
 }
 
-// ── Section Header ───────────────────────────────────────────────
-class _SectionHeader extends StatelessWidget {
+// ── Header Section dengan Ikon ──
+class _SectionHeaderModern extends StatelessWidget {
   final String title;
-  final String? subtitle;
-  const _SectionHeader({required this.title, this.subtitle});
+  final String subtitle;
+  final IconData icon;
+  final Color? iconColor;
+
+  const _SectionHeaderModern({required this.title, required this.subtitle, required this.icon, this.iconColor});
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Row(
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary)),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(subtitle!,
-                style: const TextStyle(
-                    fontSize: 11, color: AppTheme.textSecond)),
-          ],
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: (iconColor ?? AppTheme.hijauMuda).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: iconColor ?? AppTheme.hijauTua, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
         ],
       );
 }
@@ -668,26 +578,19 @@ class _EmptyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: AppTheme.cardDecoration(radius: 12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppTheme.border)),
         child: Center(
           child: Column(
             children: [
-              const Icon(Icons.inbox_outlined,
-                  size: 32, color: AppTheme.textSecond),
-              const SizedBox(height: 8),
-              Text(msg,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textSecond,
-                      height: 1.5)),
+              const Icon(Icons.inbox_rounded, size: 36, color: AppTheme.textHint),
+              const SizedBox(height: 12),
+              Text(msg, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.5)),
             ],
           ),
         ),
       );
 }
 
-// ── Format helper ────────────────────────────────────────────────
 String _fmtRupiah(double angka) {
   final s = angka.toInt().toString();
   final buf = StringBuffer();

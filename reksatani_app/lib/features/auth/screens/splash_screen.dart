@@ -46,21 +46,50 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
+  // ─── FIX LOGIKA: PEMANGGILAN SINGLETON HIVE SECARA AMAN ───
   Future<void> _pindahLayar() async {
-    await Future.delayed(const Duration(milliseconds: 3000));
-    if (!mounted) return;
+    try {
+      // Menunggu jalannya animasi splash screen selama 3 detik
+      await Future.delayed(const Duration(milliseconds: 3000));
+      if (!mounted) return;
 
-    final hive = HiveService();
-    Widget screenLanjut = hive.isFirstTime() ? const OnboardingScreen() : AppRouter.getGatekeeper();
+      Widget screenLanjut;
 
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => screenLanjut,
-        transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 800),
-      ),
-    );
+      try {
+        // FIX: Memanggil factory instance Singleton, bukan membuat instance baru kaku
+        final hive = HiveService(); 
+        
+        // Memastikan box settingsBox sudah terbuka sempurna sebelum dibaca
+        if (!hive.settingsBox.isOpen) {
+          debugPrint('📡 [Hive-Fix] Membuka ulang settingsBox yang tertunda...');
+          await hive.init();
+        }
+
+        // Mengecek kondisi onboarding menggunakan fungsi bawaan komandan
+        bool isFirst = hive.isFirstTime();
+        screenLanjut = isFirst ? const OnboardingScreen() : AppRouter.getGatekeeper();
+      } catch (e) {
+        // Proteksi jika terjadi silent error lokal, arahkan ke Gatekeeper utama
+        debugPrint('⚠️ [Anti-Stuck Alert] Mengarahkan otomatis ke Gatekeeper karena: $e');
+        screenLanjut = AppRouter.getGatekeeper(); 
+      }
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => screenLanjut,
+            transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+            transitionDuration: const Duration(milliseconds: 800),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Fatal Alert] Gagal memindahkan layar splash screen: $e');
+      if (mounted) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AppRouter.getGatekeeper()));
+      }
+    }
   }
 
   @override
@@ -71,7 +100,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         backgroundColor: AppTheme.bgPage, 
         body: Stack(
           children: [
-            // ─── EFEK GLOWING ORB BERNAFAS DI TENGAH ───
+            // Efek glowing pendaran hijau di tengah layar
             Positioned.fill(
               child: Center(
                 child: AnimatedBuilder(
@@ -104,7 +133,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               ),
             ),
             
-            // ─── KONTEN UTAMA DITENGAH (SUDAH DIPERBAIKI) ───
+            // Konten Utama di Tengah Sempurna
             Positioned.fill(
               child: Center(
                 child: FadeTransition(
@@ -129,7 +158,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(22),
-                                child: Image.asset('assets/logo.png', fit: BoxFit.contain),
+                                child: Image.asset('assets/logo.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.eco, size: 50, color: AppTheme.hijauTua)),
                               ),
                             ),
                           ),

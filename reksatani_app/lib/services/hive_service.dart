@@ -16,7 +16,6 @@ class HiveService {
   static const String _petaniBoxName = 'petaniBox';
   static const String _komoditasBoxName = 'komoditasBox';
   static const String _transaksiBoxName = 'transaksiBox';
-  // 1. Tambahkan nama box khusus pengaturan/sesi
   static const String _settingsBoxName = 'settingsBox';
 
   Future<void> init({String? testPath}) async {
@@ -42,13 +41,24 @@ class HiveService {
       Hive.registerAdapter(NotifikasiHiveModelAdapter());
     }
 
-    await Hive.openBox<UserHiveModel>(_usersBoxName);
-    await Hive.openBox<PetaniHiveModel>(_petaniBoxName);
-    await Hive.openBox<KomoditasHiveModel>(_komoditasBoxName);
-    await Hive.openBox<TransaksiHiveModel>(_transaksiBoxName);
-    await Hive.openBox<NotifikasiHiveModel>('notifikasiBox');
-    // 2. Buka box settings (tanpa tipe khusus agar bisa menampung tipe data dinamis)
-    await Hive.openBox(_settingsBoxName);
+    // ── FIX: Membuka Box dengan Sistem Keamanan Auto-Repair ──
+    await _openBoxSafe<UserHiveModel>(_usersBoxName);
+    await _openBoxSafe<PetaniHiveModel>(_petaniBoxName);
+    await _openBoxSafe<KomoditasHiveModel>(_komoditasBoxName);
+    await _openBoxSafe<TransaksiHiveModel>(_transaksiBoxName);
+    await _openBoxSafe<NotifikasiHiveModel>('notifikasiBox');
+    await _openBoxSafe(_settingsBoxName);
+  }
+
+  // ── INOVASI: Fungsi Ajaib Anti-Korup ──
+  Future<void> _openBoxSafe<T>(String boxName) async {
+    try {
+      await Hive.openBox<T>(boxName);
+    } catch (e) {
+      debugPrint('🚨 [HiveService] Box $boxName korup! Melakukan auto-repair...');
+      await Hive.deleteBoxFromDisk(boxName); // Hapus data rusak
+      await Hive.openBox<T>(boxName);        // Buat ulang yang baru
+    }
   }
 
   Box<UserHiveModel> get usersBox => Hive.box<UserHiveModel>(_usersBoxName);
@@ -56,23 +66,16 @@ class HiveService {
   Box<KomoditasHiveModel> get komoditasBox => Hive.box<KomoditasHiveModel>(_komoditasBoxName);
   Box<TransaksiHiveModel> get transaksiBox => Hive.box<TransaksiHiveModel>(_transaksiBoxName);
   Box<NotifikasiHiveModel> get notifikasiBox => Hive.box<NotifikasiHiveModel>('notifikasiBox');
-  // 3. Buat getter untuk settingsBox
   Box get settingsBox => Hive.box(_settingsBoxName);
   
   bool isFirstTime() {
-    // Jika 'hasOnboarded' bernilai false atau belum ada (null), berarti ini pertama kali
     final hasOnboarded = settingsBox.get('hasOnboarded', defaultValue: false);
     return !hasOnboarded;
   }
 
-  /// Menandai bahwa user sudah selesai melewati layar Onboarding
   Future<void> completeOnboarding() async {
     await settingsBox.put('hasOnboarded', true);
   }
-
-  // ═══════════════════════════════════════════════════════════════
-  // LOGIKA TRANSAKSI & DATA
-  // ═══════════════════════════════════════════════════════════════
 
   Future<void> saveTransaksi(TransaksiHiveModel transaksi) async {
     await transaksiBox.put(transaksi.idLokal, transaksi);

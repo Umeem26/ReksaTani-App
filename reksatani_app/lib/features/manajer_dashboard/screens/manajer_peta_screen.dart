@@ -49,14 +49,20 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
       child: Scaffold(
         backgroundColor: AppTheme.bgPage,
         appBar: AppBar(
-          backgroundColor: AppTheme.bgCard,
+          backgroundColor: Colors.white,
           foregroundColor: AppTheme.textPrimary,
           elevation: 0,
           scrolledUnderElevation: 0,
-          title: const Text('GIS Distribusi Panen', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.3)),
+          title: const Row(
+            children: [
+              Icon(Icons.map_rounded, color: AppTheme.hijauTua, size: 22),
+              SizedBox(width: 8),
+              Text('GIS Distribusi Panen', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.5)),
+            ],
+          ),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: AppTheme.border),
+            child: Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
           ),
         ),
         body: Stack(
@@ -75,48 +81,54 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                   userAgentPackageName: 'com.reksatani.app',
                 ),
                 
-                // Inovasi: Lapisan Zona Jangkauan/Kepadatan Panen (Radius Ring)
+                // Zona Jangkauan/Kepadatan Panen (Radius Ring)
                 CircleLayer(
                   circles: daftarLokasi.map((trx) {
                     final isSelected = _selectedTrx?.idLokal == trx.idLokal;
                     return CircleMarker(
                       point: LatLng(trx.latitude, trx.longitude),
-                      // Jangkauan membesar seiring besarnya volume panen (simulasi zona lumbung)
                       radius: 120 + (trx.berat * 0.4),
                       useRadiusInMeter: true,
-                      color: (isSelected ? AppTheme.merah : AppTheme.hijauMuda).withOpacity(0.18),
-                      borderStrokeWidth: 1.5,
-                      borderColor: (isSelected ? AppTheme.merah : AppTheme.hijauMuda).withOpacity(0.6),
+                      color: (isSelected ? AppTheme.merah : AppTheme.hijauMuda).withOpacity(0.15),
+                      borderStrokeWidth: 2,
+                      borderColor: (isSelected ? AppTheme.merah : AppTheme.hijauMuda).withOpacity(0.5),
                     );
                   }).toList(),
                 ),
 
-                // Lapisan Penanda Kustom Modern
+                // Lapisan Penanda Kustom Modern (Pulsing Markers)
                 MarkerLayer(
                   markers: daftarLokasi.map((trx) {
                     final isSelected = _selectedTrx?.idLokal == trx.idLokal;
                     return Marker(
                       point: LatLng(trx.latitude, trx.longitude),
-                      width: isSelected ? 52 : 42,
-                      height: isSelected ? 52 : 42,
+                      width: isSelected ? 56 : 44,
+                      height: isSelected ? 56 : 44,
                       child: GestureDetector(
                         onTap: () {
                           setState(() => _selectedTrx = trx);
                           HapticFeedback.lightImpact();
                         },
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutBack,
                           decoration: BoxDecoration(
-                            color: isSelected ? AppTheme.merah : AppTheme.hijauTua,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: isSelected 
+                                  ? [AppTheme.merah, const Color(0xFF991B1B)] 
+                                  : [AppTheme.hijauMuda, AppTheme.hijauTua],
+                            ),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: (isSelected ? AppTheme.merah : AppTheme.hijauTua).withOpacity(0.4),
-                                blurRadius: isSelected ? 12 : 8,
-                                offset: const Offset(0, 4),
+                                color: (isSelected ? AppTheme.merah : AppTheme.hijauTua).withOpacity(0.5),
+                                blurRadius: isSelected ? 16 : 10,
+                                offset: const Offset(0, 6),
                               )
                             ],
-                            border: Border.all(color: Colors.white, width: 2),
+                            border: Border.all(color: Colors.white, width: isSelected ? 3 : 2),
                           ),
                           child: Center(
                             child: Text(
@@ -124,7 +136,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
-                                fontSize: isSelected ? 15 : 13,
+                                fontSize: isSelected ? 18 : 14,
                               ),
                             ),
                           ),
@@ -136,121 +148,124 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
               ],
             ),
 
-            // ─── BILAH HEADER ANALITIK & FILTER MELAYANG ───
+            // ─── BILAH HEADER ANALITIK & FILTER MELAYANG (ULTRA GLASS) ───
             Positioned(
-              top: 12,
-              left: 16,
-              right: 16,
-              child: Column(
-                children: [
-                  // 1. Kartu Rekap Analitik Realtime
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 4))],
-                      border: Border.all(color: AppTheme.border.withOpacity(0.6)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildHeaderStat('Lokasi Aktif', '${daftarLokasi.length} Titik', Icons.place_outlined, AppTheme.hijauTua),
-                        _buildHeaderStat('Volume Zona', '${_ctrl.totalVolumeAktif.toInt()} kg', Icons.scale_outlined, AppTheme.hijauMuda),
-                        _buildHeaderStat('Valuasi Aset', _fmtRibuSingkat(_ctrl.totalValuasiAktif), Icons.payments_outlined, const Color(0xFF3B82F6)),
-                      ],
+              top: 16, left: 16, right: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 8))],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white.withOpacity(0.9), width: 1.5),
+                      ),
+                      child: Column(
+                        children: [
+                          // 1. Kartu Rekap Analitik Realtime
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildHeaderStat('Lokasi Aktif', '${daftarLokasi.length} Titik', Icons.place_rounded, AppTheme.hijauTua),
+                                Container(width: 1, height: 30, color: AppTheme.border),
+                                _buildHeaderStat('Volume Zona', '${_ctrl.totalVolumeAktif.toInt()} kg', Icons.scale_rounded, AppTheme.hijauMuda),
+                                Container(width: 1, height: 30, color: AppTheme.border),
+                                _buildHeaderStat('Valuasi Aset', _fmtRibuSingkat(_ctrl.totalValuasiAktif), Icons.payments_rounded, const Color(0xFF3B82F6)),
+                              ],
+                            ),
+                          ),
+                          
+                          Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
+                          
+                          // 2. Baris Filter Dinamis (Scrollable)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Row(
+                                children: [
+                                  // Filter Komoditas Chips
+                                  ..._ctrl.daftarKomoditasUnik.map((komoditas) {
+                                    final isActive = _ctrl.filterKomoditas == komoditas;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: _GlassChip(
+                                        label: komoditas == 'Semua' ? '🌾 Semua Komoditas' : komoditas,
+                                        isActive: isActive,
+                                        activeColor: AppTheme.hijauTua,
+                                        onTap: () {
+                                          _ctrl.setFilterKomoditas(komoditas);
+                                          setState(() => _selectedTrx = null);
+                                        },
+                                      ),
+                                    );
+                                  }),
+
+                                  Container(
+                                    height: 24, width: 1.5,
+                                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                                    color: AppTheme.border.withOpacity(0.8),
+                                  ),
+
+                                  // Filter Grade Kualitas Chips
+                                  ...['Semua', 'A', 'B', 'C'].map((grade) {
+                                    final isActive = _ctrl.filterGrade == grade;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: _GlassChip(
+                                        label: grade == 'Semua' ? '⭐ Semua Grade' : 'Grade $grade',
+                                        isActive: isActive,
+                                        activeColor: const Color(0xFFF59E0B),
+                                        onTap: () {
+                                          _ctrl.setFilterGrade(grade);
+                                          setState(() => _selectedTrx = null);
+                                        },
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 10),
-
-                  // 2. Baris Filter Dinamis (Scrollable)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    child: Row(
-                      children: [
-                        // Filter Komoditas Chips
-                        ..._ctrl.daftarKomoditasUnik.map((komoditas) {
-                          final isActive = _ctrl.filterKomoditas == komoditas;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: FilterChip(
-                              label: Text(komoditas == 'Semua' ? '🌾 Semua Komoditas' : komoditas),
-                              labelStyle: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
-                                color: isActive ? Colors.white : AppTheme.textSecond,
-                              ),
-                              selected: isActive,
-                              showCheckmark: false,
-                              backgroundColor: Colors.white.withOpacity(0.9),
-                              selectedColor: AppTheme.hijauTua,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(color: isActive ? AppTheme.hijauTua : AppTheme.border.withOpacity(0.6)),
-                              ),
-                              onSelected: (_) {
-                                _ctrl.setFilterKomoditas(komoditas);
-                                setState(() => _selectedTrx = null);
-                              },
-                            ),
-                          );
-                        }),
-
-                        Container(
-                          height: 20, width: 1,
-                          margin: const EdgeInsets.symmetric(horizontal: 6),
-                          color: AppTheme.border,
-                        ),
-
-                        // Filter Grade Kualitas Chips
-                        ...['Semua', 'A', 'B', 'C'].map((grade) {
-                          final isActive = _ctrl.filterGrade == grade;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: FilterChip(
-                              label: Text(grade == 'Semua' ? '⭐ Semua Grade' : 'Grade $grade'),
-                              labelStyle: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
-                                color: isActive ? Colors.white : AppTheme.textSecond,
-                              ),
-                              selected: isActive,
-                              showCheckmark: false,
-                              backgroundColor: Colors.white.withOpacity(0.9),
-                              selectedColor: AppTheme.hijauMuda,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(color: isActive ? AppTheme.hijauMuda : AppTheme.border.withOpacity(0.6)),
-                              ),
-                              onSelected: (_) {
-                                _ctrl.setFilterGrade(grade);
-                                setState(() => _selectedTrx = null);
-                              },
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
 
             // ─── TOMBOL BIDIK PEMUSATAN PETA (RECENTER) ───
             Positioned(
-              bottom: _selectedTrx != null ? 350 : 150, // Menghindar secara dinamis dari kartu detail
-              right: 20,
+              // FIX: Angka bottom disesuaikan (110) agar melayang TEPAT DI ATAS navbar kaca saat tdk ada pop-up.
+              // Jika ada pop-up (380), tombol melompat naik menghindari pop-up.
+              bottom: _selectedTrx != null ? 380 : 110, 
+              right: 16,
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 6))],
+                ),
                 child: FloatingActionButton(
                   heroTag: 'recenterMapBtn',
-                  mini: true,
+                  mini: false,
                   backgroundColor: Colors.white,
-                  foregroundColor: AppTheme.textPrimary,
-                  elevation: 4,
-                  child: const Icon(Icons.my_location_rounded, size: 20, color: AppTheme.hijauTua),
+                  foregroundColor: AppTheme.hijauTua,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppTheme.border)),
+                  child: const Icon(Icons.my_location_rounded, size: 24),
                   onPressed: () {
                     if (daftarLokasi.isNotEmpty) {
                       _mapCtrl.move(
@@ -260,50 +275,63 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                     } else {
                       _mapCtrl.move(const LatLng(-7.150975, 110.140259), 6.0);
                     }
-                    HapticFeedback.lightImpact();
+                    HapticFeedback.selectionClick();
                   },
                 ),
               ),
             ),
 
-            // ─── KARTU DETAIL LOKASI (GLASSMORPHISM POP-UP) ───
-            if (_selectedTrx != null)
-              Positioned(
-                bottom: 150,
-                left: 20,
-                right: 20,
-                child: Container(
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, 10))],
-                  ),
+            // ─── KARTU DETAIL LOKASI (APPLE MAPS STYLE POP-UP) ───
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              // FIX: Angka bottom disesuaikan (110) agar melayang TEPAT DI ATAS navbar kaca. -400 untuk menyembunyikan ke bawah.
+              bottom: _selectedTrx != null ? 110 : -400,
+              left: 16, right: 16,
+              child: _selectedTrx == null ? const SizedBox.shrink() : Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 35, offset: const Offset(0, 15))],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                     child: Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(24),
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Pill drag handle illusion
+                          Center(
+                            child: Container(
+                              width: 40, height: 4,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                          
                           // Header info
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(10),
+                                width: 52, height: 52,
                                 decoration: BoxDecoration(
                                   color: AppTheme.hijauSoft,
-                                  borderRadius: BorderRadius.circular(14),
+                                  borderRadius: BorderRadius.circular(16),
                                   border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3)),
                                 ),
-                                child: const Text('🌾', style: TextStyle(fontSize: 22)),
+                                child: const Center(child: Text('🌾', style: TextStyle(fontSize: 26))),
                               ),
-                              const SizedBox(width: 14),
+                              const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,43 +341,56 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                                         Expanded(
                                           child: Text(
                                             _selectedTrx!.namaKomoditas,
-                                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.textPrimary),
+                                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppTheme.textPrimary, letterSpacing: -0.5),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: AppTheme.hijauMuda.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(6),
+                                            color: AppTheme.hijauTua,
+                                            borderRadius: BorderRadius.circular(8),
                                           ),
                                           child: Text(
                                             'Grade ${_selectedTrx!.gradeTerpilih}',
-                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.hijauTua),
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      'Petani: ${_selectedTrx!.namaPetani}',
-                                      style: const TextStyle(color: AppTheme.textSecond, fontSize: 12.5, fontWeight: FontWeight.w500),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.person_rounded, size: 14, color: AppTheme.textSecond),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            _selectedTrx!.namaPetani,
+                                            style: const TextStyle(color: AppTheme.textSecond, fontSize: 13, fontWeight: FontWeight.w600),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              IconButton(
-                                icon: const Icon(Icons.close_rounded, size: 20, color: AppTheme.textSecond),
-                                onPressed: () => setState(() => _selectedTrx = null),
-                                constraints: const BoxConstraints(),
-                                padding: EdgeInsets.zero,
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => setState(() => _selectedTrx = null),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(color: AppTheme.bgPage, shape: BoxShape.circle),
+                                  child: const Icon(Icons.close_rounded, size: 20, color: AppTheme.textHint),
+                                ),
                               )
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          Container(height: 1, color: AppTheme.border.withOpacity(0.6)),
-                          const SizedBox(height: 16),
+                          
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Divider(height: 1, color: AppTheme.border),
+                          ),
                           
                           // Isi rincian
                           Row(
@@ -358,52 +399,61 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('Volume Panen', style: TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 2),
+                                  const Text('Volume Panen', style: TextStyle(fontSize: 12, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
                                   Text(
                                     '${_selectedTrx!.berat.toInt()} kg',
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary),
                                   ),
                                 ],
                               ),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  const Text('Valuasi Pembelian', style: TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 2),
+                                  const Text('Valuasi Pembelian', style: TextStyle(fontSize: 12, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
                                   Text(
                                     _fmtRupiah(_selectedTrx!.totalBayar),
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppTheme.hijauTua),
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.hijauTua, letterSpacing: -0.5),
                                   ),
                                 ],
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 20),
                           
-                          // Status Sinkronisasi/Lokal Info
-                          Row(
-                            children: [
-                              Icon(
-                                _selectedTrx!.statusSinkronisasi == 'synced' ? Icons.cloud_done_rounded : Icons.cloud_upload_rounded,
-                                size: 13,
-                                color: _selectedTrx!.statusSinkronisasi == 'synced' ? AppTheme.hijauMuda : const Color(0xFFF59E0B),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                _selectedTrx!.statusSinkronisasi == 'synced' ? 'Tersinkronisasi ke Cloud' : 'Menunggu Sinkronisasi Lokal',
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: _selectedTrx!.statusSinkronisasi == 'synced' ? AppTheme.hijauTua : const Color(0xFF92400E),
+                          // Lencana Status Ekstra Elegan
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: _selectedTrx!.statusSinkronisasi == 'synced' ? AppTheme.hijauSoft : const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _selectedTrx!.statusSinkronisasi == 'synced' ? Icons.cloud_done_rounded : Icons.cloud_upload_rounded,
+                                  size: 16,
+                                  color: _selectedTrx!.statusSinkronisasi == 'synced' ? AppTheme.hijauTua : const Color(0xFFD97706),
                                 ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                _selectedTrx!.pengepulId.isNotEmpty ? 'Agen: ${_selectedTrx!.namaPengepul}' : '',
-                                style: const TextStyle(fontSize: 10, color: AppTheme.textHint),
-                              )
-                            ],
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _selectedTrx!.statusSinkronisasi == 'synced' ? 'Tersinkronisasi ke Cloud' : 'Menunggu Sinkronisasi Lokal',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: _selectedTrx!.statusSinkronisasi == 'synced' ? AppTheme.hijauTua : const Color(0xFF92400E),
+                                    ),
+                                  ),
+                                ),
+                                if (_selectedTrx!.pengepulId.isNotEmpty)
+                                  Text(
+                                    'Agen: ${_selectedTrx!.namaPengepul}',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: (_selectedTrx!.statusSinkronisasi == 'synced' ? AppTheme.hijauTua : const Color(0xFFD97706)).withOpacity(0.6)),
+                                  )
+                              ],
+                            ),
                           )
                         ],
                       ),
@@ -411,33 +461,28 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Pembangun komponen kolom statistik singkat pada header melayang
   Widget _buildHeaderStat(String label, String value, IconData icon, Color color) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 4),
-            Text(
-              value,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: color),
-            ),
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
           ],
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, color: AppTheme.textSecond, fontWeight: FontWeight.w500),
-        ),
+        const SizedBox(height: 6),
+        Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppTheme.textPrimary, letterSpacing: -0.3)),
       ],
     );
   }
@@ -459,5 +504,44 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
       return 'Rp ${(angka / 1000).toStringAsFixed(0)} Rb';
     }
     return 'Rp ${angka.toInt()}';
+  }
+}
+
+// Komponen Pembantu Filter Chips Glassmorphism
+class _GlassChip extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  const _GlassChip({required this.label, required this.isActive, required this.activeColor, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? activeColor : AppTheme.bgPage.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isActive ? activeColor : AppTheme.border, width: 1.5),
+          boxShadow: isActive ? [BoxShadow(color: activeColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))] : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+            color: isActive ? Colors.white : AppTheme.textSecond,
+          ),
+        ),
+      ),
+    );
   }
 }
