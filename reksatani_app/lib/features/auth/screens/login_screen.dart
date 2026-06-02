@@ -1,17 +1,10 @@
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../controllers/auth_controller.dart';
 import '../../../core/routing/app_router.dart';
-
-// --- COLOR PALETTE (Light Mode Adapted) ---
-const Color textDark = Color(0xFF061621);    // Teks utama (Gelap pekat)
-const Color textMuted = Color(0xFF7B8B9A);   // Teks sekunder (Abu-abu)
-const Color bgLight = Color(0xFFF5F7FA);     // Background utama aplikasi (Off-white)
-const Color cardWhite = Color(0xFFFFFFFF);   // Background form
-const Color greenPrimary = Color(0xFF00AE3F);// Hijau nyala
-const Color greenMedium = Color(0xFF019241); // Hijau sedang (Gradient)
-const Color inputBg = Color(0xFFF3F4F6);     // Background kolom isian
+import '../../../shared/widgets/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,7 +13,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _usernameFocus = FocusNode();
@@ -28,18 +21,23 @@ class _LoginScreenState extends State<LoginScreen> {
   final AuthController _authController = AuthController();
   
   bool _isPasswordVisible = false;
-  Offset _pointerOffset = Offset.zero;
+  
+  // Animasi untuk Aurora Background
+  late AnimationController _bgAnimCtrl;
 
   @override
   void initState() {
     super.initState();
-    // Memantau fokus untuk animasi pendaran bayangan input
     _usernameFocus.addListener(() => setState(() {}));
     _passwordFocus.addListener(() => setState(() {}));
+    
+    // Kecepatan putaran Aurora (20 detik 1 putaran penuh)
+    _bgAnimCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 20))..repeat();
   }
 
   @override
   void dispose() {
+    _bgAnimCtrl.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _usernameFocus.dispose();
@@ -49,18 +47,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleLogin() async {
     FocusScope.of(context).unfocus();
-
-    // Menggunakan AuthController asli milik Anda
-    bool isSuccess = await _authController.login(
-      _usernameController.text,
-      _passwordController.text,
-    );
-
+    bool isSuccess = await _authController.login(_usernameController.text, _passwordController.text);
     if (isSuccess && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => AppRouter.getGatekeeper()),
-      );
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AppRouter.getGatekeeper()));
     }
   }
 
@@ -72,223 +61,134 @@ class _LoginScreenState extends State<LoginScreen> {
       value: SystemUiOverlayStyle.dark,
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
-        // Deteksi gestur untuk efek Parallax 3D pada latar belakang
-        onPanUpdate: (details) {
-          setState(() {
-            _pointerOffset += details.delta;
-          });
-        },
         child: Scaffold(
-          backgroundColor: bgLight,
+          backgroundColor: AppTheme.bgPage,
           body: Stack(
             children: [
-              // ─── 1. LATAR BELAKANG GRADIEN HALUS ───
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [cardWhite, Color(0xFFF0FFF4), Color(0xFFE6FFFA)],
+              // ─── 1. AURORA MESH GRADIENT BACKGROUND ───
+              Positioned.fill(
+                child: ImageFiltered(
+                  // Blur ekstrim untuk menyatukan warna menjadi gradasi halus
+                  imageFilter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
+                  child: AnimatedBuilder(
+                    animation: _bgAnimCtrl,
+                    builder: (context, child) {
+                      return Transform.rotate(
+                        angle: _bgAnimCtrl.value * 2 * math.pi,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.center,
+                          children: [
+                            // Bola Hijau
+                            Positioned(
+                              top: size.height * -0.2, left: size.width * -0.2,
+                              child: Container(width: size.width * 0.8, height: size.width * 0.8, decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.hijauMuda.withOpacity(0.5))),
+                            ),
+                            // Bola Biru
+                            Positioned(
+                              bottom: size.height * -0.1, right: size.width * -0.3,
+                              child: Container(width: size.width * 0.9, height: size.width * 0.9, decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.biru.withOpacity(0.4))),
+                            ),
+                            // Bola Kuning
+                            Positioned(
+                              top: size.height * 0.2, right: size.width * -0.1,
+                              child: Container(width: size.width * 0.6, height: size.width * 0.6, decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.kuning.withOpacity(0.4))),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
                   ),
                 ),
               ),
-              
-              // ─── 2. BOLA DEKORASI DENGAN EFEK PARALLAX ───
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 100),
-                top: (size.height * 0.08) + (_pointerOffset.dy * 0.05), 
-                left: -40 + (_pointerOffset.dx * 0.05),
-                child: CircleAvatar(radius: 95, backgroundColor: greenPrimary.withOpacity(0.15)),
-              ),
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 100),
-                bottom: (size.height * 0.12) - (_pointerOffset.dy * 0.05), 
-                right: -20 - (_pointerOffset.dx * 0.05),
-                child: CircleAvatar(radius: 85, backgroundColor: const Color(0xFFE6FFFA).withOpacity(0.8)),
-              ),
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 100),
-                top: (size.height * 0.35) + (_pointerOffset.dy * 0.02), 
-                right: 25 + (_pointerOffset.dx * 0.02),
-                child: CircleAvatar(radius: 45, backgroundColor: const Color(0xFFFEF3C7).withOpacity(0.6)),
-              ),
 
-              // ─── 3. KONTEN UTAMA ───
+              // ─── 2. FLOATING GLASS TABLET (FORM LOGIN) ───
               SafeArea(
                 child: Center(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // --- LOGO & BRANDING ---
-                          Container(
-                            width: 75, height: 75,
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: cardWhite,
-                              borderRadius: BorderRadius.circular(22),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 25,
-                                  offset: const Offset(0, 8),
-                                )
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(40),
+                        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 40, offset: const Offset(0, 15))],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(40),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                          child: Container(
+                            padding: const EdgeInsets.all(32),
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.5)),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // LOGO MELAYANG DI DALAM KACA
+                                Container(
+                                  width: 80, height: 80, padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 8))]),
+                                  child: Image.asset('assets/logo.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.eco, size: 40, color: AppTheme.hijauTua)),
+                                ),
+                                const SizedBox(height: 24),
+                                
+                                // HEADER TEKS
+                                const Text('Selamat Datang', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+                                const SizedBox(height: 6),
+                                const Text('Rantai Pasok Finansial ReksaTani', style: TextStyle(color: AppTheme.textSecond, fontSize: 13, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 40),
+
+                                // INPUT FORM
+                                _buildModernTextField(controller: _usernameController, focusNode: _usernameFocus, hint: 'Username', icon: Icons.person_outline_rounded),
+                                const SizedBox(height: 20),
+                                _buildModernTextField(controller: _passwordController, focusNode: _passwordFocus, hint: 'Password', icon: Icons.lock_outline_rounded, isPassword: true),
+                                const SizedBox(height: 24),
+
+                                // ERROR MESSAGE PILL
+                                ValueListenableBuilder<String?>(
+                                  valueListenable: _authController.errorMessage,
+                                  builder: (context, error, child) {
+                                    if (error == null) return const SizedBox.shrink();
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                      margin: const EdgeInsets.only(bottom: 24),
+                                      decoration: BoxDecoration(color: AppTheme.merah.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppTheme.merah.withOpacity(0.3))),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.error_outline_rounded, color: AppTheme.merah, size: 18),
+                                          const SizedBox(width: 8),
+                                          Expanded(child: Text(error, style: const TextStyle(color: AppTheme.merah, fontSize: 12, fontWeight: FontWeight.w700))),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+
+                                // LOGIN BUTTON GRADIENT
+                                ValueListenableBuilder<bool>(
+                                  valueListenable: _authController.isLoading,
+                                  builder: (context, isLoading, child) {
+                                    return Container(
+                                      width: double.infinity, height: 58,
+                                      decoration: BoxDecoration(
+                                        gradient: AppTheme.headerGradient,
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: [BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                                      ),
+                                      child: ElevatedButton(
+                                        onPressed: isLoading ? null : _handleLogin,
+                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+                                        child: isLoading
+                                            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                            : const Text('MASUK', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.0)),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ],
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: Image.asset(
-                                'assets/logo.png',
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.eco, size: 45, color: greenPrimary),
-                              ),
-                            ),
                           ),
-                          const SizedBox(height: 18),
-                          const Text(
-                            'ReksaTani',
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              color: textDark,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Sistem Rantai Pasok Finansial',
-                            style: TextStyle(color: textMuted, fontSize: 13),
-                          ),
-                          const SizedBox(height: 32),
-
-                          // ─── KARTU FORM GLASSMORPHISM ───
-                          Container(
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(30),
-                              border: Border.all(color: cardWhite.withOpacity(0.8), width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-                                  blurRadius: 35,
-                                  offset: const Offset(0, 12),
-                                )
-                              ],
-                            ),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                              child: Container(
-                                padding: const EdgeInsets.all(28),
-                                decoration: BoxDecoration(
-                                  color: cardWhite.withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    const Text(
-                                      'Selamat Datang',
-                                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textDark),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Text(
-                                      'Masuk ke akun untuk melanjutkan aktivitas',
-                                      style: TextStyle(fontSize: 12, color: textMuted),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 28),
-
-                                    // --- INPUT USERNAME ---
-                                    _buildModernTextField(
-                                      controller: _usernameController,
-                                      focusNode: _usernameFocus,
-                                      label: 'Username',
-                                      hint: 'Masukkan username',
-                                      icon: Icons.person_outline,
-                                    ),
-                                    const SizedBox(height: 18),
-
-                                    // --- INPUT PASSWORD ---
-                                    _buildModernTextField(
-                                      controller: _passwordController,
-                                      focusNode: _passwordFocus,
-                                      label: 'Password',
-                                      hint: 'Masukkan password',
-                                      icon: Icons.lock_outline,
-                                      isPassword: true,
-                                    ),
-                                    const SizedBox(height: 24),
-
-                                    // --- ERROR MESSAGE (Reaktif Asli) ---
-                                    ValueListenableBuilder<String?>(
-                                      valueListenable: _authController.errorMessage,
-                                      builder: (context, error, child) {
-                                        if (error == null) return const SizedBox.shrink();
-                                        return Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                          margin: const EdgeInsets.only(bottom: 20),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red.shade50,
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: Colors.red.shade200),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  error,
-                                                  style: TextStyle(color: Colors.red.shade700, fontSize: 12),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    ),
-
-                                    // --- TOMBOL LOGIN (Reaktif Asli) ---
-                                    ValueListenableBuilder<bool>(
-                                      valueListenable: _authController.isLoading,
-                                      builder: (context, isLoading, child) {
-                                        return SizedBox(
-                                          height: 52,
-                                          child: ElevatedButton(
-                                            onPressed: isLoading ? null : _handleLogin,
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: greenPrimary,
-                                              foregroundColor: cardWhite,
-                                              elevation: 4,
-                                              shadowColor: greenPrimary.withOpacity(0.3),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(16),
-                                              ),
-                                            ),
-                                            child: isLoading
-                                                ? const SizedBox(
-                                                    height: 22, width: 22,
-                                                    child: CircularProgressIndicator(color: cardWhite, strokeWidth: 2.5),
-                                                  )
-                                                : const Text(
-                                                    'MASUK',
-                                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                                                  ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -301,76 +201,32 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- WIDGET MODERN TEXTFIELD DENGAN EFEK FOKUS ---
-  Widget _buildModernTextField({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required String label,
-    required String hint,
-    required IconData icon,
-    bool isPassword = false,
-  }) {
+  // WIDGET TEXTFIELD "PILL" MODERN
+  Widget _buildModernTextField({required TextEditingController controller, required FocusNode focusNode, required String hint, required IconData icon, bool isPassword = false}) {
     final hasFocus = focusNode.hasFocus;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textDark),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: hasFocus ? [BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5))] : null,
+      ),
+      child: TextFormField(
+        controller: controller, focusNode: focusNode, obscureText: isPassword && !_isPasswordVisible,
+        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
+        cursorColor: AppTheme.hijauTua,
+        decoration: InputDecoration(
+          hintText: hint, hintStyle: TextStyle(color: AppTheme.textSecond.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.w600),
+          prefixIcon: Icon(icon, color: hasFocus ? AppTheme.hijauTua : AppTheme.textSecond, size: 22),
+          suffixIcon: isPassword ? IconButton(icon: Icon(_isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded, color: AppTheme.textSecond, size: 20), onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible)) : null,
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.7), // Kontras warna solid untuk input
+          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: Colors.white.withOpacity(0.9), width: 1.5)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: Colors.white.withOpacity(0.9), width: 1.5)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppTheme.hijauTua, width: 2)),
+          errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppTheme.merah.withOpacity(0.5), width: 1.5)),
         ),
-        const SizedBox(height: 8),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: hasFocus
-                ? [BoxShadow(color: greenPrimary.withOpacity(0.18), blurRadius: 10, offset: const Offset(0, 3))]
-                : null,
-          ),
-          child: TextFormField(
-            controller: controller,
-            focusNode: focusNode,
-            obscureText: isPassword && !_isPasswordVisible,
-            style: const TextStyle(color: textDark, fontSize: 14, fontWeight: FontWeight.w600),
-            cursorColor: greenPrimary,
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.normal),
-              prefixIcon: Icon(icon, color: hasFocus ? greenPrimary : textMuted, size: 20),
-              suffixIcon: isPassword
-                  ? IconButton(
-                      icon: Icon(
-                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                        color: textMuted,
-                        size: 19,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _isPasswordVisible = !_isPasswordVisible;
-                        });
-                      },
-                    )
-                  : null,
-              filled: true,
-              fillColor: cardWhite.withOpacity(0.9),
-              contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: greenPrimary, width: 1.5),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: Colors.red.shade300, width: 1.5),
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

@@ -20,7 +20,7 @@ class AppTheme {
   static const LinearGradient headerGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF019241), Color(0xFF00AE3F)],
+    colors: [Color(0xFF017A35), Color(0xFF00C853)],
   );
 
   static BoxDecoration cardDecoration({double radius = 16}) => BoxDecoration(

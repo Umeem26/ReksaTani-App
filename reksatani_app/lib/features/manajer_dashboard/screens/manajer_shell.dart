@@ -1,8 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'manajer_beranda_screen.dart';
 import 'manajer_analitik_screen.dart';
 import 'manajer_peta_screen.dart';
 import 'manajemen_komoditas_screen.dart';
+import 'manajemen_pengepul_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 
 class ManajerShell extends StatefulWidget {
@@ -18,13 +21,17 @@ class ManajerShellState extends State<ManajerShell> {
   static ManajerShellState? of(BuildContext context) =>
       context.findAncestorStateOfType<ManajerShellState>();
 
-  void changeTab(int i) => setState(() => _index = i);
+  void changeTab(int i) {
+    HapticFeedback.selectionClick(); // Memberikan getaran haptic halus khas iOS
+    setState(() => _index = i);
+  }
 
   static const _screens = <Widget>[
     BerandaManajerScreen(),
     ManajerAnalitikScreen(),
     ManajerPetaScreen(),
     ManajemenKomoditasScreen(),
+    ManajemenPengepulScreen(),
   ];
 
   static const _tabs = [
@@ -32,13 +39,15 @@ class ManajerShellState extends State<ManajerShell> {
     _Tab(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Analitik'),
     _Tab(icon: Icons.map_outlined,       activeIcon: Icons.map_rounded,       label: 'Peta'),
     _Tab(icon: Icons.category_outlined,  activeIcon: Icons.category_rounded,  label: 'Komoditas'),
+    _Tab(icon: Icons.people_outline,     activeIcon: Icons.people_rounded,    label: 'Pengepul'),
   ];
 
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: AppTheme.bgPage,
+        extendBody: true, // Wajib agar konten body bisa menembus di bawah navbar kaca
         body: IndexedStack(index: _index, children: _screens),
-        bottomNavigationBar: _BottomNav(
+        bottomNavigationBar: _LiquidGlassBottomNav(
           currentIndex: _index,
           tabs: _tabs,
           onTap: changeTab,
@@ -46,61 +55,103 @@ class ManajerShellState extends State<ManajerShell> {
       );
 }
 
-class _BottomNav extends StatelessWidget {
+// ─── INOVASI ULTIMATE: LIQUID GLASS DOCK (MANAJER VERSION) ───
+class _LiquidGlassBottomNav extends StatelessWidget {
   final int currentIndex;
   final List<_Tab> tabs;
   final ValueChanged<int> onTap;
 
-  const _BottomNav(
-      {required this.currentIndex, required this.tabs, required this.onTap});
+  const _LiquidGlassBottomNav({
+    required this.currentIndex,
+    required this.tabs,
+    required this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppTheme.border)),
-          boxShadow: [
-            BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -2))
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 62,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(tabs.length, (i) {
-                final tab    = tabs[i];
-                final active = currentIndex == i;
-                return GestureDetector(
-                  onTap: () => onTap(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: SizedBox(
-                    width: 80,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          active ? tab.activeIcon : tab.icon,
-                          color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
-                          size: 22,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(tab.label,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: active ? AppTheme.hijauMuda : const Color(0xFFAAAAAA),
-                              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                            )),
-                      ],
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: SizedBox(
+          height: 70, // Tinggi standar dok kaca
+          child: Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              // ── 1. LAPISAN SHADOW (DIPISAH AGAR BAYANGAN RAPI) ──
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(35),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 25, offset: const Offset(0, 10)),
+                  ],
+                ),
+              ),
+
+              // ── 2. LAPISAN KACA BURAM (LIQUID GLASS) ──
+              ClipRRect(
+                borderRadius: BorderRadius.circular(35),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15), // Blur optimal agar background tembus
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.35), // Transparansi tinggi agar efek 'Liquid' terlihat jelas!
+                      borderRadius: BorderRadius.circular(35),
+                      border: Border.all(color: Colors.white.withOpacity(0.7), width: 1.5), // Efek bingkai kaca
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: List.generate(tabs.length, (i) {
+                        final tab = tabs[i];
+                        final active = currentIndex == i;
+
+                        return GestureDetector(
+                          onTap: () => onTap(i),
+                          behavior: HitTestBehavior.opaque,
+                          child: SizedBox(
+                            width: 60,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutBack,
+                              transform: Matrix4.translationValues(0, active ? -2 : 0, 0), // Lompatan halus
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 300),
+                                    transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                                    child: Icon(
+                                      active ? tab.activeIcon : tab.icon,
+                                      key: ValueKey<bool>(active),
+                                      color: active ? AppTheme.hijauTua : AppTheme.textSecond.withOpacity(0.8),
+                                      size: active ? 26 : 24,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  AnimatedDefaultTextStyle(
+                                    duration: const Duration(milliseconds: 300),
+                                    style: TextStyle(
+                                      fontSize: active ? 11 : 10,
+                                      color: active ? AppTheme.hijauTua : AppTheme.textSecond.withOpacity(0.8),
+                                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                                    ),
+                                    child: Text(tab.label),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
                     ),
                   ),
-                );
-              }),
-            ),
+                ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _Tab {
