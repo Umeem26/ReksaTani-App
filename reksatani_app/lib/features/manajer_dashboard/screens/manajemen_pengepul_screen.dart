@@ -22,12 +22,17 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
   void initState() {
     super.initState();
     _fetchData();
-    // ── UI OTOMATIS RENDER ULANG SAAT DATA BACKGROUND BERUBAH ──
-    MasterDataService().addListener(() => _fetchData(showLoading: false));
+    MasterDataService().addListener(_onDataMasterChanged);
+  }
+
+  void _onDataMasterChanged() {
+    if (mounted && !MasterDataService().isSyncing) {
+      _fetchData(showLoading: false);
+    }
   }
 
   Future<void> _fetchData({bool showLoading = true}) async {
-    if (showLoading) setState(() => _isLoading = true);
+    if (showLoading && mounted) setState(() => _isLoading = true);
     final data = await _controller.getSemuaPengepul();
     if (mounted) {
       setState(() {
@@ -39,8 +44,15 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
 
   @override
   void dispose() {
-    MasterDataService().removeListener(() => _fetchData(showLoading: false));
+    MasterDataService().removeListener(_onDataMasterChanged);
     super.dispose();
+  }
+
+  // ── FUNGSI MANUAL PULL-TO-REFRESH ──
+  Future<void> _onManualRefresh() async {
+    HapticFeedback.lightImpact();
+    await MasterDataService().syncAll();
+    await _fetchData();
   }
 
   List<TransaksiHiveModel> _getTransaksiAgen(String pengepulId) {
@@ -257,91 +269,104 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: AppTheme.hijauTua, strokeWidth: 3))
-            : _pengepulList.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]), child: const Icon(Icons.badge_outlined, size: 48, color: AppTheme.textHint)),
-                        const SizedBox(height: 20),
-                        const Text('Belum Ada Agen', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
-                        const SizedBox(height: 6),
-                        const Text('Gunakan tombol di bawah untuk\nmendaftarkan agen lapangan baru.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
-                      ],
-                    ),
-                  )
-                // Dihilangkan RefreshIndicator karena sudah reaktif
-                : ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 180),
-                    itemCount: _pengepulList.length,
-                    itemBuilder: (context, index) {
-                      final item = _pengepulList[index];
-                      final id = item['_id'];
-                      final username = item['username'] ?? '';
-                      final sisaUangJalan = (item['sisa_uang_jalan'] ?? 0).toDouble();
-                      final lastSync = _getWaktuSyncTerakhir(id.toString());
-                      final history = _getTransaksiAgen(id.toString());
-                      final online = _isOnline(lastSync);
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppTheme.border.withOpacity(0.5)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6))]),
-                        child: Row(
-                          children: [
-                            Container(width: 56, height: 56, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)), child: Center(child: Text(username.substring(0,1).toUpperCase(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.hijauTua)))),
-                            const SizedBox(width: 16),
-                            Expanded(
+            : RefreshIndicator(
+                onRefresh: _onManualRefresh,
+                color: AppTheme.hijauTua,
+                backgroundColor: Colors.white,
+                // CUSTOM SCROLL VIEW AGAR BISA DI-PULL SAAT KOSONG
+                child: _pengepulList.isEmpty
+                    ? CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        slivers: [
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text(username, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppTheme.textPrimary, letterSpacing: -0.3)),
+                                  Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]), child: const Icon(Icons.badge_outlined, size: 48, color: AppTheme.textHint)),
+                                  const SizedBox(height: 20),
+                                  const Text('Belum Ada Agen', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
                                   const SizedBox(height: 6),
-                                  Row(
+                                  const Text('Gunakan tombol di bawah untuk\nmendaftarkan agen lapangan baru.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 180),
+                        itemCount: _pengepulList.length,
+                        itemBuilder: (context, index) {
+                          final item = _pengepulList[index];
+                          final id = item['_id'];
+                          final username = item['username'] ?? '';
+                          final sisaUangJalan = (item['sisa_uang_jalan'] ?? 0).toDouble();
+                          final lastSync = _getWaktuSyncTerakhir(id.toString());
+                          final history = _getTransaksiAgen(id.toString());
+                          final online = _isOnline(lastSync);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppTheme.border.withOpacity(0.5)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6))]),
+                            child: Row(
+                              children: [
+                                Container(width: 56, height: 56, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)), child: Center(child: Text(username.substring(0,1).toUpperCase(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.hijauTua)))),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: online ? AppTheme.hijauMuda : Colors.grey.shade400)),
-                                      const SizedBox(width: 6),
-                                      Text(online ? 'Sedang Online' : _timeAgo(lastSync), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: online ? AppTheme.hijauTua : AppTheme.textSecond)),
+                                      Text(username, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppTheme.textPrimary, letterSpacing: -0.3)),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: online ? AppTheme.hijauMuda : Colors.grey.shade400)),
+                                          const SizedBox(width: 6),
+                                          Text(online ? 'Sedang Online' : _timeAgo(lastSync), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: online ? AppTheme.hijauTua : AppTheme.textSecond)),
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                ],
-                              ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(_fmtRupiahSingkat(sisaUangJalan), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.hijauTua, letterSpacing: -0.5)),
-                                const SizedBox(height: 4),
-                                const Text('Kas Agen', style: TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(_fmtRupiahSingkat(sisaUangJalan), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.hijauTua, letterSpacing: -0.5)),
+                                    const SizedBox(height: 4),
+                                    const Text('Kas Agen', style: TextStyle(fontSize: 11, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 32, height: 32,
+                                  child: PopupMenuButton<String>(
+                                    padding: EdgeInsets.zero,
+                                    onSelected: (val) {
+                                      if (val == 'detail') _showDetailSheet(item, history, lastSync);
+                                      if (val == 'edit') _showFormDialog(dataLama: item);
+                                      if (val == 'hapus') _hapus(id, username);
+                                    },
+                                    icon: const Icon(Icons.more_vert_rounded, color: AppTheme.textSecond),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    color: Colors.white,
+                                    elevation: 8,
+                                    itemBuilder: (_) => [
+                                      const PopupMenuItem(value: 'detail', child: Row(children: [Icon(Icons.assignment_ind_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width:8), Text('Profil & Histori', style: TextStyle(fontWeight: FontWeight.w600))])),
+                                      const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width:8), Text('Edit Akun', style: TextStyle(fontWeight: FontWeight.w600))])),
+                                      const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_rounded, color: AppTheme.merah, size: 18), SizedBox(width:8), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
+                                    ],
+                                  ),
+                                )
                               ],
                             ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 32, height: 32,
-                              child: PopupMenuButton<String>(
-                                padding: EdgeInsets.zero,
-                                onSelected: (val) {
-                                  if (val == 'detail') _showDetailSheet(item, history, lastSync);
-                                  if (val == 'edit') _showFormDialog(dataLama: item);
-                                  if (val == 'hapus') _hapus(id, username);
-                                },
-                                icon: const Icon(Icons.more_vert_rounded, color: AppTheme.textSecond),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                color: Colors.white,
-                                elevation: 8,
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(value: 'detail', child: Row(children: [Icon(Icons.assignment_ind_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width:8), Text('Profil & Histori', style: TextStyle(fontWeight: FontWeight.w600))])),
-                                  const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width:8), Text('Edit Akun', style: TextStyle(fontWeight: FontWeight.w600))])),
-                                  const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_rounded, color: AppTheme.merah, size: 18), SizedBox(width:8), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
-                                ],
-                              ),
-                            )
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
+              ),
       ),
     );
   }

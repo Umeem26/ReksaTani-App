@@ -19,15 +19,22 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
     super.initState();
     _ctrl = ManajerAnalitikController();
     
-    // ── UI OTOMATIS RENDER ULANG SAAT DATA BACKGROUND BERUBAH ──
+    // ── LISTENER BACKGROUND SYNC REAKTIF ──
     MasterDataService().addListener(_onDataMasterChanged);
+    
     _ctrl.addListener(() {
       if (mounted) setState(() {});
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _ctrl.refresh();
     });
   }
 
   void _onDataMasterChanged() {
-    if (mounted) setState(() {});
+    if (mounted && !MasterDataService().isSyncing) {
+      _ctrl.refresh();
+    }
   }
 
   @override
@@ -35,6 +42,13 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
     MasterDataService().removeListener(_onDataMasterChanged);
     _ctrl.dispose();
     super.dispose();
+  }
+
+  // ── FUNGSI MANUAL PULL-TO-REFRESH ──
+  Future<void> _onManualRefresh() async {
+    HapticFeedback.lightImpact();
+    await MasterDataService().syncAll();
+    if (mounted) _ctrl.refresh();
   }
 
   @override
@@ -45,52 +59,57 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
       value: SystemUiOverlayStyle.dark, 
       child: Scaffold(
         backgroundColor: AppTheme.bgPage,
-        // Dihilangkan RefreshIndicator
-        body: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-          slivers: [
-            SliverAppBar(
-              pinned: true,
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              title: const Text('Analitik Detail', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppTheme.textPrimary, letterSpacing: -0.5)),
-              centerTitle: false,
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(1),
-                child: Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
+        // DIBUNGKUS REFRESH INDICATOR
+        body: RefreshIndicator(
+          color: AppTheme.hijauMuda,
+          backgroundColor: Colors.white,
+          onRefresh: _onManualRefresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                title: const Text('Analitik Detail', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+                centerTitle: false,
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(1),
+                  child: Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
+                ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 150),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  _SyncDetailCard(persen: _ctrl.persenSynced, synced: _ctrl.jumlahSynced, pending: _ctrl.jumlahPending, total: totalTransaksi),
-                  const SizedBox(height: 36),
-                  const _SectionHeaderModern(title: 'Stok per Komoditas', subtitle: 'Distribusi berat & nilai tiap jenis hasil tani', icon: Icons.inventory_2_rounded),
-                  const SizedBox(height: 16),
-                  if (_ctrl.stokPerKomoditas.isEmpty)
-                    const _EmptyCard(msg: 'Belum ada data komoditas.')
-                  else
-                    ..._ctrl.stokPerKomoditas.map((d) => _KomoditasRow(data: d, totalKg: _ctrl.totalStokKg, totalNilai: _ctrl.totalNilai)),
-                  const SizedBox(height: 36),
-                  const _SectionHeaderModern(title: 'Breakdown Grade', subtitle: 'Proporsi kualitas komoditas masuk', icon: Icons.star_rounded, iconColor: Color(0xFFF59E0B)),
-                  const SizedBox(height: 16),
-                  if (_ctrl.stokPerGrade.isEmpty)
-                    const _EmptyCard(msg: 'Belum ada data grade.')
-                  else
-                    _GradeBreakdownCard(grades: _ctrl.stokPerGrade, totalKg: _ctrl.totalStokKg),
-                  const SizedBox(height: 36),
-                  const _SectionHeaderModern(title: 'Distribusi Transaksi', subtitle: 'Jumlah transaksi per jenis komoditas', icon: Icons.pie_chart_rounded, iconColor: Color(0xFF3B82F6)),
-                  const SizedBox(height: 16),
-                  if (_ctrl.distribusiTransaksi.isEmpty)
-                    const _EmptyCard(msg: 'Belum ada data transaksi.')
-                  else
-                    _DistribusiCard(data: _ctrl.distribusiTransaksi, total: totalTransaksi),
-                ]),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 150),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _SyncDetailCard(persen: _ctrl.persenSynced, synced: _ctrl.jumlahSynced, pending: _ctrl.jumlahPending, total: totalTransaksi),
+                    const SizedBox(height: 36),
+                    const _SectionHeaderModern(title: 'Stok per Komoditas', subtitle: 'Distribusi berat & nilai tiap jenis hasil tani', icon: Icons.inventory_2_rounded),
+                    const SizedBox(height: 16),
+                    if (_ctrl.stokPerKomoditas.isEmpty)
+                      const _EmptyCard(msg: 'Belum ada data komoditas.')
+                    else
+                      ..._ctrl.stokPerKomoditas.map((d) => _KomoditasRow(data: d, totalKg: _ctrl.totalStokKg, totalNilai: _ctrl.totalNilai)),
+                    const SizedBox(height: 36),
+                    const _SectionHeaderModern(title: 'Breakdown Grade', subtitle: 'Proporsi kualitas komoditas masuk', icon: Icons.star_rounded, iconColor: Color(0xFFF59E0B)),
+                    const SizedBox(height: 16),
+                    if (_ctrl.stokPerGrade.isEmpty)
+                      const _EmptyCard(msg: 'Belum ada data grade.')
+                    else
+                      _GradeBreakdownCard(grades: _ctrl.stokPerGrade, totalKg: _ctrl.totalStokKg),
+                    const SizedBox(height: 36),
+                    const _SectionHeaderModern(title: 'Distribusi Transaksi', subtitle: 'Jumlah transaksi per jenis komoditas', icon: Icons.pie_chart_rounded, iconColor: Color(0xFF3B82F6)),
+                    const SizedBox(height: 16),
+                    if (_ctrl.distribusiTransaksi.isEmpty)
+                      const _EmptyCard(msg: 'Belum ada data transaksi.')
+                    else
+                      _DistribusiCard(data: _ctrl.distribusiTransaksi, total: totalTransaksi),
+                  ]),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

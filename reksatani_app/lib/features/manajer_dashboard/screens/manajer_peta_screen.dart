@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/manajer_peta_controller.dart';
 import '../../../../models/hive/transaksi_hive_model.dart';
+import '../../../../services/master_data_service.dart';
 
 class ManajerPetaScreen extends StatefulWidget {
   const ManajerPetaScreen({super.key});
@@ -24,13 +25,38 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
     super.initState();
     _ctrl = ManajerPetaController();
     _mapCtrl = MapController();
+    
+    // ── 1. LISTENER BACKGROUND SYNC ──
+    MasterDataService().addListener(_onDataMasterChanged);
+    
     _ctrl.addListener(() {
       if (mounted) setState(() {});
     });
+
+    // ── 2. AUTO-FETCH DATA SAAT LAYAR DIBUKA PERTAMA KALI ──
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        try {
+          // Melakukan pemanggilan paksa ke fungsi refresh() milik Controller
+          (_ctrl as dynamic).refresh();
+        } catch (_) {}
+      }
+    });
+  }
+
+  void _onDataMasterChanged() {
+    // ── 3. JIKA SYNC TELAH SELESAI, TARIK TITIK LOKASI TERBARU DARI HIVE ──
+    if (mounted && !MasterDataService().isSyncing) {
+      try {
+        (_ctrl as dynamic).refresh();
+      } catch (_) {}
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    MasterDataService().removeListener(_onDataMasterChanged);
     _ctrl.dispose();
     super.dispose();
   }
@@ -247,8 +273,6 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
 
             // ─── TOMBOL BIDIK PEMUSATAN PETA (RECENTER) ───
             Positioned(
-              // FIX: Angka bottom disesuaikan (110) agar melayang TEPAT DI ATAS navbar kaca saat tdk ada pop-up.
-              // Jika ada pop-up (380), tombol melompat naik menghindari pop-up.
               bottom: _selectedTrx != null ? 380 : 110, 
               right: 16,
               child: AnimatedContainer(
@@ -285,7 +309,6 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
             AnimatedPositioned(
               duration: const Duration(milliseconds: 350),
               curve: Curves.easeOutCubic,
-              // FIX: Angka bottom disesuaikan (110) agar melayang TEPAT DI ATAS navbar kaca. -400 untuk menyembunyikan ke bawah.
               bottom: _selectedTrx != null ? 110 : -400,
               left: 16, right: 16,
               child: _selectedTrx == null ? const SizedBox.shrink() : Container(
@@ -309,7 +332,6 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Pill drag handle illusion
                           Center(
                             child: Container(
                               width: 40, height: 4,
@@ -317,8 +339,6 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                               decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(10)),
                             ),
                           ),
-                          
-                          // Header info
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -386,13 +406,10 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                               )
                             ],
                           ),
-                          
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 20),
                             child: Divider(height: 1, color: AppTheme.border),
                           ),
-                          
-                          // Isi rincian
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -421,8 +438,6 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                             ],
                           ),
                           const SizedBox(height: 20),
-                          
-                          // Lencana Status Ekstra Elegan
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             decoration: BoxDecoration(
@@ -507,7 +522,6 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
   }
 }
 
-// Komponen Pembantu Filter Chips Glassmorphism
 class _GlassChip extends StatelessWidget {
   final String label;
   final bool isActive;
