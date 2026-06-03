@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../shared/widgets/connectivity_wrapper.dart';
+import '../../../../services/master_data_service.dart';
 import '../controllers/pasar_controller.dart';
 import '../../../shared/widgets/app_theme.dart';
 import 'tren_harga_screen.dart';
@@ -13,6 +15,22 @@ class PasarScreen extends StatefulWidget {
 
 class _PasarScreenState extends State<PasarScreen> {
   final _controller = PasarController();
+
+  @override
+  void initState() {
+    super.initState();
+    MasterDataService().addListener(_onDataMasterChanged);
+  }
+
+  void _onDataMasterChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    MasterDataService().removeListener(_onDataMasterChanged);
+    super.dispose();
+  }
 
   List<dynamic> _getDaftarHarga() {
     final c = _controller as dynamic;
@@ -45,7 +63,14 @@ class _PasarScreenState extends State<PasarScreen> {
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: AppTheme.bgPage,
-        body: CustomScrollView(
+        body: ConnectivityWrapper(
+          child: RefreshIndicator(
+            color: AppTheme.hijauMuda,
+            backgroundColor: Colors.white,
+            onRefresh: () async {
+              await MasterDataService().syncAll();
+            },
+            child: CustomScrollView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           slivers: [
             SliverAppBar(
@@ -143,9 +168,11 @@ class _PasarScreenState extends State<PasarScreen> {
                       ),
                     ),
                   ),
-          ],
+            ],
+          ),
         ),
       ),
+    ),
     );
   }
 

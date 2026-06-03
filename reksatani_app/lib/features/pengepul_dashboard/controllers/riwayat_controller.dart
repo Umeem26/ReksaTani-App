@@ -10,6 +10,20 @@ class RiwayatController extends ChangeNotifier {
   String _searchQuery = '';
   String _filterStatus = 'Semua'; 
 
+  RiwayatController() {
+    _svc.addListener(_onMasterDataChanged);
+  }
+
+  void _onMasterDataChanged() {
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _svc.removeListener(_onMasterDataChanged);
+    super.dispose();
+  }
+
   String get searchQuery => _searchQuery;
   String get filterStatus => _filterStatus;
 

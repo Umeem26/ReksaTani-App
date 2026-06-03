@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../shared/widgets/connectivity_wrapper.dart';
+import '../../../../services/master_data_service.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../../../core/routing/app_router.dart';
 import '../controllers/profil_controller.dart';
@@ -118,10 +120,17 @@ class _ProfilScreenState extends State<ProfilScreen> {
             child: Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
           ),
         ),
-        body: ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-          children: [
+        body: ConnectivityWrapper(
+          child: RefreshIndicator(
+            color: AppTheme.hijauMuda,
+            backgroundColor: Colors.white,
+            onRefresh: () async {
+              await MasterDataService().syncAll();
+            },
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+              children: [
             // ── 1. KARTU PROFIL UTAMA (BENTO STYLE) ──
             Container(
               padding: const EdgeInsets.all(24),
@@ -337,6 +346,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
           ],
         ),
       ),
+    ),
+    ),
     );
   }
 

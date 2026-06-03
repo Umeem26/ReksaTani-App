@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../../shared/widgets/connectivity_wrapper.dart';
+import '../../../../services/master_data_service.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../../../services/notification_service.dart';
 import '../../../../models/hive/notifikasi_hive_model.dart';
@@ -42,36 +44,48 @@ class NotifikasiScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: Consumer<NotificationService>(
-            builder: (context, svc, _) {
-              final list = svc.allNotifications;
-              
-              if (list.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]),
-                        child: const Icon(Icons.notifications_off_rounded, size: 48, color: AppTheme.textHint),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text('Belum Ada Notifikasi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
-                      const SizedBox(height: 6),
-                      const Text('Notifikasi sistem dan info sinkronisasi\nakan muncul di sini.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
-                    ],
-                  ),
+          body: ConnectivityWrapper(
+            child: Consumer<NotificationService>(
+              builder: (context, svc, _) {
+                final list = svc.allNotifications;
+                
+                return RefreshIndicator(
+                  color: AppTheme.hijauMuda,
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    await MasterDataService().syncAll();
+                  },
+                  child: list.isEmpty
+                      ? SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Container(
+                            height: MediaQuery.of(context).size.height * 0.7,
+                            alignment: Alignment.center,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]),
+                                  child: const Icon(Icons.notifications_off_rounded, size: 48, color: AppTheme.textHint),
+                                ),
+                                const SizedBox(height: 20),
+                                const Text('Belum Ada Notifikasi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+                                const SizedBox(height: 6),
+                                const Text('Notifikasi sistem dan info sinkronisasi\nakan muncul di sini.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+                          itemCount: list.length,
+                          itemBuilder: (_, i) => _NotifCard(notif: list[i], svc: svc),
+                        ),
                 );
-              }
-
-              return ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-                itemCount: list.length,
-                itemBuilder: (_, i) => _NotifCard(notif: list[i], svc: svc),
-              );
-            },
+              },
+            ),
           ),
         ),
       ),

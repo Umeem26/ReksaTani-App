@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../services/hive_service.dart';
+import '../../../../services/master_data_service.dart';
 
 class DataTrenItem {
   final String namaKomoditas;
@@ -33,6 +34,17 @@ class TrenHargaController extends ChangeNotifier {
 
   TrenHargaController() {
     _muatDataTren();
+    MasterDataService().addListener(_onMasterDataChanged);
+  }
+
+  void _onMasterDataChanged() {
+    _muatDataTren();
+  }
+
+  @override
+  void dispose() {
+    MasterDataService().removeListener(_onMasterDataChanged);
+    super.dispose();
   }
 
   void setSelectedIndex(int index) {
