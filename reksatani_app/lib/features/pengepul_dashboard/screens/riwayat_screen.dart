@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../shared/widgets/connectivity_wrapper.dart';
+import '../../../../services/master_data_service.dart';
 import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
@@ -112,8 +114,9 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
           ),
         ),
         
-        body: Column(
-          children: [
+        body: ConnectivityWrapper(
+          child: Column(
+            children: [
             // Meta Info Jumlah Data
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -135,49 +138,64 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
 
             // Daftar Transaksi Invoice Card
             Expanded(
-              child: listTampil.isEmpty
-                  ? _buildEmpty()
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                      itemCount: listTampil.length,
-                      itemBuilder: (_, i) => _TransaksiCardPremium(
-                        trx: listTampil[i],
-                        onEdit: listTampil[i].statusSinkronisasi != 'pending_delete'
-                            ? () async {
-                                final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: listTampil[i])));
-                                if (changed == true && mounted) setState(() {});
-                              }
-                            : null,
-                        onDelete: listTampil[i].statusSinkronisasi != 'pending_delete'
-                            ? () async {
-                                final ok = await showDialog<bool>(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    backgroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                    title: const Text('Hapus Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.merah)),
-                                    content: const Text('Transaksi ini akan dihapus permanen dari perangkat. Lanjutkan?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond))),
-                                      ElevatedButton(
-                                        onPressed: () => Navigator.pop(context, true),
-                                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
-                                        child: const Text('Hapus Permanen'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (ok == true && mounted) {
-                                  await _ctrl.hapusTransaksi(listTampil[i]);
+              child: RefreshIndicator(
+                color: AppTheme.hijauMuda,
+                backgroundColor: Colors.white,
+                onRefresh: () async {
+                  await MasterDataService().syncAll();
+                },
+                child: listTampil.isEmpty
+                    ? SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: Container(
+                          height: MediaQuery.of(context).size.height * 0.6,
+                          alignment: Alignment.center,
+                          child: _buildEmpty(),
+                        ),
+                      )
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                        itemCount: listTampil.length,
+                        itemBuilder: (_, i) => _TransaksiCardPremium(
+                          trx: listTampil[i],
+                          onEdit: listTampil[i].statusSinkronisasi != 'pending_delete'
+                              ? () async {
+                                  final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: listTampil[i])));
+                                  if (changed == true && mounted) setState(() {});
                                 }
-                              }
-                            : null,
+                              : null,
+                          onDelete: listTampil[i].statusSinkronisasi != 'pending_delete'
+                              ? () async {
+                                  final ok = await showDialog<bool>(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      backgroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                      title: const Text('Hapus Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.merah)),
+                                      content: const Text('Transaksi ini akan dihapus permanen dari perangkat. Lanjutkan?'),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond))),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
+                                          child: const Text('Hapus Permanen'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (ok == true && mounted) {
+                                    await _ctrl.hapusTransaksi(listTampil[i]);
+                                  }
+                                }
+                              : null,
+                        ),
                       ),
-                    ),
+              ),
             ),
           ],
         ),
+      ),
       ),
     );
   }

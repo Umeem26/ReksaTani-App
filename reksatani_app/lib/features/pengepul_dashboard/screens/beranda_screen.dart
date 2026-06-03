@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../../shared/widgets/connectivity_wrapper.dart';
 import '../../../../../models/hive/user_hive_model.dart';
 import '../../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../../models/hive/petani_hive_model.dart';
@@ -128,7 +129,8 @@ class _BerandaScreenState extends State<BerandaScreen> {
       value: SystemUiOverlayStyle.dark, // Teks status bar gelap karena header putih
       child: Scaffold(
         backgroundColor: AppTheme.bgPage, // Background abu-abu sangat muda (High contrast)
-        body: RefreshIndicator(
+        body: ConnectivityWrapper(
+          child: RefreshIndicator(
           color: AppTheme.hijauMuda,
           backgroundColor: Colors.white,
           onRefresh: _refresh,
@@ -281,6 +283,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

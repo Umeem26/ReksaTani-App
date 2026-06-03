@@ -27,15 +27,22 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
     super.initState();
     _ctrl = ManajerBerandaController();
     
-    // ── INOVASI REAKTIF: UI otomatis render ulang saat ada sync di background ──
+    // ── LISTENER KE MASTER DATA (BACKGROUND SYNC REAKTIF) ──
     MasterDataService().addListener(_onDataMasterChanged);
+    
     _ctrl.addListener(() {
       if (mounted) setState(() {});
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _ctrl.refresh();
     });
   }
 
   void _onDataMasterChanged() {
-    if (mounted) setState(() {});
+    if (mounted && !MasterDataService().isSyncing) {
+      _ctrl.refresh();
+    }
   }
 
   @override
@@ -43,6 +50,13 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
     MasterDataService().removeListener(_onDataMasterChanged);
     _ctrl.dispose();
     super.dispose();
+  }
+
+  // ── FUNGSI MANUAL PULL-TO-REFRESH ──
+  Future<void> _onManualRefresh() async {
+    HapticFeedback.lightImpact();
+    await MasterDataService().syncAll(); // Paksa sync ke Cloud
+    if (mounted) _ctrl.refresh(); // Segarkan UI lokal
   }
 
   Future<void> _logout() async {
@@ -98,65 +112,70 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
       value: SystemUiOverlayStyle.dark, 
       child: Scaffold(
         backgroundColor: AppTheme.bgPage,
-        // Dihilangkan RefreshIndicator, full scrolling biasa
-        body: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-          slivers: [
-            SliverToBoxAdapter(
-              child: _ManajerHeaderModern(
-                user: _ctrl.user,
-                onLogout: _logout,
-                totalNilai: _ctrl.totalNilai,
-                totalStokKg: _ctrl.totalStokKg,
+        // DIBUNGKUS KEMBALI DENGAN REFRESH INDICATOR
+        body: RefreshIndicator(
+          color: AppTheme.hijauMuda,
+          backgroundColor: Colors.white,
+          onRefresh: _onManualRefresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            slivers: [
+              SliverToBoxAdapter(
+                child: _ManajerHeaderModern(
+                  user: _ctrl.user,
+                  onLogout: _logout,
+                  totalNilai: _ctrl.totalNilai,
+                  totalStokKg: _ctrl.totalStokKg,
+                ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 150),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  _BentoSyncRow(jumlahPending: _ctrl.jumlahPending, jumlahSynced: _ctrl.jumlahSynced),
-                  const SizedBox(height: 36),
-                  _SectionHeaderModern(
-                    title: 'Harga & Komoditas Gudang',
-                    icon: Icons.grid_view_rounded,
-                    actionLabel: 'Lihat Semua',
-                    onAction: () => ManajerShellState.of(context)?.changeTab(3),
-                  ),
-                  const SizedBox(height: 16),
-                  if (_ctrl.daftarKomoditas.isEmpty)
-                    const _EmptyCardBento(msg: 'Belum ada komoditas terdaftar di gudang.')
-                  else
-                    ..._ctrl.daftarKomoditas.take(3).map((k) {
-                      final hasGrade = k.gradeKualitas.isNotEmpty;
-                      double hargaMaks = 0.0;
-                      if (hasGrade) {
-                        try { hargaMaks = (k.gradeKualitas.last['harga_maks'] as num).toDouble(); } catch (_) {}
-                      }
-                      return _KomoditasRowModern(namaKomoditas: k.namaKomoditas, jumlahGrade: k.gradeKualitas.length, hargaMaks: hargaMaks, hasGrade: hasGrade);
-                    }),
-                  const SizedBox(height: 36),
-                  _SectionHeaderModern(
-                    title: 'Aktivitas & Uang Jalan Agen',
-                    icon: Icons.assignment_ind_rounded,
-                    actionLabel: 'Lihat Semua',
-                    onAction: () => ManajerShellState.of(context)?.changeTab(4),
-                  ),
-                  const SizedBox(height: 16),
-                  if (_ctrl.daftarAgen.isEmpty)
-                    const _EmptyCardBento(msg: 'Belum ada data agen lapangan terdaftar.')
-                  else
-                    ..._ctrl.daftarAgen.map((agen) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _KasAgenCardModern(
-                            user: agen,
-                            history: _ctrl.getTransaksiAgen(agen.id),
-                            lastSync: _ctrl.getWaktuSyncTerakhir(agen.id),
-                          ),
-                        )),
-                ]),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 150),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _BentoSyncRow(jumlahPending: _ctrl.jumlahPending, jumlahSynced: _ctrl.jumlahSynced),
+                    const SizedBox(height: 36),
+                    _SectionHeaderModern(
+                      title: 'Harga & Komoditas Gudang',
+                      icon: Icons.grid_view_rounded,
+                      actionLabel: 'Lihat Semua',
+                      onAction: () => ManajerShellState.of(context)?.changeTab(3),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_ctrl.daftarKomoditas.isEmpty)
+                      const _EmptyCardBento(msg: 'Belum ada komoditas terdaftar di gudang.')
+                    else
+                      ..._ctrl.daftarKomoditas.take(3).map((k) {
+                        final hasGrade = k.gradeKualitas.isNotEmpty;
+                        double hargaMaks = 0.0;
+                        if (hasGrade) {
+                          try { hargaMaks = (k.gradeKualitas.last['harga_maks'] as num).toDouble(); } catch (_) {}
+                        }
+                        return _KomoditasRowModern(namaKomoditas: k.namaKomoditas, jumlahGrade: k.gradeKualitas.length, hargaMaks: hargaMaks, hasGrade: hasGrade);
+                      }),
+                    const SizedBox(height: 36),
+                    _SectionHeaderModern(
+                      title: 'Aktivitas & Uang Jalan Agen',
+                      icon: Icons.assignment_ind_rounded,
+                      actionLabel: 'Lihat Semua',
+                      onAction: () => ManajerShellState.of(context)?.changeTab(4),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_ctrl.daftarAgen.isEmpty)
+                      const _EmptyCardBento(msg: 'Belum ada data agen lapangan terdaftar.')
+                    else
+                      ..._ctrl.daftarAgen.map((agen) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _KasAgenCardModern(
+                              user: agen,
+                              history: _ctrl.getTransaksiAgen(agen.id),
+                              lastSync: _ctrl.getWaktuSyncTerakhir(agen.id),
+                            ),
+                          )),
+                  ]),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

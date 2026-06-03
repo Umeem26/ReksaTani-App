@@ -20,12 +20,17 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
   void initState() {
     super.initState();
     _fetchData();
-    // ── UI OTOMATIS RENDER ULANG SAAT DATA BACKGROUND BERUBAH ──
-    MasterDataService().addListener(() => _fetchData(showLoading: false));
+    MasterDataService().addListener(_onDataMasterChanged);
+  }
+
+  void _onDataMasterChanged() {
+    if (mounted && !MasterDataService().isSyncing) {
+      _fetchData(showLoading: false);
+    }
   }
 
   Future<void> _fetchData({bool showLoading = true}) async {
-    if (showLoading) setState(() => _isLoading = true);
+    if (showLoading && mounted) setState(() => _isLoading = true);
     final data = await _controller.getSemuaKomoditas();
     if (mounted) {
       setState(() {
@@ -37,8 +42,15 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
 
   @override
   void dispose() {
-    MasterDataService().removeListener(() => _fetchData(showLoading: false));
+    MasterDataService().removeListener(_onDataMasterChanged);
     super.dispose();
+  }
+
+  // ── FUNGSI MANUAL PULL-TO-REFRESH ──
+  Future<void> _onManualRefresh() async {
+    HapticFeedback.lightImpact();
+    await MasterDataService().syncAll();
+    await _fetchData();
   }
 
   void _showFormDialog({Map<String, dynamic>? dataLama}) {
@@ -122,102 +134,115 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: AppTheme.hijauTua, strokeWidth: 3))
-            : _komoditasList.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]), child: const Icon(Icons.category_outlined, size: 48, color: AppTheme.textHint)),
-                        const SizedBox(height: 20),
-                        const Text('Belum Ada Komoditas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
-                        const SizedBox(height: 6),
-                        const Text('Gunakan tombol di bawah untuk\nmenambahkan harga & komoditas baru.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
-                      ],
-                    ),
-                  )
-                // Dihilangkan RefreshIndicator karena sudah auto-sync/reaktif
-                : ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 180),
-                    itemCount: _komoditasList.length,
-                    itemBuilder: (context, index) {
-                      final item = _komoditasList[index];
-                      final id = item['_id'];
-                      final nama = item['nama_komoditas'] ?? '';
-                      final satuan = item['unit_satuan'] ?? 'kg';
-                      final grades = List<Map<String, dynamic>>.from(item['grade_kualitas'] ?? []);
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppTheme.border.withOpacity(0.5)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6))]),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            : RefreshIndicator(
+                onRefresh: _onManualRefresh,
+                color: AppTheme.hijauTua,
+                backgroundColor: Colors.white,
+                // CUSTOM SCROLL VIEW AGAR TETAP BISA DI-PULL SAAT LIST KOSONG
+                child: _komoditasList.isEmpty
+                    ? CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        slivers: [
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22)))),
-                                      const SizedBox(width: 14),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(nama, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppTheme.textPrimary, letterSpacing: -0.3)),
-                                          const SizedBox(height: 4),
-                                          Text('${grades.length} Variasi Grade', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(
-                                    width: 32, height: 32,
-                                    child: PopupMenuButton<String>(
-                                      padding: EdgeInsets.zero,
-                                      onSelected: (val) {
-                                        if (val == 'edit') _showFormDialog(dataLama: item);
-                                        if (val == 'hapus') _hapus(id, nama);
-                                      },
-                                      icon: const Icon(Icons.more_horiz_rounded, color: AppTheme.textSecond),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                      color: Colors.white,
-                                      elevation: 8,
-                                      itemBuilder: (_) => [
-                                        const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width:8), Text('Edit', style: TextStyle(fontWeight: FontWeight.w600))])),
-                                        const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_rounded, color: AppTheme.merah, size: 18), SizedBox(width:8), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
-                                      ],
-                                    ),
-                                  )
+                                  Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]), child: const Icon(Icons.category_outlined, size: 48, color: AppTheme.textHint)),
+                                  const SizedBox(height: 20),
+                                  const Text('Belum Ada Komoditas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+                                  const SizedBox(height: 6),
+                                  const Text('Gunakan tombol di bawah untuk\nmenambahkan harga & komoditas baru.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
                                 ],
                               ),
                             ),
-                            Container(height: 1, color: AppTheme.bgPage),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                              child: Column(
-                                children: grades.map((g) {
-                                  final gradeName = g['grade'];
-                                  final harga = (g['harga_maks'] as num).toDouble();
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: AppTheme.hijauMuda.withOpacity(0.12), borderRadius: BorderRadius.circular(8)), child: Text('Grade $gradeName', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppTheme.hijauTua))),
-                                        Text('Rp ${_fmtRupiahSingkat(harga)} / $satuan', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppTheme.textPrimary)),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 180),
+                        itemCount: _komoditasList.length,
+                        itemBuilder: (context, index) {
+                          final item = _komoditasList[index];
+                          final id = item['_id'];
+                          final nama = item['nama_komoditas'] ?? '';
+                          final satuan = item['unit_satuan'] ?? 'kg';
+                          final grades = List<Map<String, dynamic>>.from(item['grade_kualitas'] ?? []);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppTheme.border.withOpacity(0.5)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6))]),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22)))),
+                                          const SizedBox(width: 14),
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(nama, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppTheme.textPrimary, letterSpacing: -0.3)),
+                                              const SizedBox(height: 4),
+                                              Text('${grades.length} Variasi Grade', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(
+                                        width: 32, height: 32,
+                                        child: PopupMenuButton<String>(
+                                          padding: EdgeInsets.zero,
+                                          onSelected: (val) {
+                                            if (val == 'edit') _showFormDialog(dataLama: item);
+                                            if (val == 'hapus') _hapus(id, nama);
+                                          },
+                                          icon: const Icon(Icons.more_horiz_rounded, color: AppTheme.textSecond),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          color: Colors.white,
+                                          elevation: 8,
+                                          itemBuilder: (_) => [
+                                            const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width:8), Text('Edit', style: TextStyle(fontWeight: FontWeight.w600))])),
+                                            const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_rounded, color: AppTheme.merah, size: 18), SizedBox(width:8), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
+                                          ],
+                                        ),
+                                      )
+                                    ],
+                                  ),
+                                ),
+                                Container(height: 1, color: AppTheme.bgPage),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                                  child: Column(
+                                    children: grades.map((g) {
+                                      final gradeName = g['grade'];
+                                      final harga = (g['harga_maks'] as num).toDouble();
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 12),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: AppTheme.hijauMuda.withOpacity(0.12), borderRadius: BorderRadius.circular(8)), child: Text('Grade $gradeName', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppTheme.hijauTua))),
+                                            Text('Rp ${_fmtRupiahSingkat(harga)} / $satuan', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppTheme.textPrimary)),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
+              ),
       ),
     );
   }
