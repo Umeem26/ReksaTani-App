@@ -176,12 +176,12 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
 
     if (widget.isMurniKasbon) {
       if (_petaniTerpilih == null) {
-        _showSnack('Wajib memilih mitra petani terdaftar untuk pencairan kasbon!', isError: true);
+        _showSnack('Silakan pilih mitra petani terlebih dahulu untuk mencairkan kasbon.', isError: true);
         return;
       }
       final double dipinjam = double.tryParse(_nominalKasbonCtrl.text) ?? 0.0;
       if (_controller.sisaUangJalan < dipinjam) {
-        _showSnack('Gagal! Saldo Uang Jalan Anda tidak cukup. Sisa: Rp ${_fmt(_controller.sisaUangJalan.toInt())}', isError: true);
+        _showSnack('Saldo Uang Jalan Anda tidak mencukupi untuk pencairan ini (Sisa saldo: Rp ${_fmt(_controller.sisaUangJalan.toInt())}).', isError: true);
         return;
       }
 
@@ -196,7 +196,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     }
 
     if (_hargaMelebihi) {
-      _showSnack('Harga melebihi batas maksimal grade $_gradeTerpilih (Rp ${_fmt(_hargaMaksGrade.toInt())})!', isError: true);
+      _showSnack('Harga yang dimasukkan melebihi batas maksimal untuk Grade $_gradeTerpilih (Maksimal Rp ${_fmt(_hargaMaksGrade.toInt())}).', isError: true);
       return;
     }
 
@@ -205,7 +205,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     final uangTunaiKeluar = _totalBayar - potongan;
 
     if (_controller.sisaUangJalan < uangTunaiKeluar) {
-      _showSnack('Saldo Uang Jalan tidak mencukupi! Sisa: Rp ${_fmt(_controller.sisaUangJalan.toInt())}', isError: true);
+      _showSnack('Saldo Uang Jalan Anda tidak mencukupi untuk menyelesaikan transaksi ini (Sisa saldo: Rp ${_fmt(_controller.sisaUangJalan.toInt())}).', isError: true);
       return;
     }
 
@@ -338,7 +338,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                     decoration: _dropDeco(),
                     hint: const Text('Pilih dari daftar mitra'),
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textHint),
-                    validator: (v) => widget.isMurniKasbon && v == null ? 'Mitra wajib dipilih' : null,
+                    validator: (v) => widget.isMurniKasbon && v == null ? 'Silakan pilih mitra petani' : null,
                     items: _daftarPetani
                         .map((p) => DropdownMenuItem(value: p, child: Text(p.namaPetani, style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary))))
                         .toList(),
@@ -356,14 +356,14 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                       ctrl: _namaPenjualCtrl,
                       label: 'Nama Lengkap Penjual',
                       hint: 'Masukkan nama penjual',
-                      validator: (v) => (v?.isEmpty ?? true) ? 'Wajib diisi' : null,
+                      validator: (v) => (v?.isEmpty ?? true) ? 'Nama lengkap tidak boleh kosong' : null,
                     ),
                     const SizedBox(height: 16),
                     _ReksaField(
                       ctrl: _desaCtrl,
                       label: 'Asal Desa / Wilayah',
                       hint: 'Masukkan asal desa',
-                      validator: (v) => (v?.isEmpty ?? true) ? 'Wajib diisi' : null,
+                      validator: (v) => (v?.isEmpty ?? true) ? 'Nama desa tidak boleh kosong' : null,
                     ),
                   ],
                   if (_petaniTerpilih != null)
@@ -386,7 +386,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                       type: TextInputType.number,
                       formatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: (_) => setState(() {}),
-                      validator: (v) => ((v?.isEmpty ?? true) || (double.tryParse(v!) ?? 0) <= 0) ? 'Masukkan nominal valid' : null,
+                      validator: (v) => ((v?.isEmpty ?? true) || (double.tryParse(v!) ?? 0) <= 0) ? 'Silakan masukkan jumlah nominal pinjaman yang valid' : null,
                     ),
                   ],
                 ),
@@ -405,7 +405,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                       items: _daftarKomoditas
                           .map((k) => DropdownMenuItem(value: k, child: Text(k.namaKomoditas, style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary))))
                           .toList(),
-                      validator: (_) => _komoditasTerpilih == null ? 'Pilih komoditas' : null,
+                      validator: (_) => _komoditasTerpilih == null ? 'Silakan pilih komoditas' : null,
                       onChanged: (k) => setState(() {
                         _komoditasTerpilih = k;
                         _gradeTerpilih = widget.gradeTebakanPcd;
@@ -424,7 +424,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                             type: TextInputType.number,
                             formatters: [FilteringTextInputFormatter.digitsOnly],
                             onChanged: (_) => setState(() {}),
-                            validator: (v) => (v?.isEmpty ?? true) ? 'Wajib' : null,
+                            validator: (v) => (v?.isEmpty ?? true) ? 'Jumlah berat tidak boleh kosong' : null,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -441,11 +441,11 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                               if (maks > 0 && h > maks) {
                                 _hargaCtrl.text = maks.toInt().toString();
                                 _hargaCtrl.selection = TextSelection.fromPosition(TextPosition(offset: _hargaCtrl.text.length));
-                                _showSnack('Harga otomatis diturunkan ke batas maksimal Grade $_gradeTerpilih (Rp ${_fmt(maks.toInt())})', isError: true);
+                                _showSnack('Harga disesuaikan kembali ke batas maksimum Grade $_gradeTerpilih yaitu Rp ${_fmt(maks.toInt())}.', isError: true);
                               }
                               setState(() {});
                             },
-                            validator: (v) => (v?.isEmpty ?? true) ? 'Wajib' : null,
+                            validator: (v) => (v?.isEmpty ?? true) ? 'Harga per kg tidak boleh kosong' : null,
                             isError: _hargaMelebihi,
                           ),
                         ),
@@ -483,7 +483,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                                 ),
                               ))
                           .toList(),
-                      validator: (_) => _gradeTerpilih == null ? 'Pilih kualitas' : null,
+                      validator: (_) => _gradeTerpilih == null ? 'Silakan pilih grade kualitas' : null,
                       onChanged: (g) => setState(() {
                         _gradeTerpilih = g;
                         final hMaks = (_daftarGrade.firstWhere((x) => x['grade'] == g, orElse: () => {})['harga_maks'] as num?)?.toInt() ?? 0;

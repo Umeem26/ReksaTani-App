@@ -46,7 +46,7 @@ void main() async {
         debugShowCheckedModeBanner: false,
         home: Scaffold(
           body: Center(
-            child: Text('Gagal memuat database lokal.\nHarap hapus data aplikasi (Clear Data)\natau install ulang.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
+            child: Text('Aplikasi tidak dapat memuat penyimpanan lokal.\nSilakan hapus data aplikasi di pengaturan HP Anda atau coba instal ulang aplikasi.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
           ),
         ),
       ));

@@ -48,7 +48,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
   Future<void> _refresh() async {
     setState(() => _syncing = true);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Memulai sinkronisasi data...'), duration: Duration(seconds: 1)),
+      const SnackBar(content: Text('Menghubungkan data Anda ke server...'), duration: Duration(seconds: 1)),
     );
 
     await _controller.syncData();
@@ -61,7 +61,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
             children: [
               Icon(Icons.check_circle_rounded, color: Colors.white),
               SizedBox(width: 8),
-              Text('Data berhasil disinkronkan!', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text('Data Anda berhasil diperbarui!', style: TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
           backgroundColor: AppTheme.hijauMuda,
@@ -89,7 +89,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
           ],
         ),
         content: const Text(
-          'Kamu yakin ingin logout?\nData luring tetap tersimpan dengan aman di perangkat ini.',
+          'Apakah Anda yakin ingin keluar dari akun ini? Data transaksi Anda akan tetap tersimpan aman di HP ini.',
           style: TextStyle(fontSize: 14, color: AppTheme.textSecond, height: 1.5),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
@@ -107,7 +107,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text('Keluar', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -193,8 +193,8 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                 builder: (_) => AlertDialog(
                                   backgroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                  title: const Text('Hapus Petani', style: TextStyle(fontWeight: FontWeight.w800)),
-                                  content: Text('Yakin ingin menghapus ${p.namaPetani}?'),
+                                  title: const Text('Hapus Mitra Petani', style: TextStyle(fontWeight: FontWeight.w800)),
+                                  content: Text('Apakah Anda yakin ingin menghapus data mitra ${p.namaPetani}?'),
                                   actions: [
                                     TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond))),
                                     ElevatedButton(
@@ -226,7 +226,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     ),
                     const SizedBox(height: 16),
                     if (harga.isEmpty)
-                      const _EmptyStateBento(icon: Icons.price_change_outlined, msg: 'Belum ada data harga.\nTarik ke bawah untuk sync.')
+                      const _EmptyStateBento(icon: Icons.price_change_outlined, msg: 'Belum ada data harga.\nTarik ke bawah untuk memperbarui data.')
                     else
                       ...harga.map((h) => _HargaRow(data: h)),
                     const SizedBox(height: 36),
@@ -258,13 +258,13 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                         backgroundColor: Colors.white,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                         title: const Text('Hapus Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.merah)),
-                                        content: const Text('Transaksi ini akan dihapus permanen. Lanjutkan?'),
+                                        content: const Text('Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.'),
                                         actions: [
                                           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond))),
                                           ElevatedButton(
                                             onPressed: () => Navigator.pop(context, true),
                                             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
-                                            child: const Text('Hapus Permanen'),
+                                            child: const Text('Ya, Hapus'),
                                           ),
                                         ],
                                       ),

@@ -173,13 +173,13 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                                       backgroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                       title: const Text('Hapus Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.merah)),
-                                      content: const Text('Transaksi ini akan dihapus permanen dari perangkat. Lanjutkan?'),
+                                      content: const Text('Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.'),
                                       actions: [
                                         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond))),
                                         ElevatedButton(
                                           onPressed: () => Navigator.pop(context, true),
                                           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
-                                          child: const Text('Hapus Permanen'),
+                                          child: const Text('Ya, Hapus'),
                                         ),
                                       ],
                                     ),

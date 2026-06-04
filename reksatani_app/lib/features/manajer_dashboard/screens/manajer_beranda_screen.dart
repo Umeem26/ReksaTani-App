@@ -75,7 +75,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
             Text('Keluar Aplikasi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppTheme.textPrimary)),
           ],
         ),
-        content: const Text('Kamu yakin ingin logout dari akun Manajer Gudang?', style: TextStyle(fontSize: 14, color: AppTheme.textSecond, height: 1.5)),
+        content: const Text('Apakah Anda yakin ingin keluar dari akun Manajer Gudang?', style: TextStyle(fontSize: 14, color: AppTheme.textSecond, height: 1.5)),
         actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
         actions: [
           TextButton(
@@ -91,7 +91,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text('Keluar', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),

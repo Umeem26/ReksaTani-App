@@ -22,7 +22,7 @@ class AuthController {
 
       // 3. Jika username tidak ditemukan di MongoDB
       if (userDoc == null) {
-        errorMessage.value = 'Username tidak ditemukan di database pusat!';
+        errorMessage.value = 'Username tidak terdaftar. Silakan periksa kembali username Anda.';
         isLoading.value = false;
         return false;
       }
@@ -30,7 +30,7 @@ class AuthController {
       // 4. Validasi Password
       // CATATAN: Pastikan nama field di MongoDB-mu adalah 'password_hash' atau sesuaikan
       if (userDoc['password_hash'] != password) {
-        errorMessage.value = 'Password yang Anda masukkan salah!';
+        errorMessage.value = 'Password salah. Silakan coba lagi.';
         isLoading.value = false;
         return false;
       }
@@ -53,7 +53,7 @@ class AuthController {
 
     } catch (e) {
       // Menangkap error jika internet putus saat sedang login
-      errorMessage.value = 'Gagal terhubung ke Server. Pastikan ada sinyal internet saat Login. Error: $e';
+      errorMessage.value = 'Koneksi internet bermasalah. Pastikan perangkat Anda terhubung ke internet untuk masuk pertama kali.';
       isLoading.value = false;
       return false;
     }
