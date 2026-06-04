@@ -158,11 +158,11 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              trx.gradeTerpilih.isNotEmpty ? trx.gradeTerpilih : '🌾',
+                              AppTheme.getCommodityIcon(trx.namaKomoditas),
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
-                                fontSize: isSelected ? 18 : 14,
+                                fontSize: isSelected ? 22 : 18,
                               ),
                             ),
                           ),
@@ -226,7 +226,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                                     return Padding(
                                       padding: const EdgeInsets.only(right: 8),
                                       child: _GlassChip(
-                                        label: komoditas == 'Semua' ? '🌾 Semua Komoditas' : komoditas,
+                                        label: komoditas == 'Semua' ? '🌾 Semua Komoditas' : '${AppTheme.getCommodityIcon(komoditas)} $komoditas',
                                         isActive: isActive,
                                         activeColor: AppTheme.hijauTua,
                                         onTap: () {
@@ -349,7 +349,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3)),
                                 ),
-                                child: const Center(child: Text('🌾', style: TextStyle(fontSize: 26))),
+                                child: Center(child: Text(AppTheme.getCommodityIcon(_selectedTrx!.namaKomoditas), style: const TextStyle(fontSize: 26))),
                               ),
                               const SizedBox(width: 16),
                               Expanded(

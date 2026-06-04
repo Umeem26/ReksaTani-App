@@ -368,7 +368,7 @@ class _KomoditasRowModern extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppTheme.border.withOpacity(0.5)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
       child: Row(
         children: [
-          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22)))),
+          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: Center(child: Text(AppTheme.getCommodityIcon(namaKomoditas), style: const TextStyle(fontSize: 22)))),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

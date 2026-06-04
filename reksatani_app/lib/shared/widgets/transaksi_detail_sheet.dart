@@ -101,7 +101,7 @@ class TransaksiDetailSheet extends StatelessWidget {
                             Container(
                               width: 48, height: 48,
                               decoration: BoxDecoration(color: isKasbonMurni ? const Color(0xFFFEF3C7) : AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)),
-                              child: Center(child: isKasbonMurni ? const Icon(Icons.payments_rounded, color: Color(0xFFF59E0B)) : const Text('🌾', style: TextStyle(fontSize: 22))),
+                              child: Center(child: isKasbonMurni ? const Icon(Icons.payments_rounded, color: Color(0xFFF59E0B)) : Text(AppTheme.getCommodityIcon(trx.namaKomoditas), style: const TextStyle(fontSize: 22))),
                             ),
                             const SizedBox(width: 14),
                             Expanded(

@@ -379,7 +379,7 @@ class _TransaksiCardPremium extends StatelessWidget {
                     child: Center(
                       child: isKasbonMurni 
                           ? const Icon(Icons.payments_rounded, color: Color(0xFFF59E0B), size: 26) 
-                          : const Text('🌾', style: TextStyle(fontSize: 24)),
+                          : Text(AppTheme.getCommodityIcon(trx.namaKomoditas), style: const TextStyle(fontSize: 24)),
                     ),
                   ),
                   const SizedBox(width: 16),

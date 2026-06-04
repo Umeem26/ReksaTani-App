@@ -184,7 +184,7 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
                                     children: [
                                       Row(
                                         children: [
-                                          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22)))),
+                                          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: Center(child: Text(AppTheme.getCommodityIcon(nama), style: const TextStyle(fontSize: 22)))),
                                           const SizedBox(width: 14),
                                           Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,

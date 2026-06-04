@@ -683,7 +683,7 @@ class _HargaRow extends StatelessWidget {
           Container(
             width: 48, height: 48,
             decoration: BoxDecoration(color: AppTheme.bgPage, borderRadius: BorderRadius.circular(16)),
-            child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22))),
+            child: Center(child: Text(AppTheme.getCommodityIcon(komoditas), style: const TextStyle(fontSize: 22))),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -753,7 +753,7 @@ class _TransaksiRow extends StatelessWidget {
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(color: isKasbonMurni ? const Color(0xFFFEF3C7) : AppTheme.bgPage, borderRadius: BorderRadius.circular(16)),
-              child: Center(child: isKasbonMurni ? const Icon(Icons.payments_rounded, color: Color(0xFFF59E0B), size: 24) : const Text('🌾', style: TextStyle(fontSize: 22))),
+              child: Center(child: isKasbonMurni ? const Icon(Icons.payments_rounded, color: Color(0xFFF59E0B), size: 24) : Text(AppTheme.getCommodityIcon(trx.namaKomoditas), style: const TextStyle(fontSize: 22))),
             ),
             const SizedBox(width: 14),
             Expanded(

@@ -17,14 +17,22 @@ class HargaItem {
 class PasarController {
   final _hive = HiveService();
   String filterGrade = 'Semua';
+  String filterKomoditas = 'Semua';
 
   void setFilterGrade(String grade) {
     filterGrade = grade;
   }
 
+  void setFilterKomoditas(String komoditas) {
+    filterKomoditas = komoditas;
+  }
+
   List<HargaItem> get daftarHarga {
     final result = <HargaItem>[];
     for (final k in _hive.komoditasBox.values) {
+      if (filterKomoditas != 'Semua' && k.namaKomoditas != filterKomoditas) {
+        continue;
+      }
       for (final g in k.gradeKualitas) {
         final grade    = g['grade'] as String? ?? '';
         final hargaMaks = (g['harga_maks'] as num?)?.toDouble() ?? 0;
