@@ -273,11 +273,22 @@ class _ManajerHeaderModern extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(children: [
-                      Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.analytics_rounded, color: Colors.white, size: 18)),
-                      const SizedBox(width: 10),
-                      const Text('Total Valuasi Transaksi Masuk', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
-                    ]),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.analytics_rounded, color: Colors.white, size: 18)),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Total Valuasi Transaksi Masuk', 
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)), child: const Text('Dasbor Manajer', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
                   ],
                 ),

@@ -438,7 +438,7 @@ class _PengepulFormSheetState extends State<_PengepulFormSheet> {
     super.initState();
     if (widget.dataLama != null) {
       _usernameCtrl.text = widget.dataLama!['username'] ?? '';
-      _passwordCtrl.text = widget.dataLama!['password_hash'] ?? '';
+      _passwordCtrl.text = '';
       _uangJalanCtrl.text = (widget.dataLama!['sisa_uang_jalan'] ?? 0).toInt().toString();
     }
   }
@@ -477,8 +477,16 @@ class _PengepulFormSheetState extends State<_PengepulFormSheet> {
             const Text('Password', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
             const SizedBox(height: 8),
             TextFormField(
-              controller: _passwordCtrl, obscureText: _obscurePass, validator: (val) => (val?.isEmpty ?? true) ? 'Password tidak boleh kosong' : null, style: const TextStyle(fontWeight: FontWeight.w700),
-              decoration: _inputDeco('Masukkan password').copyWith(suffixIcon: IconButton(icon: Icon(_obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: AppTheme.textSecond, size: 20), onPressed: () => setState(() => _obscurePass = !_obscurePass))),
+              controller: _passwordCtrl,
+              obscureText: _obscurePass,
+              validator: (val) {
+                if (widget.dataLama == null && (val == null || val.isEmpty)) {
+                  return 'Password tidak boleh kosong';
+                }
+                return null;
+              },
+              style: const TextStyle(fontWeight: FontWeight.w700),
+              decoration: _inputDeco(widget.dataLama == null ? 'Masukkan password' : 'Kosongkan jika tidak ingin diubah').copyWith(suffixIcon: IconButton(icon: Icon(_obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: AppTheme.textSecond, size: 20), onPressed: () => setState(() => _obscurePass = !_obscurePass))),
             ),
             const SizedBox(height: 16),
             const Text('Suntik Saldo Awal Kas (Rp)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
