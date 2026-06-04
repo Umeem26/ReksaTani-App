@@ -358,20 +358,69 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
   }
 
   // ── GETTER untuk UI (dari Hive lokal) ──────────────────────────
+  void _seedDefaultKomoditasIfMissing() {
+    final Map<String, List<Map<String, dynamic>>> defaultGrades = {
+      'Gabah': [
+        {'grade': 'A', 'harga_maks': 7500.0},
+        {'grade': 'B', 'harga_maks': 6800.0},
+        {'grade': 'C', 'harga_maks': 6000.0},
+      ],
+      'Kopi Robusta': [
+        {'grade': 'A', 'harga_maks': 42000.0},
+        {'grade': 'B', 'harga_maks': 38000.0},
+        {'grade': 'C', 'harga_maks': 34000.0},
+      ],
+      'Sawit': [
+        {'grade': 'A', 'harga_maks': 2800.0},
+        {'grade': 'B', 'harga_maks': 2400.0},
+        {'grade': 'C', 'harga_maks': 2000.0},
+      ],
+    };
+
+    for (final name in defaultGrades.keys) {
+      bool exists = _hive.komoditasBox.values.any((k) => k.namaKomoditas.toLowerCase() == name.toLowerCase());
+      if (!exists) {
+        final id = name.toLowerCase().replaceAll(' ', '_');
+        final m = KomoditasHiveModel(
+          id: id,
+          namaKomoditas: name,
+          unitSatuan: 'kg',
+          gradeKualitas: defaultGrades[name]!,
+          diperbaruiOleh: 'sistem',
+          waktuPembaruan: DateTime.now(),
+        );
+        _hive.komoditasBox.put(m.id, m);
+      }
+    }
+  }
+
+  List<KomoditasHiveModel> getDaftarKomoditas() {
+    final allowedNames = {'gabah', 'kopi robusta', 'sawit'};
+    _seedDefaultKomoditasIfMissing();
+    return _hive.komoditasBox.values
+        .where((k) => allowedNames.contains(k.namaKomoditas.toLowerCase()))
+        .toList();
+  }
+
   List<PetaniHiveModel> getDaftarPetani() => _hive.petaniBox.values.toList();
-  List<KomoditasHiveModel> getDaftarKomoditas() => _hive.komoditasBox.values.toList();
+  
   List<UserHiveModel> getDaftarAgen() => _hive.usersBox.values.where((u) => u.role == 'pengepul').toList();
 
-  List<Map<String, dynamic>> getDaftarHargaDisplay() =>
-      _hive.komoditasBox.values.expand((k) {
-        return k.gradeKualitas.map((g) => {
-              'namaKomoditas': k.namaKomoditas,
-              'unitSatuan': k.unitSatuan,
-              'grade': g['grade'] as String,
-              'hargaMaks': (g['harga_maks'] as num).toDouble(),
-              'komoditasId': k.id,
-            });
-      }).toList();
+  List<Map<String, dynamic>> getDaftarHargaDisplay() {
+    final allowedNames = {'gabah', 'kopi robusta', 'sawit'};
+    _seedDefaultKomoditasIfMissing();
+    return _hive.komoditasBox.values
+        .where((k) => allowedNames.contains(k.namaKomoditas.toLowerCase()))
+        .expand((k) {
+          return k.gradeKualitas.map((g) => {
+                'namaKomoditas': k.namaKomoditas,
+                'unitSatuan': k.unitSatuan,
+                'grade': g['grade'] as String,
+                'hargaMaks': (g['harga_maks'] as num).toDouble(),
+                'komoditasId': k.id,
+              });
+        }).toList();
+  }
 
   List<TransaksiHiveModel> getRiwayatTransaksi() =>
       _hive.transaksiBox.values

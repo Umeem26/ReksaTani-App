@@ -33,4 +33,15 @@ class AppTheme {
               offset: Offset(0, 2)),
         ],
       );
+
+  static String getCommodityIcon(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('kopi') || lower.contains('robusta')) {
+      return '☕';
+    } else if (lower.contains('sawit')) {
+      return '🌴';
+    } else {
+      return '🌾';
+    }
+  }
 }

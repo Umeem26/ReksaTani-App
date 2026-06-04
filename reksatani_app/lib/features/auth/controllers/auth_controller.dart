@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' as mongo; // Import mongo_dart
+import 'package:bcrypt/bcrypt.dart';
 import '../../../models/hive/user_hive_model.dart';
 import '../../../services/hive_service.dart';
 import '../../../services/mongodb_service.dart'; // Import MongoDB Service temanmu
@@ -22,24 +23,49 @@ class AuthController {
 
       // 3. Jika username tidak ditemukan di MongoDB
       if (userDoc == null) {
-        errorMessage.value = 'Username tidak ditemukan di database pusat!';
+        errorMessage.value = 'Username tidak terdaftar. Silakan periksa kembali username Anda.';
         isLoading.value = false;
         return false;
       }
 
-      // 4. Validasi Password
-      // CATATAN: Pastikan nama field di MongoDB-mu adalah 'password_hash' atau sesuaikan
-      if (userDoc['password_hash'] != password) {
-        errorMessage.value = 'Password yang Anda masukkan salah!';
+      // 4. Validasi Password dengan Bcrypt & Auto-migration
+      final storedHash = userDoc['password_hash'] as String? ?? '';
+      bool isCorrect = false;
+      bool needsMigration = false;
+
+      if (storedHash.startsWith('\$2a\$') || storedHash.startsWith('\$2b\$') || storedHash.startsWith('\$2y\$')) {
+        try {
+          isCorrect = BCrypt.checkpw(password, storedHash);
+        } catch (e) {
+          isCorrect = false;
+        }
+      } else {
+        isCorrect = storedHash == password;
+        if (isCorrect) {
+          needsMigration = true;
+        }
+      }
+
+      if (!isCorrect) {
+        errorMessage.value = 'Password salah. Silakan coba lagi.';
         isLoading.value = false;
         return false;
+      }
+
+      String finalPasswordHash = storedHash;
+      if (needsMigration) {
+        finalPasswordHash = BCrypt.hashpw(password, BCrypt.gensalt());
+        await usersCollection.updateOne(
+          mongo.where.eq('_id', userDoc['_id']),
+          mongo.modify.set('password_hash', finalPasswordHash),
+        );
       }
 
       // 5. Jika COCOK, Kita ambil datanya dari MongoDB dan ubah jadi format Lokal (Hive)
       final loggedInUser = UserHiveModel(
         id: userDoc['_id'].toString(), // ObjectId dari Mongo diubah ke String
         username: userDoc['username'],
-        passwordHash: userDoc['password_hash'],
+        passwordHash: finalPasswordHash,
         role: userDoc['role'], // 'pengepul' atau 'manajer'
         sisaUangJalan: (userDoc['sisa_uang_jalan'] ?? 0).toDouble(), // Pastikan double
         waktuDibuat: DateTime.now(),
@@ -53,7 +79,7 @@ class AuthController {
 
     } catch (e) {
       // Menangkap error jika internet putus saat sedang login
-      errorMessage.value = 'Gagal terhubung ke Server. Pastikan ada sinyal internet saat Login. Error: $e';
+      errorMessage.value = 'Koneksi internet bermasalah. Pastikan perangkat Anda terhubung ke internet untuk masuk pertama kali.';
       isLoading.value = false;
       return false;
     }

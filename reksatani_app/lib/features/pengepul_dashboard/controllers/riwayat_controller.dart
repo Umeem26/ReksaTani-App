@@ -84,5 +84,6 @@ class RiwayatController extends ChangeNotifier {
       await trx.save();
     }
     notifyListeners();
+    _svc.syncAll();
   }
 }

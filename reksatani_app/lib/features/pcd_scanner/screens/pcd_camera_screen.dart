@@ -45,6 +45,8 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   String _liveLightingStatus = "Menghitung...";
   Color _liveLightingColor = Colors.grey;
   String _liveDetectedObject = "Mencari objek...";
+  List<Offset>? _detectedCorners;
+  List<Offset>? _detectedNotaCorners;
 
   // ─── KONTROL PERANGKAT HARDWARE ───
   bool _isFlashOn = false;
@@ -132,11 +134,26 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         _isProcessingFrame = true;
 
         try {
-          final int luma = image.planes[0].bytes.fold<int>(0, (p, e) => p + e) ~/ image.planes[0].bytes.length;
+          final bytes = image.planes[0].bytes;
+          final frameW = image.width;
+          final frameH = image.height;
+          final bytesPerRow = image.planes[0].bytesPerRow;
+
+          // 1. Hitung rata-rata kecerahan untuk luma (Lompati piksel agar sangat cepat)
+          int totalLuma = 0;
+          int countLuma = 0;
+          for (int y = 0; y < frameH; y += 8) {
+            for (int x = 0; x < frameW; x += 8) {
+              totalLuma += bytes[y * bytesPerRow + x];
+              countLuma++;
+            }
+          }
+          final int luma = countLuma > 0 ? totalLuma ~/ countLuma : 127;
 
           String lightStatus;
           Color lightColor;
           String detectedObj = "Menganalisis...";
+          List<Offset>? newCorners;
 
           if (luma < 60) {
             lightStatus = "TERLALU GELAP";
@@ -149,16 +166,183 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
           } else {
             lightStatus = "PENCAHAYAAN IDEAL";
             lightColor = AppTheme.hijauMuda;
-            
-            if (_step == 0) {
-              detectedObj = "Terdeteksi: Lembar Kertas/Nota";
-            } else {
-              detectedObj = "Terdeteksi: Komoditas Organik";
+            detectedObj = _step == 0 ? "Sejajarkan nota di area kamera" : "Arahkan kamera ke Komoditas";
+          }
+
+          if (_step == 0) {
+            // 2. Deteksi sudut nota real-time HANYA jika step == 0
+            int minVal = 255;
+            int maxVal = 0;
+            const int gridR = 15;
+            const int gridC = 15;
+            final double stepX = frameW / gridC;
+            final double stepY = frameH / gridR;
+
+            for (int gy = 0; gy < gridR; gy++) {
+              for (int gx = 0; gx < gridC; gx++) {
+                int fx = (gx * stepX).round().clamp(0, frameW - 1);
+                int fy = (gy * stepY).round().clamp(0, frameH - 1);
+                int val = bytes[fy * bytesPerRow + fx];
+                if (val < minVal) minVal = val;
+                if (val > maxVal) maxVal = val;
+              }
             }
+
+            int threshold = (minVal + maxVal) ~/ 2 + 10;
+            if (threshold < 70) threshold = 70;
+
+            final densities = List.generate(gridR, (_) => List.filled(gridC, 0));
+            for (int gy = 0; gy < gridR; gy++) {
+              for (int gx = 0; gx < gridC; gx++) {
+                int count = 0;
+                for (int dy = 0; dy < 2; dy++) {
+                  for (int dx = 0; dx < 2; dx++) {
+                    int fx = ((gx + dx * 0.5) * stepX).round().clamp(0, frameW - 1);
+                    int fy = ((gy + dy * 0.5) * stepY).round().clamp(0, frameH - 1);
+                    if (bytes[fy * bytesPerRow + fx] >= threshold) {
+                      count++;
+                    }
+                  }
+                }
+                densities[gy][gx] = count;
+              }
+            }
+
+            final isDense = List.generate(gridR, (_) => List.filled(gridC, false));
+            for (int r = 0; r < gridR; r++) {
+              for (int c = 0; c < gridC; c++) {
+                if (densities[r][c] >= 2) {
+                  isDense[r][c] = true;
+                }
+              }
+            }
+
+            final visited = List.generate(gridR, (_) => List.filled(gridC, false));
+            List<List<int>> largestComp = [];
+            for (int r = 0; r < gridR; r++) {
+              for (int c = 0; c < gridC; c++) {
+                if (isDense[r][c] && !visited[r][c]) {
+                  final List<List<int>> comp = [];
+                  final List<List<int>> queue = [[r, c]];
+                  visited[r][c] = true;
+                  while (queue.isNotEmpty) {
+                    final curr = queue.removeAt(0);
+                    comp.add(curr);
+                    final currR = curr[0];
+                    final currC = curr[1];
+                    final dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                    for (final d in dirs) {
+                      final nr = currR + d[0];
+                      final nc = currC + d[1];
+                      if (nr >= 0 && nr < gridR && nc >= 0 && nc < gridC) {
+                        if (isDense[nr][nc] && !visited[nr][nc]) {
+                          visited[nr][nc] = true;
+                          queue.add([nr, nc]);
+                        }
+                      }
+                    }
+                  }
+                  if (comp.length > largestComp.length) {
+                    largestComp = comp;
+                  }
+                }
+              }
+            }
+
+            if (largestComp.length >= 10) {
+              int minSumIdx = 0, maxSumIdx = 0, maxDiffIdx = 0, minDiffIdx = 0;
+              double minSum = 9999, maxSum = -9999, maxDiff = -9999, minDiff = 9999;
+
+              for (int i = 0; i < largestComp.length; i++) {
+                final cell = largestComp[i];
+                double gx = cell[1] / gridC;
+                double gy = cell[0] / gridR;
+                double sum = gx + gy;
+                double diff = gx - gy;
+
+                if (sum < minSum) { minSum = sum; minSumIdx = i; }
+                if (sum > maxSum) { maxSum = sum; maxSumIdx = i; }
+                if (diff > maxDiff) { maxDiff = diff; maxDiffIdx = i; }
+                if (diff < minDiff) { minDiff = diff; minDiffIdx = i; }
+              }
+
+              final tlCell = largestComp[minSumIdx];
+              final trCell = largestComp[maxDiffIdx];
+              final brCell = largestComp[maxSumIdx];
+              final blCell = largestComp[minDiffIdx];
+
+              Offset cellToScreenOffset(List<int> cell) {
+                double nx = 1.0 - (cell[0] / gridR);
+                double ny = cell[1] / gridC;
+                return Offset(nx, ny);
+              }
+
+              newCorners = [
+                cellToScreenOffset(tlCell),
+                cellToScreenOffset(trCell),
+                cellToScreenOffset(brCell),
+                cellToScreenOffset(blCell),
+              ];
+              detectedObj = "Terdeteksi: Lembar Kertas/Nota";
+              if (luma >= 60 && luma <= 210) {
+                lightColor = AppTheme.hijauMuda;
+              }
+            } else {
+              if (luma >= 60 && luma <= 210) {
+                detectedObj = "Sejajarkan nota di area kamera";
+                lightColor = Colors.white;
+              }
+            }
+          } else {
+            // 3. Analisis YUV untuk klasifikasi komoditas live HANYA jika step == 1
+            String detectedCommodity = "Arahkan kamera ke Komoditas";
+            
+            int sumY = 0, sumU = 0, sumV = 0, countSamples = 0;
+            final uBytes = image.planes.length >= 3 ? image.planes[1].bytes : null;
+            final vBytes = image.planes.length >= 3 ? image.planes[2].bytes : null;
+            final uBytesPerRow = image.planes.length >= 3 ? image.planes[1].bytesPerRow : 0;
+            final vBytesPerRow = image.planes.length >= 3 ? image.planes[2].bytesPerRow : 0;
+            
+            for (int dy = -2; dy <= 2; dy++) {
+              for (int dx = -2; dx <= 2; dx++) {
+                int sy = (frameH ~/ 2) + dy * 20;
+                int sx = (frameW ~/ 2) + dx * 20;
+                if (sy >= 0 && sy < frameH && sx >= 0 && sx < frameW) {
+                  sumY += bytes[sy * bytesPerRow + sx];
+                  countSamples++;
+                  
+                  if (uBytes != null && vBytes != null) {
+                    int csy = sy ~/ 2;
+                    int csx = sx ~/ 2;
+                    sumU += uBytes[csy * uBytesPerRow + csx];
+                    sumV += vBytes[csy * vBytesPerRow + csx];
+                  }
+                }
+              }
+            }
+            
+            final double avgY = sumY / countSamples;
+            final double avgU = countSamples > 0 && uBytes != null ? sumU / countSamples : 128.0;
+            final double avgV = countSamples > 0 && vBytes != null ? sumV / countSamples : 128.0;
+
+            if (avgV > 132 && avgU < 118) {
+              detectedCommodity = "Terdeteksi: Kelapa Sawit (TBS)";
+            } else if (avgY > 110 && avgU < 122 && avgV > 122) {
+              detectedCommodity = "Terdeteksi: Gabah Padi (GKP/GKG)";
+            } else if (avgY < 95) {
+              detectedCommodity = "Terdeteksi: Kopi Robusta (Biji Kopi)";
+            } else {
+              detectedCommodity = "Arahkan kamera ke Komoditas";
+            }
+            detectedObj = detectedCommodity;
           }
 
           if (mounted) {
             setState(() {
+              _detectedCorners = newCorners;
+              if (_step == 0 && newCorners != null) {
+                _detectedNotaCorners = newCorners;
+              }
               _liveLightingStatus = lightStatus;
               _liveLightingColor = lightColor;
               _liveDetectedObject = detectedObj;
@@ -166,7 +350,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
           }
         } catch (_) {}
 
-        await Future.delayed(const Duration(milliseconds: 1000));
+        await Future.delayed(const Duration(milliseconds: 100)); // Delay kecil untuk rendering overlay responsif
         _isProcessingFrame = false;
       });
     }
@@ -205,6 +389,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     if (_cameraController!.value.isTakingPicture) return;
 
     try {
+      final finalCorners = _detectedCorners ?? _detectedNotaCorners;
       _stopLiveStream(); 
       HapticFeedback.vibrate(); 
 
@@ -214,6 +399,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       setState(() {
         if (_step == 0) {
           _fotoNotaPath = adjustedPhoto.path;
+          _detectedNotaCorners = finalCorners;
           _showLiveCamera = false; 
         } else if (_step == 1) {
           _fotoBarangPath = adjustedPhoto.path;
@@ -240,6 +426,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         setState(() {
           if (_step == 0) {
             _fotoNotaPath = savedImage.path;
+            _detectedNotaCorners = null;
             _showLiveCamera = false;
           } else if (_step == 1) {
             _fotoBarangPath = savedImage.path;
@@ -280,7 +467,10 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
 
     String finalNotaPath = _fotoNotaPath!;
     if (_fotoNotaPath != null) {
-      finalNotaPath = await _pcdController.prosesWarpingNota(_fotoNotaPath!);
+      finalNotaPath = await _pcdController.prosesWarpingNota(
+        _fotoNotaPath!,
+        manualCorners: _detectedNotaCorners,
+      );
     }
 
     String finalBarangPath = _fotoBarangPath!;
@@ -344,6 +534,9 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
           gradeTebakanPcd: tebakanGrade,
           initialBeratOcr: dataHasilOcr['berat'],
           initialHargaOcr: dataHasilOcr['harga'],
+          initialNamaPenjualOcr: dataHasilOcr['nama'],
+          initialDesaOcr: dataHasilOcr['desa'],
+          initialKomoditasOcr: dataHasilOcr['komoditas'],
         ),
       ),
     );
@@ -707,7 +900,29 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         fit: StackFit.expand,
         children: [
           // 1. Lensa Kamera Utama yang super bersih
-          Container(color: Colors.black, child: Center(child: CameraPreview(_cameraController!))),
+          Container(
+            color: Colors.black,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: _cameraController!.value.aspectRatio > 1
+                    ? 1 / _cameraController!.value.aspectRatio
+                    : _cameraController!.value.aspectRatio,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CameraPreview(_cameraController!),
+                    if (_step == 0 && _detectedCorners != null)
+                      CustomPaint(
+                        painter: DocumentOutlinePainter(
+                          corners: _detectedCorners!,
+                          color: _liveLightingColor,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
 
           // 2. HUD Live Sensor Data Atas
           Positioned(
@@ -901,5 +1116,51 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         ),
       ),
     );
+  }
+}
+
+class DocumentOutlinePainter extends CustomPainter {
+  final List<Offset> corners;
+  final Color color;
+
+  DocumentOutlinePainter({required this.corners, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (corners.length < 4) return;
+
+    final paintBorder = Paint()
+      ..color = color.withOpacity(0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final paintFill = Paint()
+      ..color = color.withOpacity(0.15)
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(corners[0].dx * size.width, corners[0].dy * size.height)
+      ..lineTo(corners[1].dx * size.width, corners[1].dy * size.height)
+      ..lineTo(corners[2].dx * size.width, corners[2].dy * size.height)
+      ..lineTo(corners[3].dx * size.width, corners[3].dy * size.height)
+      ..close();
+
+    canvas.drawPath(path, paintFill);
+    canvas.drawPath(path, paintBorder);
+
+    final paintCircle = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    
+    for (final corner in corners) {
+      canvas.drawCircle(Offset(corner.dx * size.width, corner.dy * size.height), 6.0, paintCircle);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant DocumentOutlinePainter oldDelegate) {
+    return oldDelegate.corners != corners || oldDelegate.color != color;
   }
 }

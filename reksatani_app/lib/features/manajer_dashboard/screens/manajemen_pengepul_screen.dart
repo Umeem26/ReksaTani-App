@@ -118,7 +118,7 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
           if (!sukses && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Row(children: [Icon(Icons.error_outline_rounded, color: Colors.white, size: 20), SizedBox(width: 10), Expanded(child: Text('Gagal menyimpan! Username mungkin sudah terpakai.', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))]),
+                content: const Row(children: [Icon(Icons.error_outline_rounded, color: Colors.white, size: 20), SizedBox(width: 10), Expanded(child: Text('Gagal menyimpan data. Username tersebut sudah digunakan. Silakan gunakan username lain.', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))]),
                 backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               ),
             );
@@ -135,8 +135,8 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Hapus Agen', style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.merah)),
-        content: Text('Yakin ingin menghapus akun agen $username?\nAkun ini akan diblokir dan tidak bisa login lagi ke dalam sistem lapangan.', style: const TextStyle(color: AppTheme.textSecond, height: 1.4)),
+        title: const Text('Hapus Akun Agen', style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.merah)),
+        content: Text('Apakah Anda yakin ingin menghapus akun agen $username? Akun ini akan dinonaktifkan secara permanen dari sistem.', style: const TextStyle(color: AppTheme.textSecond, height: 1.4)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w700))),
           ElevatedButton(
@@ -147,7 +147,7 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
               await _fetchData();
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            child: const Text('Hapus Permanen', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text('Ya, Hapus', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -438,7 +438,7 @@ class _PengepulFormSheetState extends State<_PengepulFormSheet> {
     super.initState();
     if (widget.dataLama != null) {
       _usernameCtrl.text = widget.dataLama!['username'] ?? '';
-      _passwordCtrl.text = widget.dataLama!['password_hash'] ?? '';
+      _passwordCtrl.text = '';
       _uangJalanCtrl.text = (widget.dataLama!['sisa_uang_jalan'] ?? 0).toInt().toString();
     }
   }
@@ -472,18 +472,26 @@ class _PengepulFormSheetState extends State<_PengepulFormSheet> {
             const SizedBox(height: 24),
             const Text('Username Login', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
             const SizedBox(height: 8),
-            TextFormField(controller: _usernameCtrl, validator: (val) => (val?.isEmpty ?? true) ? 'Username wajib diisi' : null, style: const TextStyle(fontWeight: FontWeight.w700), decoration: _inputDeco('Masukkan username unik agen')),
+            TextFormField(controller: _usernameCtrl, validator: (val) => (val?.isEmpty ?? true) ? 'Username tidak boleh kosong' : null, style: const TextStyle(fontWeight: FontWeight.w700), decoration: _inputDeco('Masukkan username unik agen')),
             const SizedBox(height: 16),
             const Text('Password', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
             const SizedBox(height: 8),
             TextFormField(
-              controller: _passwordCtrl, obscureText: _obscurePass, validator: (val) => (val?.isEmpty ?? true) ? 'Password wajib diisi' : null, style: const TextStyle(fontWeight: FontWeight.w700),
-              decoration: _inputDeco('Masukkan password').copyWith(suffixIcon: IconButton(icon: Icon(_obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: AppTheme.textSecond, size: 20), onPressed: () => setState(() => _obscurePass = !_obscurePass))),
+              controller: _passwordCtrl,
+              obscureText: _obscurePass,
+              validator: (val) {
+                if (widget.dataLama == null && (val == null || val.isEmpty)) {
+                  return 'Password tidak boleh kosong';
+                }
+                return null;
+              },
+              style: const TextStyle(fontWeight: FontWeight.w700),
+              decoration: _inputDeco(widget.dataLama == null ? 'Masukkan password' : 'Kosongkan jika tidak ingin diubah').copyWith(suffixIcon: IconButton(icon: Icon(_obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: AppTheme.textSecond, size: 20), onPressed: () => setState(() => _obscurePass = !_obscurePass))),
             ),
             const SizedBox(height: 16),
             const Text('Suntik Saldo Awal Kas (Rp)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
             const SizedBox(height: 8),
-            TextFormField(controller: _uangJalanCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], validator: (val) => (val?.isEmpty ?? true) ? 'Saldo awal wajib diisi' : null, style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.hijauTua), decoration: _inputDeco('Contoh: 5000000').copyWith(prefixText: 'Rp ')),
+            TextFormField(controller: _uangJalanCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], validator: (val) => (val?.isEmpty ?? true) ? 'Saldo awal tidak boleh kosong' : null, style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.hijauTua), decoration: _inputDeco('Contoh: 5000000').copyWith(prefixText: 'Rp ')),
             const SizedBox(height: 32),
             SizedBox(width: double.infinity, height: 56, child: ElevatedButton(onPressed: _simpan, style: ElevatedButton.styleFrom(backgroundColor: AppTheme.hijauTua, foregroundColor: Colors.white, elevation: 6, shadowColor: AppTheme.hijauTua.withOpacity(0.4), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text('Simpan Data Agen', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5)))),
           ],

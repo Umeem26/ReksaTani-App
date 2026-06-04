@@ -84,8 +84,8 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Hapus Petani', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.merah)),
-        content: Text('Yakin ingin menghapus ${petani.namaPetani} dari daftar mitra?', style: const TextStyle(color: AppTheme.textSecond, height: 1.4)),
+        title: const Text('Hapus Mitra Petani', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.merah)),
+        content: Text('Apakah Anda yakin ingin menghapus ${petani.namaPetani} dari daftar mitra?', style: const TextStyle(color: AppTheme.textSecond, height: 1.4)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w700))),
           ElevatedButton(
@@ -336,7 +336,7 @@ class _PetaniFormSheetState extends State<PetaniFormSheet> {
                 controller: _namaCtrl,
                 style: const TextStyle(fontWeight: FontWeight.w700),
                 decoration: _deco('Contoh: Budi Santoso', Icons.person_outline_rounded),
-                validator: (v) => (v == null || v.isEmpty) ? 'Nama wajib diisi' : null,
+                validator: (v) => (v == null || v.isEmpty) ? 'Nama petani tidak boleh kosong' : null,
               ),
               const SizedBox(height: 20),
               
@@ -346,7 +346,7 @@ class _PetaniFormSheetState extends State<PetaniFormSheet> {
                 controller: _desaCtrl,
                 style: const TextStyle(fontWeight: FontWeight.w700),
                 decoration: _deco('Contoh: Desa Sukamaju', Icons.location_on_outlined),
-                validator: (v) => (v == null || v.isEmpty) ? 'Desa wajib diisi' : null,
+                validator: (v) => (v == null || v.isEmpty) ? 'Nama desa tidak boleh kosong' : null,
               ),
               const SizedBox(height: 36),
               

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show Offset;
 import '../services/document_warping_service.dart';
 import '../services/image_segmentation_service.dart';
 import '../services/ocr_regex_service.dart'; // 👈 Impor service baru Modul 8
@@ -20,10 +21,10 @@ class PcdController {
         confidenceValidator = confidenceValidator ?? ConfidenceValidator();
 
   // ─── MODUL 6: Eksekusi Pelurusan Sudut Nota ───
-  Future<String> prosesWarpingNota(String imagePath) async {
+  Future<String> prosesWarpingNota(String imagePath, {List<Offset>? manualCorners}) async {
     try {
       final fileNotaAsli = File(imagePath);
-      final fileNotaLurus = await _warpingService.warpNota(fileNotaAsli);
+      final fileNotaLurus = await _warpingService.warpNota(fileNotaAsli, manualCorners: manualCorners);
       return fileNotaLurus.path;
     } catch (e) {
       return imagePath; 

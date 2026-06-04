@@ -1,10 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:reksatani_app/services/master_data_service.dart';
 
 void main() {
-  dotenv.loadFromString(envString: 'MONGODB_URI=mongodb://localhost:27017');
-
   final service = MasterDataService();
 
   group('MasterDataService - Data Parser Unit Tests', () {

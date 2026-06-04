@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/master_data_service.dart';
 import 'services/mongodb_service.dart';
@@ -9,12 +8,6 @@ import 'features/auth/screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  try {
-    await dotenv.load(fileName: ".env");
-  } catch (e) {
-    debugPrint("⚠️ Peringatan: Gagal meload .env file. Error: $e");
-  }
 
   // ── FIX: Memastikan Hive benar-benar siap sebelum menggambar UI ──
   bool isHiveReady = false;
@@ -46,7 +39,7 @@ void main() async {
         debugShowCheckedModeBanner: false,
         home: Scaffold(
           body: Center(
-            child: Text('Gagal memuat database lokal.\nHarap hapus data aplikasi (Clear Data)\natau install ulang.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
+            child: Text('Aplikasi tidak dapat memuat penyimpanan lokal.\nSilakan hapus data aplikasi di pengaturan HP Anda atau coba instal ulang aplikasi.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
           ),
         ),
       ));
