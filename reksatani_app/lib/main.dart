@@ -16,11 +16,14 @@ void main() async {
     debugPrint("⚠️ Peringatan: Gagal meload .env file. Error: $e");
   }
 
+  // ── FIX: Memastikan Hive benar-benar siap sebelum menggambar UI ──
+  bool isHiveReady = false;
   try {
     final hiveService = HiveService();
     await hiveService.init();
+    isHiveReady = true;
   } catch (e) {
-    debugPrint("🚨 ERROR FATAL: Hive gagal diinisialisasi! Error: $e");
+    debugPrint("🚨 ERROR FATAL: Hive gagal diinisialisasi secara total! Error: $e");
   }
 
   try {
@@ -31,12 +34,24 @@ void main() async {
 
   // ─── LISTENER AUTO-SYNC LATAR BELAKANG ───
   Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
-    // Jika terdeteksi ada koneksi internet (Mobile atau WiFi)
     if (results.contains(ConnectivityResult.mobile) || results.contains(ConnectivityResult.wifi)) {
       debugPrint("📡 Sinyal Internet Terdeteksi! Memulai Auto-Sync Latar Belakang...");
-      MasterDataService().syncAll(); // Panggil fungsi reaktif
+      if (isHiveReady) MasterDataService().syncAll(); 
     }
   });
+
+  // Jika HP gagal membuat database (Storage penuh / rusak parah)
+  if (!isHiveReady) {
+      runApp(const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: Text('Gagal memuat database lokal.\nHarap hapus data aplikasi (Clear Data)\natau install ulang.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
+          ),
+        ),
+      ));
+      return;
+  }
 
   runApp(const MyApp());
 }
@@ -48,12 +63,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'ReksaTani',
-      debugShowCheckedModeBanner: false, // Menghilangkan pita debug
+      debugShowCheckedModeBanner: false, 
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      // Arahkan ke Gatekeeper
       home: const SplashScreen(),
     );
   }

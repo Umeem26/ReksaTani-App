@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../../shared/widgets/connectivity_wrapper.dart';
+import '../../../../../services/master_data_service.dart';
 import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../../../../services/hive_service.dart';
@@ -152,94 +154,106 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
             ),
           ),
         ),
-        body: ValueListenableBuilder(
-          valueListenable: _hiveService.petaniBox.listenable(),
-          builder: (context, Box<PetaniHiveModel> box, _) {
-            if (user == null) return const Center(child: Text('User tidak ditemukan'));
-            
-            final listPetani = box.values.where((p) {
-              final isMilikUser = p.pengepulId == user.id;
-              final matchSearch = p.namaPetani.toLowerCase().contains(_searchQuery) || p.desa.toLowerCase().contains(_searchQuery);
-              return isMilikUser && matchSearch;
-            }).toList();
-
-            if (listPetani.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]),
-                      child: const Icon(Icons.group_off_rounded, size: 48, color: AppTheme.textHint),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text('Belum ada mitra', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
-                    const SizedBox(height: 6),
-                    const Text('Gunakan tombol di bawah untuk\nmenambahkan mitra petani baru.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
-                  ],
-                ),
-              );
-            }
-
-            return ListView.builder(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-              itemCount: listPetani.length,
-              itemBuilder: (context, index) {
-                final p = listPetani[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.border.withOpacity(0.5)),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6))],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 52, height: 52,
-                        decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)),
-                        child: Center(
-                          child: Text(p.namaPetani.substring(0, 1).toUpperCase(), style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w900, fontSize: 20)),
+        body: ConnectivityWrapper(
+          child: ValueListenableBuilder(
+            valueListenable: _hiveService.petaniBox.listenable(),
+            builder: (context, Box<PetaniHiveModel> box, _) {
+              if (user == null) return const Center(child: Text('User tidak ditemukan'));
+              
+              final listPetani = box.values.where((p) {
+                final isMilikUser = p.pengepulId == user.id;
+                final matchSearch = p.namaPetani.toLowerCase().contains(_searchQuery) || p.desa.toLowerCase().contains(_searchQuery);
+                return isMilikUser && matchSearch;
+              }).toList();
+  
+              return RefreshIndicator(
+                color: AppTheme.hijauMuda,
+                backgroundColor: Colors.white,
+                onRefresh: () async {
+                  await MasterDataService().syncAll();
+                },
+                child: listPetani.isEmpty
+                    ? SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: Container(
+                          height: MediaQuery.of(context).size.height * 0.6,
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]),
+                                child: const Icon(Icons.group_off_rounded, size: 48, color: AppTheme.textHint),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text('Belum ada mitra', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+                              const SizedBox(height: 6),
+                              const Text('Gunakan tombol di bawah untuk\nmenambahkan mitra petani baru.', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(p.namaPetani, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.textPrimary, letterSpacing: -0.3)),
-                            const SizedBox(height: 6),
-                            Row(
+                      )
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+                        itemCount: listPetani.length,
+                        itemBuilder: (context, index) {
+                          final p = listPetani[index];
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6))],
+                            ),
+                            child: Row(
                               children: [
-                                const Icon(Icons.location_on_rounded, color: AppTheme.textHint, size: 14),
-                                const SizedBox(width: 4),
-                                Text(p.desa, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+                                Container(
+                                  width: 52, height: 52,
+                                  decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)),
+                                  child: Center(
+                                    child: Text(p.namaPetani.substring(0, 1).toUpperCase(), style: const TextStyle(color: AppTheme.hijauTua, fontWeight: FontWeight.w900, fontSize: 20)),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(p.namaPetani, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.textPrimary, letterSpacing: -0.3)),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.location_on_rounded, color: AppTheme.textHint, size: 14),
+                                          const SizedBox(width: 4),
+                                          Text(p.desa, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuButton<String>(
+                                  onSelected: (val) { if (val == 'edit') _tampilkanFormPetani(petani: p); if (val == 'delete') _hapusPetani(p); },
+                                  icon: const Icon(Icons.more_vert_rounded, size: 24, color: AppTheme.textSecond),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  color: Colors.white,
+                                  elevation: 10,
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width: 10), Text('Edit Mitra', style: TextStyle(fontWeight: FontWeight.w600))])),
+                                    const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: AppTheme.merah), SizedBox(width: 10), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
+                                  ],
+                                ),
                               ],
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                      PopupMenuButton<String>(
-                        onSelected: (val) { if (val == 'edit') _tampilkanFormPetani(petani: p); if (val == 'delete') _hapusPetani(p); },
-                        icon: const Icon(Icons.more_vert_rounded, size: 24, color: AppTheme.textSecond),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        color: Colors.white,
-                        elevation: 10,
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: AppTheme.textPrimary), SizedBox(width: 10), Text('Edit Mitra', style: TextStyle(fontWeight: FontWeight.w600))])),
-                          const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: AppTheme.merah), SizedBox(width: 10), Text('Hapus', style: TextStyle(color: AppTheme.merah, fontWeight: FontWeight.w600))])),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
+              );
+            },
+          ),
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _tampilkanFormPetani(),

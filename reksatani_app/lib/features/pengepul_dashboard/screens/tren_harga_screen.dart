@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../shared/widgets/connectivity_wrapper.dart';
+import '../../../../services/master_data_service.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../controllers/tren_harga_controller.dart';
 
@@ -57,72 +59,93 @@ class _TrenHargaScreenState extends State<TrenHargaScreen> with SingleTickerProv
             child: Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
           ),
         ),
-        body: _ctrl.daftarTren.isEmpty
-            ? const Center(child: Text('Data komoditas belum tersedia.', style: TextStyle(color: AppTheme.textHint)))
-            : Column(
-                children: [
-                  // ── INOVASI: Floating Dropdown Selector ──
-                  Container(
-                    color: Colors.white,
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('KOMODITAS AKTIF', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.textSecond, letterSpacing: 1.0)),
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppTheme.bgPage,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppTheme.border, width: 1.5),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            // MENGGUNAKAN SELECTED INDEX SESUAI LOGIKAMU
-                            child: DropdownButton<int>(
-                              value: _ctrl.selectedIndex,
-                              isExpanded: true,
-                              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.hijauTua, size: 28),
-                              dropdownColor: Colors.white,
-                              borderRadius: BorderRadius.circular(24),
-                              items: List.generate(_ctrl.daftarTren.length, (index) {
-                                final currentItem = _ctrl.daftarTren[index];
-                                return DropdownMenuItem<int>(
-                                  value: index,
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.border)),
-                                        child: const Text('🌾', style: TextStyle(fontSize: 14)),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text('${currentItem.namaKomoditas} - Grade ${currentItem.grade}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.textPrimary)),
-                                    ],
-                                  ),
-                                );
-                              }),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  _ctrl.setSelectedIndex(val); // Fungsi ASLI dari controllermu
-                                  _chartAnimCtrl.forward(from: 0.0); // Reset animasi chart
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
+        body: ConnectivityWrapper(
+          child: _ctrl.daftarTren.isEmpty
+              ? RefreshIndicator(
+                  color: AppTheme.hijauMuda,
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    await MasterDataService().syncAll();
+                  },
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Container(
+                      height: MediaQuery.of(context).size.height * 0.7,
+                      alignment: Alignment.center,
+                      child: const Text('Data komoditas belum tersedia.', style: TextStyle(color: AppTheme.textHint)),
                     ),
                   ),
-
-                  // ── KONTEN UTAMA TREN ──
-                  if (item != null)
-                    Expanded(
-                      child: ListView(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+                )
+              : Column(
+                  children: [
+                    // ── INOVASI: Floating Dropdown Selector ──
+                    Container(
+                      color: Colors.white,
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const Text('KOMODITAS AKTIF', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.textSecond, letterSpacing: 1.0)),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.bgPage,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppTheme.border, width: 1.5),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              // MENGGUNAKAN SELECTED INDEX SESUAI LOGIKAMU
+                              child: DropdownButton<int>(
+                                value: _ctrl.selectedIndex,
+                                isExpanded: true,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.hijauTua, size: 28),
+                                dropdownColor: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                items: List.generate(_ctrl.daftarTren.length, (index) {
+                                  final currentItem = _ctrl.daftarTren[index];
+                                  return DropdownMenuItem<int>(
+                                    value: index,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.border)),
+                                          child: const Text('🌾', style: TextStyle(fontSize: 14)),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text('${currentItem.namaKomoditas} - Grade ${currentItem.grade}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.textPrimary)),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    _ctrl.setSelectedIndex(val); // Fungsi ASLI dari controllermu
+                                    _chartAnimCtrl.forward(from: 0.0); // Reset animasi chart
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+  
+                    // ── KONTEN UTAMA TREN ──
+                    if (item != null)
+                      Expanded(
+                        child: RefreshIndicator(
+                          color: AppTheme.hijauMuda,
+                          backgroundColor: Colors.white,
+                          onRefresh: () async {
+                            await MasterDataService().syncAll();
+                          },
+                          child: ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+                            children: [
                           // ── Bento Chart Card ──
                           Container(
                             padding: const EdgeInsets.all(24),
@@ -253,8 +276,10 @@ class _TrenHargaScreenState extends State<TrenHargaScreen> with SingleTickerProv
                         ],
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
+            ),
+        ),
       ),
     );
   }
