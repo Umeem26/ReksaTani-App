@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
+import 'package:camera/camera.dart';
 
 /// Service untuk melakukan grading otomatis barang (A/B/C) menggunakan TensorFlow Lite.
 /// Mendukung inferensi lokal non-blocking dengan background isolate,
@@ -67,21 +68,13 @@ class GradingMlService {
 
   /// Melakukan inferensi kelas kualitas (A/B/C) secara non-blocking dengan isolate.
   /// Menerima parameter [imageFile] dan mengembalikan map hasil berupa grade dan confidence.
-  Future<Map<String, dynamic>> inferGrade(File imageFile) async {
+  /// Melakukan inferensi kelas kualitas/komoditas secara non-blocking dengan input tensor.
+  Future<Map<String, dynamic>> inferFromTensor(List<List<List<List<double>>>> inputTensor) async {
     if (!_isModelLoaded) {
       await loadModel();
     }
 
-    if (!await imageFile.exists()) {
-      throw FileSystemException("Berkas gambar tidak ditemukan", imageFile.path);
-    }
-
     try {
-      final bytes = await imageFile.readAsBytes();
-
-      // Eksekusi preprocessing citra terakselerasi native dengan fallback ke pure Dart
-      final inputTensor = await _preprocessImage(bytes);
-
       List<double> scores;
 
       if (_isTestMode) {
@@ -92,7 +85,7 @@ class GradingMlService {
           throw Exception("Interpreter belum diinisialisasi");
         }
 
-        // TFLite output shape: [1, 3] untuk 3 kelas grading (A, B, C)
+        // TFLite output shape: [1, 3] untuk 3 kelas
         var output = List<double>.filled(3, 0.0).reshape([1, 3]);
 
         // Jalankan inferensi TFLite
@@ -112,14 +105,22 @@ class GradingMlService {
         }
       }
 
-      // Konversi index ke Grade (0 -> A, 1 -> B, 2 -> C)
+      // Konversi index ke komoditas (0 -> gabah, 1 -> kopi robusta, 2 -> sawit)
+      final commodities = ['gabah', 'kopi robusta', 'sawit'];
+      final predictedCommodity = commodities[highestIdx];
+
+      // Pertahankan mapping grade demi kompatibilitas lama
       final grades = ['A', 'B', 'C'];
       final predictedGrade = grades[highestIdx];
 
       return {
+        'commodity': predictedCommodity,
         'grade': predictedGrade,
         'confidence': maxScore,
         'scores': {
+          'gabah': scores[0],
+          'kopi robusta': scores[1],
+          'sawit': scores[2],
           'A': scores[0],
           'B': scores[1],
           'C': scores[2],
@@ -127,9 +128,19 @@ class GradingMlService {
         'inference_mode': _isTestMode ? 'simulated' : 'native_tflite',
       };
     } catch (e) {
-      debugPrint("🚨 [GradingMlService] Terjadi kesalahan saat inferensi grade: $e");
+      debugPrint("🚨 [GradingMlService] Terjadi kesalahan saat inferensi tensor: $e");
       throw Exception("Kesalahan inferensi lokal ML: $e");
     }
+  }
+
+  /// Melakukan inferensi dari berkas gambar.
+  Future<Map<String, dynamic>> inferGrade(File imageFile) async {
+    if (!await imageFile.exists()) {
+      throw FileSystemException("Berkas gambar tidak ditemukan", imageFile.path);
+    }
+    final bytes = await imageFile.readAsBytes();
+    final inputTensor = await _preprocessImage(bytes);
+    return await inferFromTensor(inputTensor);
   }
 
   /// Membersihkan memori interpreter saat service tidak lagi digunakan.
@@ -138,6 +149,110 @@ class GradingMlService {
     _interpreter = null;
     _isModelLoaded = false;
     debugPrint("🧹 [GradingMlService] Sumber daya interpreter berhasil dibersihkan.");
+  }
+
+  /// Mengonversi CameraImage (live stream preview) ke tensor input [1, 224, 224, 3]
+  /// secara efisien menggunakan sampling grid langsung dari buffer YUV/BGRA.
+  List<List<List<List<double>>>> convertCameraImageToTensor(CameraImage image) {
+    final int width = image.width;
+    final int height = image.height;
+    final bool isLandscape = width > height;
+
+    if (image.format.group == ImageFormatGroup.yuv420) {
+      final yPlane = image.planes[0];
+      final uPlane = image.planes[1];
+      final vPlane = image.planes[2];
+
+      final yBuffer = yPlane.bytes;
+      final uBuffer = uPlane.bytes;
+      final vBuffer = vPlane.bytes;
+
+      final yRowStride = yPlane.bytesPerRow;
+      final yPixelStride = yPlane.bytesPerPixel ?? 1;
+
+      final uRowStride = uPlane.bytesPerRow;
+      final uPixelStride = uPlane.bytesPerPixel ?? 2;
+
+      final vRowStride = vPlane.bytesPerRow;
+      final vPixelStride = vPlane.bytesPerPixel ?? 2;
+
+      final int yLength = yBuffer.length;
+      final int uLength = uBuffer.length;
+      final int vLength = vBuffer.length;
+
+      final List<List<List<double>>> grid = List.generate(
+        224,
+        (y) {
+          final List<List<double>> row = List.generate(
+            224,
+            (x) {
+              int sx, sy;
+              if (isLandscape) {
+                sy = ((223 - x) * height ~/ 224).clamp(0, height - 1);
+                sx = (y * width ~/ 224).clamp(0, width - 1);
+              } else {
+                sx = (x * width ~/ 224).clamp(0, width - 1);
+                sy = (y * height ~/ 224).clamp(0, height - 1);
+              }
+
+              final int yIdx = sy * yRowStride + sx * yPixelStride;
+              final int uIdx = (sy ~/ 2) * uRowStride + (sx ~/ 2) * uPixelStride;
+              final int vIdx = (sy ~/ 2) * vRowStride + (sx ~/ 2) * vPixelStride;
+
+              final int yVal = yIdx < yLength ? yBuffer[yIdx] : 128;
+              final int uVal = uIdx < uLength ? uBuffer[uIdx] : 128;
+              final int vVal = vIdx < vLength ? vBuffer[vIdx] : 128;
+
+              final double r = (yVal + 1.370705 * (vVal - 128)).clamp(0, 255);
+              final double g = (yVal - 0.337633 * (uVal - 128) - 0.698001 * (vVal - 128)).clamp(0, 255);
+              final double b = (yVal + 1.732446 * (uVal - 128)).clamp(0, 255);
+
+              return [r / 255.0, g / 255.0, b / 255.0];
+            },
+          );
+          return row;
+        },
+      );
+      return [grid];
+    } else {
+      final plane = image.planes[0];
+      final buffer = plane.bytes;
+      final rowStride = plane.bytesPerRow;
+      final int bufferLength = buffer.length;
+      const int pixelStride = 4;
+
+      final List<List<List<double>>> grid = List.generate(
+        224,
+        (y) {
+          final List<List<double>> row = List.generate(
+            224,
+            (x) {
+              int sx, sy;
+              if (isLandscape) {
+                sy = ((223 - x) * height ~/ 224).clamp(0, height - 1);
+                sx = (y * width ~/ 224).clamp(0, width - 1);
+              } else {
+                sx = (x * width ~/ 224).clamp(0, width - 1);
+                sy = (y * height ~/ 224).clamp(0, height - 1);
+              }
+
+              final int idx = sy * rowStride + sx * pixelStride;
+              if (idx + 2 < bufferLength) {
+                return [
+                  buffer[idx + 2] / 255.0,
+                  buffer[idx + 1] / 255.0,
+                  buffer[idx] / 255.0,
+                ];
+              } else {
+                return [0.0, 0.0, 0.0];
+              }
+            },
+          );
+          return row;
+        },
+      );
+      return [grid];
+    }
   }
 
   /// Melakukan preprocessing citra secara efisien.
@@ -156,16 +271,28 @@ class GradingMlService {
   /// Preprocessing citra menggunakan API native `dart:ui`.
   /// Ini berjalan sangat cepat karena memanfaatkan engine C++ dari Flutter untuk mendecode dan meresize gambar.
   Future<List<List<List<List<double>>>>> _preprocessImageNative(Uint8List bytes) async {
+    // 1. Decode a downscaled version (saves memory and CPU time)
     final codec = await ui.instantiateImageCodec(
       bytes,
       targetWidth: 224,
-      targetHeight: 224,
     );
     final frame = await codec.getNextFrame();
-    final uiImage = frame.image;
+    final rawUiImage = frame.image;
 
-    final int actualWidth = uiImage.width;
-    final int actualHeight = uiImage.height;
+    // 2. Draw onto a strict 224x224 canvas to guarantee dimensions
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final paint = ui.Paint()..filterQuality = ui.FilterQuality.medium;
+
+    canvas.drawImageRect(
+      rawUiImage,
+      ui.Rect.fromLTWH(0, 0, rawUiImage.width.toDouble(), rawUiImage.height.toDouble()),
+      const ui.Rect.fromLTWH(0, 0, 224, 224),
+      paint,
+    );
+
+    final picture = recorder.endRecording();
+    final uiImage = await picture.toImage(224, 224);
 
     final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.rawRgba);
     if (byteData == null) {
@@ -174,15 +301,14 @@ class GradingMlService {
 
     final Uint8List rgbaBytes = byteData.buffer.asUint8List();
 
-    // Buat format List<List<List<List<double>>>> secara efisien sesuai dimensi aktual
     final input = List.generate(
       1,
       (_) => List.generate(
-        actualHeight,
+        224,
         (y) => List.generate(
-          actualWidth,
+          224,
           (x) {
-            final int offset = (y * actualWidth + x) * 4;
+            final int offset = (y * 224 + x) * 4;
             return [
               rgbaBytes[offset] / 255.0,     // R
               rgbaBytes[offset + 1] / 255.0, // G
@@ -192,6 +318,10 @@ class GradingMlService {
         ),
       ),
     );
+
+    // Free resources
+    rawUiImage.dispose();
+    uiImage.dispose();
 
     return input;
   }
