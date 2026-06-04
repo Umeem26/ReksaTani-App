@@ -53,6 +53,7 @@ dependencies:
   camera: ^0.10.5
   google_mlkit_text_recognition: ^0.13.0
   tflite_flutter: ^0.12.1
+  bcrypt: ^1.2.0
 
 dev_dependencies:
   flutter_test:

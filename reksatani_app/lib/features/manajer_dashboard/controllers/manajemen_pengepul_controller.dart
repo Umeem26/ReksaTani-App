@@ -1,5 +1,6 @@
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import 'package:uuid/uuid.dart';
+import 'package:bcrypt/bcrypt.dart';
 import '../../../../services/mongodb_service.dart';
 import '../../../../services/hive_service.dart';
 import '../../../../models/hive/user_hive_model.dart';
@@ -56,10 +57,11 @@ class ManajemenPengepulController {
 
       final id = const Uuid().v4();
       final now = DateTime.now();
+      final hashedPassword = BCrypt.hashpw(password.trim(), BCrypt.gensalt());
       await col.insert({
         '_id': id,
         'username': username.trim(),
-        'password_hash': password,
+        'password_hash': hashedPassword,
         'role': 'pengepul',
         'sisa_uang_jalan': sisaUangJalan,
         'waktu_dibuat': now.toIso8601String(),
@@ -68,7 +70,7 @@ class ManajemenPengepulController {
       final m = UserHiveModel(
         id: id,
         username: username.trim(),
-        passwordHash: password,
+        passwordHash: hashedPassword,
         role: 'pengepul',
         sisaUangJalan: sisaUangJalan,
         waktuDibuat: now,
@@ -85,7 +87,7 @@ class ManajemenPengepulController {
   Future<bool> editPengepul({
     required dynamic id,
     required String username,
-    required String password,
+    String? password,
     required double sisaUangJalan,
   }) async {
     try {
@@ -96,18 +98,29 @@ class ManajemenPengepulController {
         return false;
       }
 
+      final bool hasNewPassword = password != null && password.trim().isNotEmpty;
+      
+      var updater = modify
+          .set('username', username.trim())
+          .set('sisa_uang_jalan', sisaUangJalan);
+          
+      String? passwordHash;
+      if (hasNewPassword) {
+        passwordHash = BCrypt.hashpw(password!.trim(), BCrypt.gensalt());
+        updater = updater.set('password_hash', passwordHash);
+      }
+
       await col.updateOne(
         where.eq('_id', id),
-        modify
-            .set('username', username.trim())
-            .set('password_hash', password)
-            .set('sisa_uang_jalan', sisaUangJalan),
+        updater,
       );
 
       final m = _hive.usersBox.get(id.toString());
       if (m != null) {
         m.username = username.trim();
-        m.passwordHash = password;
+        if (passwordHash != null) {
+          m.passwordHash = passwordHash;
+        }
         m.sisaUangJalan = sisaUangJalan;
         await m.save();
       }
