@@ -10,7 +10,11 @@ class ManajemenKomoditasController {
     try {
       final col = MongoDatabase.getCollection('komoditas');
       final docs = await col.find().toList();
-      return docs;
+      final allowedNames = {'gabah', 'kopi robusta', 'sawit'};
+      return docs.where((d) {
+        final name = (d['nama_komoditas'] ?? '').toString().toLowerCase();
+        return allowedNames.contains(name);
+      }).toList();
     } catch (e) {
       print('Error getSemuaKomoditas: $e');
       return [];

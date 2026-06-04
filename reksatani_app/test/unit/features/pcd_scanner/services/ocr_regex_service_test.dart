@@ -48,5 +48,36 @@ void main() {
       expect(result['berat'], '1000');
       expect(result['harga'], '150000');
     });
+
+    test('TC-OCR-006: Positive - Multi-number line and separators', () {
+      const text = "Nota ReksaTani\nNama: Budi Santoso\nDesa: Sukamaju\nKopi Robusta\n120,5 kg @ Rp 8.500";
+      final result = service.parseText(text);
+
+      expect(result['berat'], '120');
+      expect(result['harga'], '8500');
+      expect(result['nama'], 'Budi Santoso');
+      expect(result['desa'], 'Sukamaju');
+      expect(result['komoditas'], 'kopi robusta');
+    });
+
+    test('TC-OCR-007: Math Solver - W * P = T extraction', () {
+      // 200 * 8500 = 1700000. Even with noise and dates, the mathematical relation should resolve weight and price.
+      const text = "ReksaTani Nota\nTanggal 30 Juni 2026\nBerat 200\nHarga 8500\nTotal 1.700.000\nGabah";
+      final result = service.parseText(text);
+
+      expect(result['berat'], '200');
+      expect(result['harga'], '8500');
+      expect(result['komoditas'], 'gabah');
+    });
+
+    test('TC-OCR-008: Advanced Candidate Ranker Fallback - Filters dates and years', () {
+      // No total price, but contains date 30, year 2026, and weight 200. Candidate ranker should filter 30 and 2026, picking 200.
+      const text = "ReksaTani Nota\nTanggal 30 Juni 2026\nHarga 8500\nBerat barang: 200\nGabah";
+      final result = service.parseText(text);
+
+      expect(result['berat'], '200');
+      expect(result['harga'], '8500');
+      expect(result['komoditas'], 'gabah');
+    });
   });
 }

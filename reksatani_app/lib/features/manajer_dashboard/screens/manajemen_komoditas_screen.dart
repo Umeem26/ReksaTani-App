@@ -339,7 +339,19 @@ class _KomoditasFormSheetState extends State<_KomoditasFormSheet> {
                   children: [
                     const Text('Nama Komoditas', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
                     const SizedBox(height: 8),
-                    TextFormField(controller: _namaCtrl, validator: (v) => v!.isEmpty ? 'Wajib diisi' : null, style: const TextStyle(fontWeight: FontWeight.w700), decoration: _inputDeco('Contoh: Biji Kopi')),
+                    TextFormField(
+                      controller: _namaCtrl,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                        final lower = v.trim().toLowerCase();
+                        if (lower != 'gabah' && lower != 'kopi robusta' && lower != 'sawit') {
+                          return 'Komoditas harus: Gabah, Kopi Robusta, atau Sawit';
+                        }
+                        return null;
+                      },
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      decoration: _inputDeco('Contoh: Kopi Robusta'),
+                    ),
                     const SizedBox(height: 16),
                     const Text('Unit Satuan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
                     const SizedBox(height: 8),

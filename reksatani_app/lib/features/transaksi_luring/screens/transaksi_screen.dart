@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 import '../../../models/hive/transaksi_hive_model.dart';
 import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/komoditas_hive_model.dart';
@@ -18,6 +15,9 @@ class TransaksiScreen extends StatefulWidget {
   final String? gradeTebakanPcd;
   final String? initialBeratOcr; 
   final String? initialHargaOcr; 
+  final String? initialNamaPenjualOcr; 
+  final String? initialDesaOcr; 
+  final String? initialKomoditasOcr; 
   final bool isMurniKasbon; 
 
   const TransaksiScreen({
@@ -28,6 +28,9 @@ class TransaksiScreen extends StatefulWidget {
     this.gradeTebakanPcd,
     this.initialBeratOcr, 
     this.initialHargaOcr, 
+    this.initialNamaPenjualOcr,
+    this.initialDesaOcr,
+    this.initialKomoditasOcr,
     this.isMurniKasbon = false, 
   });
 
@@ -87,6 +90,66 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     }
     if (widget.initialHargaOcr != null && widget.initialHargaOcr!.isNotEmpty) {
       _hargaCtrl.text = widget.initialHargaOcr!;
+    }
+    if (widget.initialNamaPenjualOcr != null && widget.initialNamaPenjualOcr!.isNotEmpty) {
+      _namaPenjualCtrl.text = widget.initialNamaPenjualOcr!;
+      try {
+        final ocrTokens = widget.initialNamaPenjualOcr!
+            .toLowerCase()
+            .split(RegExp(r'[\s\.\,]+'))
+            .where((t) => t.length > 1)
+            .toSet();
+        
+        PetaniHiveModel? bestMatch;
+        double bestScore = 0.0;
+
+        for (final p in _controller.daftarPetani) {
+          final nameTokens = p.namaPetani
+              .toLowerCase()
+              .split(RegExp(r'[\s\.\,]+'))
+              .where((t) => t.length > 1)
+              .toSet();
+          
+          if (nameTokens.isEmpty || ocrTokens.isEmpty) continue;
+          
+          final intersection = ocrTokens.intersection(nameTokens).length;
+          final union = ocrTokens.union(nameTokens).length;
+          final score = intersection / union;
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = p;
+          }
+        }
+
+        if (bestMatch != null && bestScore >= 0.3) {
+          _petaniTerpilih = bestMatch;
+          _namaPenjualCtrl.text = _petaniTerpilih!.namaPetani;
+          _desaCtrl.text = _petaniTerpilih!.desa;
+        } else {
+          // Fallback substring matching
+          final matches = _controller.daftarPetani.where((p) =>
+              p.namaPetani.toLowerCase().contains(widget.initialNamaPenjualOcr!.toLowerCase()) ||
+              widget.initialNamaPenjualOcr!.toLowerCase().contains(p.namaPetani.toLowerCase()));
+          if (matches.isNotEmpty) {
+            _petaniTerpilih = matches.first;
+            _namaPenjualCtrl.text = _petaniTerpilih!.namaPetani;
+            _desaCtrl.text = _petaniTerpilih!.desa;
+          }
+        }
+      } catch (_) {}
+    }
+    if (widget.initialDesaOcr != null && widget.initialDesaOcr!.isNotEmpty) {
+      if (_desaCtrl.text.isEmpty) {
+        _desaCtrl.text = widget.initialDesaOcr!;
+      }
+    }
+    if (widget.initialKomoditasOcr != null && widget.initialKomoditasOcr!.isNotEmpty) {
+      try {
+        _komoditasTerpilih = _controller.daftarKomoditas.firstWhere((k) =>
+            k.namaKomoditas.toLowerCase().contains(widget.initialKomoditasOcr!.toLowerCase()) ||
+            widget.initialKomoditasOcr!.toLowerCase().contains(k.namaKomoditas.toLowerCase()));
+      } catch (_) {}
     }
       
     _fotoNotaPath = widget.fotoNotaPath;
@@ -323,7 +386,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                       type: TextInputType.number,
                       formatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: (_) => setState(() {}),
-                      validator: (v) => (v?.isEmpty ?? true || (double.tryParse(v!) ?? 0) <= 0) ? 'Masukkan nominal valid' : null,
+                      validator: (v) => ((v?.isEmpty ?? true) || (double.tryParse(v!) ?? 0) <= 0) ? 'Masukkan nominal valid' : null,
                     ),
                   ],
                 ),
@@ -400,10 +463,11 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                           ],
                         ),
                       ),
-                    const SizedBox(height: 16),
                     _FieldLabel('Kualitas (Grade)'),
                     DropdownButtonFormField<String>(
-                      value: _gradeTerpilih,
+                      value: (_gradeTerpilih != null && _daftarGrade.any((g) => g['grade'] == _gradeTerpilih))
+                          ? _gradeTerpilih
+                          : null,
                       decoration: _dropDeco(),
                       hint: const Text('Pilih kualitas'),
                       icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textHint),
@@ -423,7 +487,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                       onChanged: (g) => setState(() {
                         _gradeTerpilih = g;
                         final hMaks = (_daftarGrade.firstWhere((x) => x['grade'] == g, orElse: () => {})['harga_maks'] as num?)?.toInt() ?? 0;
-                        if (hMaks > 0) _hargaCtrl.text = '$hMaks';
+                        if (hMaks > 0 && _hargaCtrl.text.isEmpty) _hargaCtrl.text = '$hMaks';
                         setState(() {});
                       }),
                     ),

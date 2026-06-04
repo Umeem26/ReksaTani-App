@@ -17,7 +17,12 @@ class TransaksiController {
         .where((p) => p.pengepulId == user.id)
         .toList();
   }
-  List<KomoditasHiveModel> get daftarKomoditas => _hive.komoditasBox.values.toList();
+  List<KomoditasHiveModel> get daftarKomoditas {
+    final allowedNames = {'gabah', 'kopi robusta', 'sawit'};
+    return _hive.komoditasBox.values
+        .where((k) => allowedNames.contains(k.namaKomoditas.toLowerCase()))
+        .toList();
+  }
 
   List<Map<String, dynamic>> getDaftarGrade(KomoditasHiveModel? komoditas) {
     if (komoditas == null) return [];
