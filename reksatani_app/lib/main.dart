@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/master_data_service.dart';
 import 'services/mongodb_service.dart';
@@ -9,12 +8,6 @@ import 'features/auth/screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  try {
-    await dotenv.load(fileName: ".env");
-  } catch (e) {
-    debugPrint("⚠️ Peringatan: Gagal meload .env file. Error: $e");
-  }
 
   // ── FIX: Memastikan Hive benar-benar siap sebelum menggambar UI ──
   bool isHiveReady = false;

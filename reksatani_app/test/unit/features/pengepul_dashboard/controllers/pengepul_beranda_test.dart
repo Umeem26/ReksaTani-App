@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:reksatani_app/features/pengepul_dashboard/controllers/beranda_controller.dart';
 import 'package:reksatani_app/models/hive/user_hive_model.dart';
 import 'package:reksatani_app/models/hive/transaksi_hive_model.dart';
@@ -13,14 +12,6 @@ void main() {
   final hiveService = HiveService();
 
   setUp(() async {
-    dotenv.loadFromString(envString: '''
-CLOUDINARY_CLOUD_NAME=test
-CLOUDINARY_API_KEY=test
-CLOUDINARY_API_SECRET=test
-CLOUDINARY_UPLOAD_PRESET=test
-MONGODB_URI=mongodb://localhost:27017
-''');
-
     tempDir = await Directory.systemTemp.createTemp('beranda_controller_test');
     Hive.init(tempDir.path);
 
