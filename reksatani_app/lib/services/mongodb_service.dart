@@ -1,16 +1,16 @@
 import 'dart:developer';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mongo_dart/mongo_dart.dart';
+import '../core/env/env.dart';
 
 class MongoDatabase {
   static late Db _db;
   
   static Future<void> connect() async {
     try {
-      String? mongoUri = dotenv.env['MONGO_URI'];
+      String mongoUri = Env.mongoUri;
       
-      if (mongoUri == null || mongoUri.isEmpty) {
-        throw Exception("MONGO_URI is not set in .env file");
+      if (mongoUri.isEmpty) {
+        throw Exception("MONGO_URI is not set in Env");
       }
 
       _db = await Db.create(mongoUri);

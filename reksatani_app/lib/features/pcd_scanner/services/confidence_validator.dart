@@ -25,6 +25,7 @@ class ConfidenceResult {
   final ConfidenceState state;
   final double confidence;
   final String grade;
+  final String commodity;
   final int retryCount;
   final int maxRetry;
   final double thresholdUsed;
@@ -33,6 +34,7 @@ class ConfidenceResult {
     required this.state,
     required this.confidence,
     required this.grade,
+    this.commodity = '',
     required this.retryCount,
     required this.maxRetry,
     required this.thresholdUsed,
@@ -50,7 +52,7 @@ class ConfidenceResult {
   @override
   String toString() =>
       'ConfidenceResult(state: $state, confidence: $confidence, '
-      'grade: $grade, retry: $retryCount/$maxRetry, threshold: $thresholdUsed)';
+      'grade: $grade, commodity: $commodity, retry: $retryCount/$maxRetry, threshold: $thresholdUsed)';
 }
 
 /// Service untuk memvalidasi confidence score dari hasil inferensi ML grading.
@@ -116,13 +118,14 @@ class ConfidenceValidator {
   ConfidenceResult validate({
     required double confidence,
     required String grade,
+    String commodity = '',
   }) {
     final threshold = getThresholdForGrade(grade);
 
     // ─── CASE 1: Confidence memenuhi threshold → ACCEPTED ───
     if (confidence >= threshold) {
       debugPrint(
-        '✅ [ConfidenceValidator] Grade $grade diterima '
+        '✅ [ConfidenceValidator] Komoditas $commodity / Grade $grade diterima '
         '(confidence: ${(confidence * 100).toStringAsFixed(1)}% >= '
         'threshold: ${(threshold * 100).toStringAsFixed(1)}%)',
       );
@@ -130,6 +133,7 @@ class ConfidenceValidator {
         state: ConfidenceState.accepted,
         confidence: confidence,
         grade: grade,
+        commodity: commodity,
         retryCount: _retryCount,
         maxRetry: maxRetry,
         thresholdUsed: threshold,
@@ -143,13 +147,14 @@ class ConfidenceValidator {
       // Batas retry habis → MANUAL OVERRIDE
       debugPrint(
         '🚫 [ConfidenceValidator] Batas retry tercapai ($_retryCount/$maxRetry). '
-        'Force manual override untuk Grade $grade '
+        'Force manual override untuk Komoditas $commodity '
         '(confidence: ${(confidence * 100).toStringAsFixed(1)}%)',
       );
       return ConfidenceResult(
         state: ConfidenceState.manualOverride,
         confidence: confidence,
         grade: grade,
+        commodity: commodity,
         retryCount: _retryCount,
         maxRetry: maxRetry,
         thresholdUsed: threshold,
@@ -158,7 +163,7 @@ class ConfidenceValidator {
 
     // Masih ada sisa retry → NEEDS RETRY
     debugPrint(
-      '🔄 [ConfidenceValidator] Confidence rendah untuk Grade $grade '
+      '🔄 [ConfidenceValidator] Confidence rendah untuk Komoditas $commodity '
       '(${(confidence * 100).toStringAsFixed(1)}% < ${(threshold * 100).toStringAsFixed(1)}%). '
       'Retry $_retryCount/$maxRetry',
     );
@@ -166,6 +171,7 @@ class ConfidenceValidator {
       state: ConfidenceState.needsRetry,
       confidence: confidence,
       grade: grade,
+      commodity: commodity,
       retryCount: _retryCount,
       maxRetry: maxRetry,
       thresholdUsed: threshold,

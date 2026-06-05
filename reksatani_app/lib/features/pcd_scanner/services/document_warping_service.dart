@@ -37,11 +37,21 @@ class DocumentWarpingService {
   }
 
   static Uint8List? _deteksiDanWarping(Uint8List bytes, {List<Offset>? manualCorners}) {
-    final image = img.decodeImage(bytes);
+    var image = img.decodeImage(bytes);
     if (image == null) return null;
 
-    final originalWidth = image.width;
-    final originalHeight = image.height;
+    // Downscale untuk mempercepat warping dan encoding JPEG
+    const maxDimension = 1200;
+    if (image.width > maxDimension || image.height > maxDimension) {
+      if (image.width > image.height) {
+        image = img.copyResize(image, width: maxDimension);
+      } else {
+        image = img.copyResize(image, height: maxDimension);
+      }
+    }
+
+    final currentWidth = image.width;
+    final currentHeight = image.height;
 
     img.Point origTl;
     img.Point origTr;
@@ -49,12 +59,12 @@ class DocumentWarpingService {
     img.Point origBl;
 
     if (manualCorners != null && manualCorners.length == 4) {
-      final bool isPortrait = originalHeight > originalWidth;
+      final bool isPortrait = currentHeight > currentWidth;
       if (isPortrait) {
-        origTl = img.Point((manualCorners[0].dx * originalWidth).round().clamp(0, originalWidth - 1), (manualCorners[0].dy * originalHeight).round().clamp(0, originalHeight - 1));
-        origTr = img.Point((manualCorners[1].dx * originalWidth).round().clamp(0, originalWidth - 1), (manualCorners[1].dy * originalHeight).round().clamp(0, originalHeight - 1));
-        origBr = img.Point((manualCorners[2].dx * originalWidth).round().clamp(0, originalWidth - 1), (manualCorners[2].dy * originalHeight).round().clamp(0, originalHeight - 1));
-        origBl = img.Point((manualCorners[3].dx * originalWidth).round().clamp(0, originalWidth - 1), (manualCorners[3].dy * originalHeight).round().clamp(0, originalHeight - 1));
+        origTl = img.Point((manualCorners[0].dx * currentWidth).round().clamp(0, currentWidth - 1), (manualCorners[0].dy * currentHeight).round().clamp(0, currentHeight - 1));
+        origTr = img.Point((manualCorners[1].dx * currentWidth).round().clamp(0, currentWidth - 1), (manualCorners[1].dy * currentHeight).round().clamp(0, currentHeight - 1));
+        origBr = img.Point((manualCorners[2].dx * currentWidth).round().clamp(0, currentWidth - 1), (manualCorners[2].dy * currentHeight).round().clamp(0, currentHeight - 1));
+        origBl = img.Point((manualCorners[3].dx * currentWidth).round().clamp(0, currentWidth - 1), (manualCorners[3].dy * currentHeight).round().clamp(0, currentHeight - 1));
       } else {
         // Landscape rotation (90 degrees clockwise rotation from landscape to portrait preview)
         // Screen TL (corners[0]) -> Landscape BL
@@ -65,8 +75,8 @@ class DocumentWarpingService {
         Offset mapLandscape(Offset screenOffset) {
           // nx = 1.0 - (imgY / originalHeight) => imgY = (1.0 - nx) * originalHeight
           // ny = imgX / originalWidth => imgX = ny * originalWidth
-          double imgX = screenOffset.dy * originalWidth;
-          double imgY = (1.0 - screenOffset.dx) * originalHeight;
+          double imgX = screenOffset.dy * currentWidth;
+          double imgY = (1.0 - screenOffset.dx) * currentHeight;
           return Offset(imgX, imgY);
         }
 
@@ -75,23 +85,23 @@ class DocumentWarpingService {
         final brMapped = mapLandscape(manualCorners[3]); // Screen BL -> Landscape BR
         final blMapped = mapLandscape(manualCorners[0]); // Screen TL -> Landscape BL
 
-        origTl = img.Point(tlMapped.dx.round().clamp(0, originalWidth - 1), tlMapped.dy.round().clamp(0, originalHeight - 1));
-        origTr = img.Point(trMapped.dx.round().clamp(0, originalWidth - 1), trMapped.dy.round().clamp(0, originalHeight - 1));
-        origBr = img.Point(brMapped.dx.round().clamp(0, originalWidth - 1), brMapped.dy.round().clamp(0, originalHeight - 1));
-        origBl = img.Point(blMapped.dx.round().clamp(0, originalWidth - 1), blMapped.dy.round().clamp(0, originalHeight - 1));
+        origTl = img.Point(tlMapped.dx.round().clamp(0, currentWidth - 1), tlMapped.dy.round().clamp(0, currentHeight - 1));
+        origTr = img.Point(trMapped.dx.round().clamp(0, currentWidth - 1), trMapped.dy.round().clamp(0, currentHeight - 1));
+        origBr = img.Point(brMapped.dx.round().clamp(0, currentWidth - 1), brMapped.dy.round().clamp(0, currentHeight - 1));
+        origBl = img.Point(blMapped.dx.round().clamp(0, currentWidth - 1), blMapped.dy.round().clamp(0, currentHeight - 1));
       }
     } else {
       // Lakukan downscale untuk pemrosesan deteksi sudut yang cepat & responsif
-      const maxDimension = 600;
+      const maxDimensionAngle = 600;
       img.Image processingImage = image;
       double scale = 1.0;
-      if (originalWidth > maxDimension || originalHeight > maxDimension) {
-        if (originalWidth > originalHeight) {
-          scale = originalWidth / maxDimension;
-          processingImage = img.copyResize(image, width: maxDimension);
+      if (currentWidth > maxDimensionAngle || currentHeight > maxDimensionAngle) {
+        if (currentWidth > currentHeight) {
+          scale = currentWidth / maxDimensionAngle;
+          processingImage = img.copyResize(image, width: maxDimensionAngle);
         } else {
-          scale = originalHeight / maxDimension;
-          processingImage = img.copyResize(image, height: maxDimension);
+          scale = currentHeight / maxDimensionAngle;
+          processingImage = img.copyResize(image, height: maxDimensionAngle);
         }
       }
 
@@ -245,10 +255,10 @@ class DocumentWarpingService {
         }
       }
 
-      origTl = img.Point((topLeft.x * scale).round().clamp(0, originalWidth - 1), (topLeft.y * scale).round().clamp(0, originalHeight - 1));
-      origTr = img.Point((topRight.x * scale).round().clamp(0, originalWidth - 1), (topRight.y * scale).round().clamp(0, originalHeight - 1));
-      origBr = img.Point((bottomRight.x * scale).round().clamp(0, originalWidth - 1), (bottomRight.y * scale).round().clamp(0, originalHeight - 1));
-      origBl = img.Point((bottomLeft.x * scale).round().clamp(0, originalWidth - 1), (bottomLeft.y * scale).round().clamp(0, originalHeight - 1));
+      origTl = img.Point((topLeft.x * scale).round().clamp(0, currentWidth - 1), (topLeft.y * scale).round().clamp(0, currentHeight - 1));
+      origTr = img.Point((topRight.x * scale).round().clamp(0, currentWidth - 1), (topRight.y * scale).round().clamp(0, currentHeight - 1));
+      origBr = img.Point((bottomRight.x * scale).round().clamp(0, currentWidth - 1), (bottomRight.y * scale).round().clamp(0, currentHeight - 1));
+      origBl = img.Point((bottomLeft.x * scale).round().clamp(0, currentWidth - 1), (bottomLeft.y * scale).round().clamp(0, currentHeight - 1));
     }
 
     // Validasi area sudut (harus membentuk luas daerah minimum)

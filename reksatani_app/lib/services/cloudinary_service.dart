@@ -1,15 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../core/env/env.dart';
 
 class CloudinaryService {
-  final String _cloudName = dotenv.env['CLOUDINARY_CLOUD_NAME'] ?? '';
-  final String _uploadPreset = dotenv.env['CLOUDINARY_UPLOAD_PRESET'] ?? '';
+  final String _cloudName = Env.cloudinaryCloudName;
+  final String _uploadPreset = Env.cloudinaryUploadPreset;
 
   Future<String?> uploadImage(String filePath) async {
     if (_cloudName.isEmpty || _uploadPreset.isEmpty) {
-      print('Error: Cloudinary config is missing in .env');
+      print('Error: Cloudinary config is missing in Env');
       return null;
     }
 
