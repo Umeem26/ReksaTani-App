@@ -576,9 +576,40 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     final tebakanCommodity = hasilGrading['commodity'] as String? ?? '';
     double confidence = (hasilGrading['confidence'] as num?)?.toDouble() ?? 0.0;
 
-    // Jika tidak ada objek komoditas terdeteksi pada preview terakhir, keyakinan di-set ke 0%
-    if (_detectedCorners == null) {
-      confidence = 0.0;
+    // Jika tidak dikenali sebagai komoditas pertanian, hentikan proses dan beri peringatan
+    if (tebakanCommodity == 'Bukan Komoditas' || tebakanGrade == 'Bukan Komoditas') {
+      if (mounted) Navigator.pop(context); // Tutup dialog loading
+      
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+              SizedBox(width: 10),
+              Text('Objek Tidak Dikenali', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'Objek tidak dikenali sebagai komoditas pertanian, silakan foto ulang.',
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK', style: TextStyle(color: AppTheme.hijauMuda, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      
+      setState(() {
+        _step = 1;
+        _fotoBarangPath = null;
+        _showLiveCamera = true;
+      });
+      _startLiveStream();
+      return;
     }
 
     if (mounted) Navigator.pop(context); // Tutup dialog loading
@@ -590,13 +621,24 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       commodity: tebakanCommodity,
     );
 
-    if (mounted) {
-      _showConfidenceSweeperSheet(
-        confidenceResult: confidenceResult,
+    if (confidenceResult.state == ConfidenceState.accepted) {
+      _pcdController.confidenceValidator.reset();
+      _navigateKeTransaksi(
         finalNotaPath: finalNotaPath,
         finalBarangPath: finalBarangPath,
+        tebakanGrade: tebakanGrade,
         dataHasilOcr: dataHasilOcr,
+        tebakanKomoditas: tebakanCommodity,
       );
+    } else {
+      if (mounted) {
+        _showConfidenceSweeperSheet(
+          confidenceResult: confidenceResult,
+          finalNotaPath: finalNotaPath,
+          finalBarangPath: finalBarangPath,
+          dataHasilOcr: dataHasilOcr,
+        );
+      }
     }
   }
 
@@ -1000,16 +1042,12 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                   fit: StackFit.expand,
                   children: [
                     CameraPreview(_cameraController!),
-                    if (_detectedCorners != null)
+                    if (_detectedCorners != null && _step == 0)
                       CustomPaint(
                         painter: DocumentOutlinePainter(
                           corners: _detectedCorners!,
                           color: _liveLightingColor,
-                          label: _step == 0
-                              ? "Nota Timbangan"
-                              : (_tfliteConfidence > 0.15 && _tfliteLabel != "Mencari objek..."
-                                  ? "$_tfliteLabel (${(_tfliteConfidence * 100).toStringAsFixed(0)}%)"
-                                  : null),
+                          label: "Nota Timbangan",
                         ),
                       ),
                   ],
@@ -1216,13 +1254,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     final int chromadiff = (u - 128).abs() + (v - 128).abs();
     
     // 1. Sawit/Gabah (warna merah/oranye/kuning hangat yang jenuh)
-    if (v > 138 && u < 110) return true;
+    // Diperketat agar tidak sensitif terhadap warna tembok kekuningan/cream
+    if (v > 142 && u < 105) return true;
 
     // 2. Kopi Robusta (kadar kecerahan rendah dengan warna jenuh cokelat/hijau zaitun)
-    if (y < 80 && chromadiff > 16) return true;
+    // Diperketat dari y < 80 ke y < 70 dan chromadiff > 20
+    if (y < 70 && chromadiff > 20) return true;
 
     // 3. Warna sangat jenuh secara umum (jauh dari abu-abu/netral)
-    if (chromadiff > 24) return true;
+    // Diperketat dari chromadiff > 24 ke chromadiff > 32 untuk mengabaikan tembok abu-abu/berwarna tipis
+    if (chromadiff > 32) return true;
 
     return false;
   }
