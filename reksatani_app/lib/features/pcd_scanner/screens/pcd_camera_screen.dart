@@ -48,6 +48,11 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   List<Offset>? _detectedCorners;
   List<Offset>? _detectedNotaCorners;
 
+  // ─── TFLITE LIVE CLASSIFICATION ───
+  int _lastInferenceTime = 0;
+  String _tfliteLabel = "Mencari objek...";
+  double _tfliteConfidence = 0.0;
+
   // ─── KONTROL PERANGKAT HARDWARE ───
   bool _isFlashOn = false;
   bool _isBackCamera = true;
@@ -61,6 +66,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     _fotoBarangPath = widget.initialFotoBarang;
 
     _initCamera();
+    _pcdController.loadModel(); // 👈 Memuat model ML lebih awal
   }
 
   Future<void> _initCamera() async {
@@ -249,7 +255,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               }
             }
 
-            if (largestComp.length >= 10) {
+            if (largestComp.length >= 25) {
               int minSumIdx = 0, maxSumIdx = 0, maxDiffIdx = 0, minDiffIdx = 0;
               double minSum = 9999, maxSum = -9999, maxDiff = -9999, minDiff = 9999;
 
@@ -294,47 +300,131 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               }
             }
           } else {
-            // 3. Analisis YUV untuk klasifikasi komoditas live HANYA jika step == 1
-            String detectedCommodity = "Arahkan kamera ke Komoditas";
-            
-            int sumY = 0, sumU = 0, sumV = 0, countSamples = 0;
+            // 3. Analisis dengan Model TFLite untuk klasifikasi komoditas live HANYA jika step == 1
             final uBytes = image.planes.length >= 3 ? image.planes[1].bytes : null;
             final vBytes = image.planes.length >= 3 ? image.planes[2].bytes : null;
             final uBytesPerRow = image.planes.length >= 3 ? image.planes[1].bytesPerRow : 0;
             final vBytesPerRow = image.planes.length >= 3 ? image.planes[2].bytesPerRow : 0;
+
+            // 4. Deteksi area/kotak pembatas komoditas real-time (Bounding Box)
+            const int gridR = 15;
+            const int gridC = 15;
+            final double stepX = frameW / gridC;
+            final double stepY = frameH / gridR;
             
-            for (int dy = -2; dy <= 2; dy++) {
-              for (int dx = -2; dx <= 2; dx++) {
-                int sy = (frameH ~/ 2) + dy * 20;
-                int sx = (frameW ~/ 2) + dx * 20;
-                if (sy >= 0 && sy < frameH && sx >= 0 && sx < frameW) {
-                  sumY += bytes[sy * bytesPerRow + sx];
-                  countSamples++;
-                  
-                  if (uBytes != null && vBytes != null) {
-                    int csy = sy ~/ 2;
-                    int csx = sx ~/ 2;
-                    sumU += uBytes[csy * uBytesPerRow + csx];
-                    sumV += vBytes[csy * vBytesPerRow + csx];
+            final isCommodity = List.generate(gridR, (_) => List.filled(gridC, false));
+            for (int gy = 0; gy < gridR; gy++) {
+              for (int gx = 0; gx < gridC; gx++) {
+                int fx = (gx * stepX).round().clamp(0, frameW - 1);
+                int fy = (gy * stepY).round().clamp(0, frameH - 1);
+                
+                int yVal = bytes[fy * bytesPerRow + fx];
+                int uVal = 128;
+                int vVal = 128;
+                if (uBytes != null && vBytes != null) {
+                  int csy = fy ~/ 2;
+                  int csx = fx ~/ 2;
+                  uVal = uBytes[csy * uBytesPerRow + csx];
+                  vVal = vBytes[csy * vBytesPerRow + csx];
+                }
+
+                if (_isCommodityPixel(yVal, uVal, vVal)) {
+                  isCommodity[gy][gx] = true;
+                }
+              }
+            }
+
+            final visited = List.generate(gridR, (_) => List.filled(gridC, false));
+            List<List<int>> largestComp = [];
+            for (int r = 0; r < gridR; r++) {
+              for (int c = 0; c < gridC; c++) {
+                if (isCommodity[r][c] && !visited[r][c]) {
+                  final List<List<int>> comp = [];
+                  final List<List<int>> queue = [[r, c]];
+                  visited[r][c] = true;
+                  while (queue.isNotEmpty) {
+                    final curr = queue.removeAt(0);
+                    comp.add(curr);
+                    final currR = curr[0];
+                    final currC = curr[1];
+                    final dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                    for (final d in dirs) {
+                      final nr = currR + d[0];
+                      final nc = currC + d[1];
+                      if (nr >= 0 && nr < gridR && nc >= 0 && nc < gridC) {
+                        if (isCommodity[nr][nc] && !visited[nr][nc]) {
+                          visited[nr][nc] = true;
+                          queue.add([nr, nc]);
+                        }
+                      }
+                    }
+                  }
+                  if (comp.length > largestComp.length) {
+                    largestComp = comp;
                   }
                 }
               }
             }
-            
-            final double avgY = sumY / countSamples;
-            final double avgU = countSamples > 0 && uBytes != null ? sumU / countSamples : 128.0;
-            final double avgV = countSamples > 0 && vBytes != null ? sumV / countSamples : 128.0;
 
-            if (avgV > 132 && avgU < 118) {
-              detectedCommodity = "Terdeteksi: Kelapa Sawit (TBS)";
-            } else if (avgY > 110 && avgU < 122 && avgV > 122) {
-              detectedCommodity = "Terdeteksi: Gabah Padi (GKP/GKG)";
-            } else if (avgY < 95) {
-              detectedCommodity = "Terdeteksi: Kopi Robusta (Biji Kopi)";
+            if (largestComp.length >= 15) {
+              int minX = gridC;
+              int maxX = -1;
+              int minY = gridR;
+              int maxY = -1;
+
+              for (final cell in largestComp) {
+                int gy = cell[0];
+                int gx = cell[1];
+                if (gx < minX) minX = gx;
+                if (gx > maxX) maxX = gx;
+                if (gy < minY) minY = gy;
+                if (gy > maxY) maxY = gy;
+              }
+
+              int padX1 = (minX > 0) ? minX - 1 : 0;
+              int padX2 = (maxX < gridC - 1) ? maxX + 1 : gridC - 1;
+              int padY1 = (minY > 0) ? minY - 1 : 0;
+              int padY2 = (maxY < gridR - 1) ? maxY + 1 : gridR - 1;
+
+              Offset cellToScreenOffset(int gx, int gy) {
+                double nx = 1.0 - (gy / gridR);
+                double ny = gx / gridC;
+                return Offset(nx, ny);
+              }
+
+              newCorners = [
+                cellToScreenOffset(padX1, padY1),
+                cellToScreenOffset(padX2, padY1),
+                cellToScreenOffset(padX2, padY2),
+                cellToScreenOffset(padX1, padY2),
+              ];
+
+              // Jalankan klasifikasi TFLite live setiap 400ms jika step == 1
+              final int now = DateTime.now().millisecondsSinceEpoch;
+              if (now - _lastInferenceTime > 400) {
+                _lastInferenceTime = now;
+                _pcdController.prosesKlasifikasiLive(image).then((hasil) {
+                  if (!mounted) return;
+                  final String comm = hasil['commodity'] as String;
+                  final double conf = (hasil['confidence'] as num?)?.toDouble() ?? 0.0;
+                  
+                  setState(() {
+                    _tfliteLabel = _formatCommodityName(comm);
+                    _tfliteConfidence = conf;
+                  });
+                });
+              }
+
+              if (_tfliteConfidence > 0.15 && _tfliteLabel != "Mencari objek...") {
+                lightColor = AppTheme.hijauMuda;
+              } else {
+                lightColor = Colors.white;
+              }
             } else {
-              detectedCommodity = "Arahkan kamera ke Komoditas";
+              lightColor = Colors.white;
+              _tfliteConfidence = 0.0;
+              _tfliteLabel = "Mencari objek...";
             }
-            detectedObj = detectedCommodity;
           }
 
           if (mounted) {
@@ -483,7 +573,13 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     // ─── MODUL 10: Gunakan prosesGradingLengkap untuk mendapat confidence ───
     final hasilGrading = await _pcdController.prosesGradingLengkap(finalBarangPath);
     final tebakanGrade = hasilGrading['grade'] as String;
-    final confidence = (hasilGrading['confidence'] as num?)?.toDouble() ?? 0.0;
+    final tebakanCommodity = hasilGrading['commodity'] as String? ?? '';
+    double confidence = (hasilGrading['confidence'] as num?)?.toDouble() ?? 0.0;
+
+    // Jika tidak ada objek komoditas terdeteksi pada preview terakhir, keyakinan di-set ke 0%
+    if (_detectedCorners == null) {
+      confidence = 0.0;
+    }
 
     if (mounted) Navigator.pop(context); // Tutup dialog loading
 
@@ -491,26 +587,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     final confidenceResult = _pcdController.confidenceValidator.validate(
       confidence: confidence,
       grade: tebakanGrade,
+      commodity: tebakanCommodity,
     );
 
-    if (confidenceResult.state == ConfidenceState.accepted) {
-      // Confidence tinggi → langsung navigate ke TransaksiScreen
-      _navigateKeTransaksi(
+    if (mounted) {
+      _showConfidenceSweeperSheet(
+        confidenceResult: confidenceResult,
         finalNotaPath: finalNotaPath,
         finalBarangPath: finalBarangPath,
-        tebakanGrade: tebakanGrade,
         dataHasilOcr: dataHasilOcr,
       );
-    } else {
-      // Confidence rendah → tampilkan Confidence Sweeper Bottom Sheet
-      if (mounted) {
-        _showConfidenceSweeperSheet(
-          confidenceResult: confidenceResult,
-          finalNotaPath: finalNotaPath,
-          finalBarangPath: finalBarangPath,
-          dataHasilOcr: dataHasilOcr,
-        );
-      }
     }
   }
 
@@ -521,6 +607,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     required String finalBarangPath,
     required String tebakanGrade,
     required Map<String, String> dataHasilOcr,
+    String? tebakanKomoditas,
   }) {
     if (!mounted) return;
     _stopLiveStream();
@@ -537,6 +624,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
           initialNamaPenjualOcr: dataHasilOcr['nama'],
           initialDesaOcr: dataHasilOcr['desa'],
           initialKomoditasOcr: dataHasilOcr['komoditas'],
+          initialKomoditasPcd: tebakanKomoditas,
         ),
       ),
     );
@@ -753,6 +841,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                     finalBarangPath: finalBarangPath,
                     tebakanGrade: confidenceResult.grade,
                     dataHasilOcr: dataHasilOcr,
+                    tebakanKomoditas: confidenceResult.commodity,
                   );
                 },
                 icon: const Icon(Icons.edit_rounded, size: 20),
@@ -911,11 +1000,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                   fit: StackFit.expand,
                   children: [
                     CameraPreview(_cameraController!),
-                    if (_step == 0 && _detectedCorners != null)
+                    if (_detectedCorners != null)
                       CustomPaint(
                         painter: DocumentOutlinePainter(
                           corners: _detectedCorners!,
                           color: _liveLightingColor,
+                          label: _step == 0
+                              ? "Nota Timbangan"
+                              : (_tfliteConfidence > 0.15 && _tfliteLabel != "Mencari objek..."
+                                  ? "$_tfliteLabel (${(_tfliteConfidence * 100).toStringAsFixed(0)}%)"
+                                  : null),
                         ),
                       ),
                   ],
@@ -1117,13 +1211,40 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       ),
     );
   }
+
+  bool _isCommodityPixel(int y, int u, int v) {
+    final int chromadiff = (u - 128).abs() + (v - 128).abs();
+    
+    // 1. Sawit/Gabah (warna merah/oranye/kuning hangat yang jenuh)
+    if (v > 138 && u < 110) return true;
+
+    // 2. Kopi Robusta (kadar kecerahan rendah dengan warna jenuh cokelat/hijau zaitun)
+    if (y < 80 && chromadiff > 16) return true;
+
+    // 3. Warna sangat jenuh secara umum (jauh dari abu-abu/netral)
+    if (chromadiff > 24) return true;
+
+    return false;
+  }
+
+  String _formatCommodityName(String raw) {
+    if (raw == 'gabah') return "Gabah Padi (GKP/GKG)";
+    if (raw == 'kopi robusta') return "Kopi Robusta (Biji Kopi)";
+    if (raw == 'sawit') return "Kelapa Sawit (TBS)";
+    return raw;
+  }
 }
 
 class DocumentOutlinePainter extends CustomPainter {
   final List<Offset> corners;
   final Color color;
+  final String? label;
 
-  DocumentOutlinePainter({required this.corners, required this.color});
+  DocumentOutlinePainter({
+    required this.corners,
+    required this.color,
+    this.label,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1157,10 +1278,56 @@ class DocumentOutlinePainter extends CustomPainter {
     for (final corner in corners) {
       canvas.drawCircle(Offset(corner.dx * size.width, corner.dy * size.height), 6.0, paintCircle);
     }
+
+    // Gambar label teks melayang di atas bounding box
+    if (label != null && label!.isNotEmpty) {
+      final textSpan = TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout(minWidth: 0, maxWidth: size.width);
+
+      // Cari koordinat paling kiri-atas dari box
+      double minX = corners[0].dx * size.width;
+      double minY = corners[0].dy * size.height;
+      for (final corner in corners) {
+        if (corner.dx * size.width < minX) minX = corner.dx * size.width;
+        if (corner.dy * size.height < minY) minY = corner.dy * size.height;
+      }
+
+      final rectHeight = textPainter.height + 8;
+      final rectWidth = textPainter.width + 16;
+      final rect = Rect.fromLTWH(
+        minX,
+        (minY - rectHeight - 6).clamp(8.0, size.height - rectHeight),
+        rectWidth,
+        rectHeight,
+      );
+      final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(8));
+      
+      final rectPaint = Paint()..color = color.withOpacity(0.85);
+      canvas.drawRRect(rrect, rectPaint);
+
+      textPainter.paint(
+        canvas,
+        Offset(
+          minX + 8,
+          (minY - rectHeight - 6 + 4).clamp(12.0, size.height - rectHeight + 4),
+        ),
+      );
+    }
   }
 
   @override
   bool shouldRepaint(covariant DocumentOutlinePainter oldDelegate) {
-    return oldDelegate.corners != corners || oldDelegate.color != color;
+    return oldDelegate.corners != corners || oldDelegate.color != color || oldDelegate.label != label;
   }
 }

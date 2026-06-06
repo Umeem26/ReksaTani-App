@@ -18,8 +18,18 @@ class ImageSegmentationService {
   }
 
   static Uint8List? _prosesSegmentasiUniversal(Uint8List bytes) {
-    final image = img.decodeImage(bytes);
+    var image = img.decodeImage(bytes);
     if (image == null) return null;
+
+    // Downscale untuk mempercepat pemrosesan piksel
+    const maxDimension = 600;
+    if (image.width > maxDimension || image.height > maxDimension) {
+      if (image.width > image.height) {
+        image = img.copyResize(image, width: maxDimension);
+      } else {
+        image = img.copyResize(image, height: maxDimension);
+      }
+    }
 
     final int width = image.width;
     final int height = image.height;

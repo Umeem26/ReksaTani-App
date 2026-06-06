@@ -18,6 +18,7 @@ class TransaksiScreen extends StatefulWidget {
   final String? initialNamaPenjualOcr; 
   final String? initialDesaOcr; 
   final String? initialKomoditasOcr; 
+  final String? initialKomoditasPcd; // 👈 New parameter
   final bool isMurniKasbon; 
 
   const TransaksiScreen({
@@ -31,6 +32,7 @@ class TransaksiScreen extends StatefulWidget {
     this.initialNamaPenjualOcr,
     this.initialDesaOcr,
     this.initialKomoditasOcr,
+    this.initialKomoditasPcd, // 👈 New parameter
     this.isMurniKasbon = false, 
   });
 
@@ -144,7 +146,13 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         _desaCtrl.text = widget.initialDesaOcr!;
       }
     }
-    if (widget.initialKomoditasOcr != null && widget.initialKomoditasOcr!.isNotEmpty) {
+    // Pilih komoditas berdasarkan hasil deteksi PCD / ML model
+    if (widget.initialKomoditasPcd != null && widget.initialKomoditasPcd!.isNotEmpty) {
+      try {
+        _komoditasTerpilih = _controller.daftarKomoditas.firstWhere((k) =>
+            k.namaKomoditas.toLowerCase().trim() == widget.initialKomoditasPcd!.toLowerCase().trim());
+      } catch (_) {}
+    } else if (widget.initialKomoditasOcr != null && widget.initialKomoditasOcr!.isNotEmpty) {
       try {
         _komoditasTerpilih = _controller.daftarKomoditas.firstWhere((k) =>
             k.namaKomoditas.toLowerCase().contains(widget.initialKomoditasOcr!.toLowerCase()) ||
