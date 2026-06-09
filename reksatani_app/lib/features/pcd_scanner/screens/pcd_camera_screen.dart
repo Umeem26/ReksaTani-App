@@ -61,6 +61,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   // ─── TEMPORAL FILTERS FOR NOTE SCANNER ───
   int _stableFrameCount = 0;
   List<Offset>? _lastStableCorners;
+  bool _isGalleryPick = false;
 
   @override
   void initState() {
@@ -436,13 +437,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
 
               if (_tfliteConfidence > 0.15 && _tfliteLabel != "Mencari objek...") {
                 lightColor = AppTheme.hijauMuda;
+                detectedObj = "Terdeteksi: $_tfliteLabel";
               } else {
                 lightColor = Colors.white;
+                detectedObj = "Mencari Komoditas...";
               }
             } else {
               lightColor = Colors.white;
               _tfliteConfidence = 0.0;
               _tfliteLabel = "Mencari objek...";
+              detectedObj = "Arahkan kamera ke Komoditas";
             }
           }
 
@@ -505,6 +509,10 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       final XFile photo = await _cameraController!.takePicture();
       final File adjustedPhoto = await _brightnessService.adjustBrightness(File(photo.path));
 
+      setState(() {
+        _isGalleryPick = false;
+      });
+
       if (_step == 0) {
         if (!mounted) return;
         final adjustedCorners = await Navigator.push<List<Offset>>(
@@ -548,6 +556,10 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         final prefix = _step == 0 ? 'nota' : 'barang';
         final fileName = '${prefix}_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
         final File savedImage = await File(image.path).copy('${appDir.path}/$fileName');
+
+        setState(() {
+          _isGalleryPick = true;
+        });
 
         if (_step == 0) {
           if (!mounted) return;
@@ -631,50 +643,32 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     final tebakanGrade = hasilGrading['grade'] as String;
     final tebakanCommodity = hasilGrading['commodity'] as String? ?? '';
     double confidence = (hasilGrading['confidence'] as num?)?.toDouble() ?? 0.0;
+    if (!mounted) return;
 
-    // Jika tidak dikenali sebagai komoditas pertanian, hentikan proses dan beri peringatan
-    if (tebakanCommodity == 'Bukan Komoditas' || tebakanGrade == 'Bukan Komoditas') {
-      if (mounted) Navigator.pop(context); // Tutup dialog loading
-      
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-              SizedBox(width: 10),
-              Text('Objek Tidak Dikenali', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text(
-            'Objek tidak dikenali sebagai komoditas pertanian, silakan foto ulang.',
-            style: TextStyle(fontSize: 14),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK', style: TextStyle(color: AppTheme.hijauMuda, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-      
-      setState(() {
-        _step = 1;
-        _fotoBarangPath = null;
-        _showLiveCamera = true;
-      });
-      _startLiveStream();
-      return;
+    if (!_isGalleryPick && _detectedCorners == null) {
+      confidence = 0.0;
     }
 
     if (mounted) Navigator.pop(context); // Tutup dialog loading
 
+    // Jika tidak dikenali sebagai komoditas pertanian, kita tidak memblokir secara keras.
+    // Sebaliknya kita ubah tebakan komoditas ke 'kelapa_sawit' dengan keyakinan 5% (0.05)
+    // agar memicu Confidence Sweeper Bottom Sheet sehingga user bisa lanjut secara manual.
+    String finalCommodity = tebakanCommodity;
+    String finalGrade = tebakanGrade;
+    double finalConfidence = confidence;
+
+    if (tebakanCommodity == 'Bukan Komoditas' || tebakanGrade == 'Bukan Komoditas') {
+      finalCommodity = 'kelapa_sawit';
+      finalGrade = 'A';
+      finalConfidence = 0.05;
+    }
+
     // ─── MODUL 10: Validasi Confidence Sweeper ───
     final confidenceResult = _pcdController.confidenceValidator.validate(
-      confidence: confidence,
-      grade: tebakanGrade,
-      commodity: tebakanCommodity,
+      confidence: finalConfidence,
+      grade: finalGrade,
+      commodity: finalCommodity,
     );
 
     if (confidenceResult.state == ConfidenceState.accepted) {
@@ -682,9 +676,9 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       _navigateKeTransaksi(
         finalNotaPath: finalNotaPath,
         finalBarangPath: finalBarangPath,
-        tebakanGrade: tebakanGrade,
+        tebakanGrade: finalGrade,
         dataHasilOcr: dataHasilOcr,
-        tebakanKomoditas: tebakanCommodity,
+        tebakanKomoditas: finalCommodity,
       );
     } else {
       if (mounted) {
@@ -1098,12 +1092,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                   fit: StackFit.expand,
                   children: [
                     CameraPreview(_cameraController!),
-                    if (_detectedCorners != null && _step == 0)
+                    if (_detectedCorners != null)
                       CustomPaint(
                         painter: DocumentOutlinePainter(
                           corners: _detectedCorners!,
                           color: _liveLightingColor,
-                          label: "Nota Timbangan",
+                          label: _step == 0
+                              ? "Nota Timbangan"
+                              : (_tfliteConfidence > 0.15 && _tfliteLabel != "Mencari objek..."
+                                  ? "$_tfliteLabel (${(_tfliteConfidence * 100).toStringAsFixed(0)}%)"
+                                  : null),
                         ),
                       ),
                   ],
@@ -1310,24 +1308,21 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     final int chromadiff = (u - 128).abs() + (v - 128).abs();
     
     // 1. Sawit/Gabah (warna merah/oranye/kuning hangat yang jenuh)
-    // Diperketat agar tidak sensitif terhadap warna tembok kekuningan/cream
-    if (v > 142 && u < 105) return true;
+    if (v > 132 && u < 115) return true;
 
     // 2. Kopi Robusta (kadar kecerahan rendah dengan warna jenuh cokelat/hijau zaitun)
-    // Diperketat dari y < 80 ke y < 70 dan chromadiff > 20
-    if (y < 70 && chromadiff > 20) return true;
+    if (y < 95 && chromadiff > 12) return true;
 
     // 3. Warna sangat jenuh secara umum (jauh dari abu-abu/netral)
-    // Diperketat dari chromadiff > 24 ke chromadiff > 32 untuk mengabaikan tembok abu-abu/berwarna tipis
-    if (chromadiff > 32) return true;
+    if (chromadiff > 16) return true;
 
     return false;
   }
 
   String _formatCommodityName(String raw) {
     if (raw == 'gabah') return "Gabah Padi (GKP/GKG)";
-    if (raw == 'kopi robusta') return "Kopi Robusta (Biji Kopi)";
-    if (raw == 'sawit') return "Kelapa Sawit (TBS)";
+    if (raw == 'kopi' || raw == 'kopi robusta') return "Kopi Robusta (Biji Kopi)";
+    if (raw == 'kelapa_sawit' || raw == 'sawit') return "Kelapa Sawit (TBS)";
     return raw;
   }
 }

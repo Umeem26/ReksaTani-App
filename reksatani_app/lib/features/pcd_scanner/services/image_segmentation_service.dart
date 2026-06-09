@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
@@ -35,20 +36,48 @@ class ImageSegmentationService {
     final int height = image.height;
     final resultImage = image.clone();
 
-    // 1. HITUNG RATA-RATA LUMINANCE UNTUK MENENTUKAN AMBANG BATAS (OTSU SIMPLIFIED)
-    int totalLuminance = 0;
-    for (int y = 0; y < height; y += 4) { // Sampling cepat
-      for (int x = 0; x < width; x += 4) {
-        final pixel = image.getPixel(x, y);
-        totalLuminance += (0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b).toInt();
-      }
+    // 1. HITUNG RATA-RATA WARNA DI BORDER (ADAPTIVE BACKGROUND COLOR SENSING)
+    int borderR = 0;
+    int borderG = 0;
+    int borderB = 0;
+    int borderCount = 0;
+
+    // Sample top and bottom borders
+    for (int x = 0; x < width; x += 8) {
+      final pTop = image.getPixel(x, 0);
+      borderR += pTop.r.toInt();
+      borderG += pTop.g.toInt();
+      borderB += pTop.b.toInt();
+      borderCount++;
+
+      final pBottom = image.getPixel(x, height - 1);
+      borderR += pBottom.r.toInt();
+      borderG += pBottom.g.toInt();
+      borderB += pBottom.b.toInt();
+      borderCount++;
     }
-    int dynamicThreshold = totalLuminance ~/ ((width / 4) * (height / 4));
 
-    // Beri batas toleransi bawah dan atas agar tidak terlalu ekstrem
-    dynamicThreshold = dynamicThreshold.clamp(70, 160);
+    // Sample left and right borders
+    for (int y = 8; y < height - 8; y += 8) {
+      final pLeft = image.getPixel(0, y);
+      borderR += pLeft.r.toInt();
+      borderG += pLeft.g.toInt();
+      borderB += pLeft.b.toInt();
+      borderCount++;
 
-    // 2. ITERASI UNTUK MEMISAHKAN FOREGROUND DAN BACKGROUND BERDASARKAN KONTRAS
+      final pRight = image.getPixel(width - 1, y);
+      borderR += pRight.r.toInt();
+      borderG += pRight.g.toInt();
+      borderB += pRight.b.toInt();
+      borderCount++;
+    }
+
+    final double avgR = borderR / borderCount;
+    final double avgG = borderG / borderCount;
+    final double avgB = borderB / borderCount;
+    final double avgLuma = 0.299 * avgR + 0.587 * avgG + 0.114 * avgB;
+
+    // 2. ITERASI UNTUK MEMISAHKAN FOREGROUND DAN BACKGROUND
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
         final pixel = image.getPixel(x, y);
@@ -56,7 +85,7 @@ class ImageSegmentationService {
         // Hitung nilai kecerahan piksel saat ini
         double pixelLuminance = 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b;
 
-        // Hitung juga tingkat kejenuhan warna (Saturation) untuk membedakan tanah/semen abu-abu
+        // Hitung juga tingkat kejenuhan warna (Saturation)
         double r = pixel.r / 255.0;
         double g = pixel.g / 255.0;
         double b = pixel.b / 255.0;
@@ -65,12 +94,30 @@ class ImageSegmentationService {
         double delta = max - min;
         double saturation = max == 0 ? 0 : delta / max;
 
-        // Logika Pintar: Jika warnanya sangat pucat/abu-abu (seperti semen/tanah kering) 
-        // ATAU tingkat kecerahannya terlalu jauh dari objek komoditas utama, maka itu adalah latar belakang
-        bool isBackground = (saturation < 0.08) || (pixelLuminance < (dynamicThreshold - 25));
+        // Hitung jarak Euclidean ke warna border rata-rata
+        double rDiff = pixel.r - avgR;
+        double gDiff = pixel.g - avgG;
+        double bDiff = pixel.b - avgB;
+        double distance = math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
+
+        bool isBackground = false;
+        
+        // Piksel dianggap background jika warnanya sangat dekat dengan warna border rata-rata
+        if (distance < 55.0) {
+          isBackground = true;
+        } else if (saturation < 0.08) {
+          // Piksel netral (low saturation seperti putih/abu-abu/hitam)
+          if (avgLuma > 130 && pixelLuminance > 140) {
+            // Latar belakang terang, piksel netral terang dianggap background
+            isBackground = true;
+          } else if (avgLuma <= 130 && pixelLuminance < 90) {
+            // Latar belakang gelap, piksel netral gelap dianggap background
+            isBackground = true;
+          }
+        }
 
         if (isBackground) {
-          // Ubah latar belakang menjadi warna PUTIH BERSIH, apapun warna komoditas di depannya
+          // Ubah latar belakang menjadi warna PUTIH BERSIH
           resultImage.setPixelRgb(x, y, 255, 255, 255);
         }
       }

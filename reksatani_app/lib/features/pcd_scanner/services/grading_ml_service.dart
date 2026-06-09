@@ -71,7 +71,8 @@ class GradingMlService {
       final bytes = await imageFile.readAsBytes();
       
       // Preprocessing Citra (Resize ke 224x224 dan Normalisasi 1./255)
-      final inputTensor = await _preprocessImage(bytes);
+      final prepResult = await _preprocessImage(bytes);
+      final inputTensor = prepResult.tensor;
 
       if (_isTestMode) {
         return _simulateInference(inputTensor);
@@ -98,10 +99,16 @@ class GradingMlService {
 
       String detectedKomoditas = routerClasses[routerMaxIdx];
 
-      // Jika keyakinan router terlalu rendah, degradasi ke bukan_komoditas untuk menghindari false positive (misal tembok)
-      double routerThreshold = 0.60;
+      // Jika keyakinan router terlalu rendah, degradasi ke bukan_komoditas untuk menghindari false positive (dibuat lebih sensitif di 0.25)
+      double routerThreshold = 0.25;
       if (detectedKomoditas != 'bukan_komoditas' && routerMaxScore < routerThreshold) {
         debugPrint("🛑 [GradingMlService] Objek didegradasi ke 'bukan_komoditas' karena keyakinan router terlalu rendah (${(routerMaxScore * 100).toStringAsFixed(1)}% < ${(routerThreshold * 100).toStringAsFixed(1)}%)");
+        detectedKomoditas = 'bukan_komoditas';
+      }
+
+      // ─── FOREGROUND RATIO CHECK (EMPTY FRAME DETECTION) ───
+      if (prepResult.foregroundRatio < 0.01) {
+        debugPrint("🛑 [GradingMlService] Objek didegradasi ke 'bukan_komoditas' karena rasio foreground terlalu kecil (${(prepResult.foregroundRatio * 100).toStringAsFixed(1)}% < 1.0%)");
         detectedKomoditas = 'bukan_komoditas';
       }
 
@@ -111,7 +118,7 @@ class GradingMlService {
         return {
           'komoditas': 'Bukan Komoditas',
           'grade': 'Bukan Komoditas', // Nilai ini akan dibaca oleh PcdController
-          'confidence': routerMaxScore,
+          'confidence': 0.0,
           'scores': {
             'A': 0.0,
             'B': 0.0,
@@ -173,7 +180,7 @@ class GradingMlService {
   }
 
   /// Memproses klasifikasi komoditas secara real-time langsung dari camera image stream.
-  Future<Map<String, dynamic>> inferFromTensor(List<List<List<List<double>>>> inputTensor) async {
+  Future<Map<String, dynamic>> inferFromTensor(dynamic inputTensor) async {
     if (_isTestMode) {
       return _simulateInference(inputTensor);
     }
@@ -185,36 +192,21 @@ class GradingMlService {
       routerInterpreter.run(inputTensor, routerOutput);
       List<double> routerScores = List<double>.from(routerOutput[0]);
       
-      int routerMaxIdx = 0;
-      double routerMaxScore = -1.0;
-      for (int i = 0; i < routerScores.length; i++) {
+      int routerMaxIdx = 1; // Mulai dari indeks 1 (gabah)
+      double routerMaxScore = routerScores[1];
+      for (int i = 2; i < routerScores.length; i++) {
         if (routerScores[i] > routerMaxScore) {
           routerMaxScore = routerScores[i];
           routerMaxIdx = i;
         }
       }
+
+      debugPrint("📊 [GradingMlService] Live Router: bukan_komoditas: ${(routerScores[0] * 100).toStringAsFixed(1)}%, "
+          "gabah: ${(routerScores[1] * 100).toStringAsFixed(1)}%, "
+          "sawit: ${(routerScores[2] * 100).toStringAsFixed(1)}%, "
+          "kopi: ${(routerScores[3] * 100).toStringAsFixed(1)}%");
       
       String detectedKomoditas = routerClasses[routerMaxIdx];
-      
-      // Jika keyakinan router terlalu rendah, degradasi ke bukan_komoditas
-      double routerThreshold = 0.60; 
-      if (detectedKomoditas != 'bukan_komoditas' && routerMaxScore < routerThreshold) {
-        detectedKomoditas = 'bukan_komoditas';
-      }
-      
-      if (detectedKomoditas == 'bukan_komoditas') {
-        return {
-          'commodity': 'Bukan Komoditas',
-          'grade': 'Bukan Komoditas',
-          'confidence': routerMaxScore,
-          'scores': {
-            'gabah': routerScores[1],
-            'kopi robusta': routerScores[3],
-            'sawit': routerScores[2],
-          },
-          'inference_mode': 'live_router_only',
-        };
-      }
       
       // TAHAP 2: JALANKAN EXPERT GRADER MODEL
       String graderPath;
@@ -266,51 +258,49 @@ class GradingMlService {
   }
 
   /// Mengonversi format CameraImage (YUV420/BGRA) ke tensor format 224x224 RGB ternormalisasi secara efisien.
-  List<List<List<List<double>>>> convertCameraImageToTensor(CameraImage image) {
+  Float32List convertCameraImageToTensor(CameraImage image) {
     final int width = image.width;
     final int height = image.height;
-    
-    const int targetWidth = 224;
-    const int targetHeight = 224;
-    
-    final double scaleX = width / targetWidth;
-    final double scaleY = height / targetHeight;
-    
-    final List<List<List<double>>> grid = [];
-    final bool isYUV = image.format.group == ImageFormatGroup.yuv420;
-    
-    if (isYUV) {
+    final bool isLandscape = width > height;
+    final Float32List buffer = Float32List(150528);
+    int bufferIdx = 0;
+
+    if (image.format.group == ImageFormatGroup.yuv420) {
       final yPlane = image.planes[0];
       final uPlane = image.planes.length > 1 ? image.planes[1] : null;
       final vPlane = image.planes.length > 2 ? image.planes[2] : null;
-      
+
       final yBytes = yPlane.bytes;
       final uBytes = uPlane?.bytes;
       final vBytes = vPlane?.bytes;
-      
+
       final int yRowStride = yPlane.bytesPerRow;
       final int uRowStride = uPlane?.bytesPerRow ?? 0;
       final int vRowStride = vPlane?.bytesPerRow ?? 0;
-      
+
       final int? uPixelStride = uPlane?.bytesPerPixel;
       final int? vPixelStride = vPlane?.bytesPerPixel;
-      
-      for (int y = 0; y < targetHeight; y++) {
-        final List<List<double>> row = [];
-        final int sourceY = (y * scaleY).toInt().clamp(0, height - 1);
-        
-        for (int x = 0; x < targetWidth; x++) {
-          final int sourceX = (x * scaleX).toInt().clamp(0, width - 1);
-          
-          final int yIndex = sourceY * yRowStride + sourceX;
-          final int uvY = sourceY >> 1;
-          final int uvX = sourceX >> 1;
-          
+
+      for (int y = 0; y < 224; y++) {
+        for (int x = 0; x < 224; x++) {
+          int sx, sy;
+          if (isLandscape) {
+            sy = ((223 - x) * height ~/ 224).clamp(0, height - 1);
+            sx = (y * width ~/ 224).clamp(0, width - 1);
+          } else {
+            sx = (x * width ~/ 224).clamp(0, width - 1);
+            sy = (y * height ~/ 224).clamp(0, height - 1);
+          }
+
+          final int yIndex = sy * yRowStride + sx;
+          final int uvY = sy >> 1;
+          final int uvX = sx >> 1;
+
           final int yVal = yBytes[yIndex];
-          
+
           int uVal = 128;
           int vVal = 128;
-          
+
           if (uBytes != null && uPixelStride != null) {
             final int uIndex = uvY * uRowStride + uvX * uPixelStride;
             if (uIndex < uBytes.length) uVal = uBytes[uIndex];
@@ -319,44 +309,50 @@ class GradingMlService {
             final int vIndex = uvY * vRowStride + uvX * vPixelStride;
             if (vIndex < vBytes.length) vVal = vBytes[vIndex];
           }
-          
+
           // Konversi YUV ke RGB
           final double r = (yVal + 1.402 * (vVal - 128)).clamp(0, 255) / 255.0;
           final double g = (yVal - 0.344136 * (uVal - 128) - 0.714136 * (vVal - 128)).clamp(0, 255) / 255.0;
           final double b = (yVal + 1.772 * (uVal - 128)).clamp(0, 255) / 255.0;
-          
-          row.add([r, g, b]);
+
+          buffer[bufferIdx++] = r;
+          buffer[bufferIdx++] = g;
+          buffer[bufferIdx++] = b;
         }
-        grid.add(row);
       }
+      return buffer;
     } else {
       // Format BGRA (iOS)
       final plane = image.planes[0];
       final bytes = plane.bytes;
       final int rowStride = plane.bytesPerRow;
       final int pixelStride = plane.bytesPerPixel ?? 4;
-      
-      for (int y = 0; y < targetHeight; y++) {
-        final List<List<double>> row = [];
-        final int sourceY = (y * scaleY).toInt().clamp(0, height - 1);
-        for (int x = 0; x < targetWidth; x++) {
-          final int sourceX = (x * scaleX).toInt().clamp(0, width - 1);
-          final int index = sourceY * rowStride + sourceX * pixelStride;
-          
-          if (index + 2 < bytes.length) {
-            final double b = bytes[index] / 255.0;
-            final double g = bytes[index + 1] / 255.0;
-            final double r = bytes[index + 2] / 255.0;
-            row.add([r, g, b]);
+
+      for (int y = 0; y < 224; y++) {
+        for (int x = 0; x < 224; x++) {
+          int sx, sy;
+          if (isLandscape) {
+            sy = ((223 - x) * height ~/ 224).clamp(0, height - 1);
+            sx = (y * width ~/ 224).clamp(0, width - 1);
           } else {
-            row.add([0.0, 0.0, 0.0]);
+            sx = (x * width ~/ 224).clamp(0, width - 1);
+            sy = (y * height ~/ 224).clamp(0, height - 1);
+          }
+
+          final int index = sy * rowStride + sx * pixelStride;
+          if (index + 2 < bytes.length) {
+            buffer[bufferIdx++] = bytes[index + 2] / 255.0;
+            buffer[bufferIdx++] = bytes[index + 1] / 255.0;
+            buffer[bufferIdx++] = bytes[index] / 255.0;
+          } else {
+            buffer[bufferIdx++] = 0.0;
+            buffer[bufferIdx++] = 0.0;
+            buffer[bufferIdx++] = 0.0;
           }
         }
-        grid.add(row);
       }
+      return buffer;
     }
-    
-    return [grid];
   }
 
   /// Membersihkan memori semua interpreter saat service tidak lagi digunakan.
@@ -369,7 +365,7 @@ class GradingMlService {
   }
 
   /// Melakukan preprocessing citra secara efisien.
-  Future<List<List<List<List<double>>>>> _preprocessImage(Uint8List bytes) async {
+  Future<PreprocessResult> _preprocessImage(Uint8List bytes) async {
     try {
       return await _preprocessImageNative(bytes);
     } catch (e) {
@@ -378,7 +374,7 @@ class GradingMlService {
     }
   }
 
-  Future<List<List<List<List<double>>>>> _preprocessImageNative(Uint8List bytes) async {
+  Future<PreprocessResult> _preprocessImageNative(Uint8List bytes) async {
     final codec = await ui.instantiateImageCodec(bytes, targetWidth: 224, targetHeight: 224);
     final frame = await codec.getNextFrame();
     final uiImage = frame.image;
@@ -389,61 +385,95 @@ class GradingMlService {
     if (byteData == null) throw Exception("Gagal mendapatkan byte data dari ui.Image");
 
     final Uint8List rgbaBytes = byteData.buffer.asUint8List();
+    final Float32List buffer = Float32List(150528);
+    int bufferIdx = 0;
+    int foregroundPixels = 0;
 
-    return List.generate(
-      1, (_) => List.generate(actualHeight, (y) => List.generate(actualWidth, (x) {
-            final int offset = (y * actualWidth + x) * 4;
-            return [
-              rgbaBytes[offset] / 255.0,     // R
-              rgbaBytes[offset + 1] / 255.0, // G
-              rgbaBytes[offset + 2] / 255.0, // B
-            ];
-          }),
-      ),
-    );
+    for (int y = 0; y < actualHeight; y++) {
+      for (int x = 0; x < actualWidth; x++) {
+        final int offset = (y * actualWidth + x) * 4;
+        final double r = rgbaBytes[offset] / 255.0;
+        final double g = rgbaBytes[offset + 1] / 255.0;
+        final double b = rgbaBytes[offset + 2] / 255.0;
+        
+        buffer[bufferIdx++] = r;
+        buffer[bufferIdx++] = g;
+        buffer[bufferIdx++] = b;
+
+        // Cek apakah bukan warna putih latar belakang (R, G, B tidak semuanya dekat 255)
+        if (rgbaBytes[offset] < 240 || rgbaBytes[offset + 1] < 240 || rgbaBytes[offset + 2] < 240) {
+          foregroundPixels++;
+        }
+      }
+    }
+
+    final double foregroundRatio = foregroundPixels / (actualWidth * actualHeight);
+    uiImage.dispose();
+
+    return PreprocessResult(buffer, foregroundRatio);
   }
 
-  static List<List<List<List<double>>>> _preprocessImagePureDart(Uint8List bytes) {
+  static PreprocessResult _preprocessImagePureDart(Uint8List bytes) {
     final image = img.decodeImage(bytes);
     if (image == null) throw Exception("Gagal mendekode berkas gambar.");
     final resized = img.copyResize(image, width: 224, height: 224);
 
-    return List<List<List<List<double>>>>.generate(
-      1, (_) {
-        final List<List<List<double>>> grid = [];
-        final iterator = resized.iterator;
-        for (int y = 0; y < 224; y++) {
-          final List<List<double>> row = [];
-          for (int x = 0; x < 224; x++) {
-            if (iterator.moveNext()) {
-              final pixel = iterator.current;
-              row.add([pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0]);
-            } else {
-              row.add([0.0, 0.0, 0.0]);
-            }
+    final Float32List buffer = Float32List(150528);
+    int bufferIdx = 0;
+    int foregroundPixels = 0;
+    final iterator = resized.iterator;
+
+    for (int y = 0; y < 224; y++) {
+      for (int x = 0; x < 224; x++) {
+        if (iterator.moveNext()) {
+          final pixel = iterator.current;
+          final double r = pixel.r / 255.0;
+          final double g = pixel.g / 255.0;
+          final double b = pixel.b / 255.0;
+
+          buffer[bufferIdx++] = r;
+          buffer[bufferIdx++] = g;
+          buffer[bufferIdx++] = b;
+
+          if (pixel.r < 240 || pixel.g < 240 || pixel.b < 240) {
+            foregroundPixels++;
           }
-          grid.add(row);
+        } else {
+          buffer[bufferIdx++] = 0.0;
+          buffer[bufferIdx++] = 0.0;
+          buffer[bufferIdx++] = 0.0;
         }
-        return grid;
-      },
-    );
+      }
+    }
+
+    final double foregroundRatio = foregroundPixels / 50176;
+    return PreprocessResult(buffer, foregroundRatio);
   }
 
   /// Simulasi logika inferensi (tidak diubah)
-  Map<String, dynamic> _simulateInference(List<List<List<List<double>>>> input) {
-    // Cari intensitas hijau/merah/kuning rata-rata untuk mock hasil grade
+  Map<String, dynamic> _simulateInference(dynamic input) {
     double totalR = 0;
     double totalG = 0;
     double totalB = 0;
     int count = 0;
     
-    // Ambil sampel piksel dari input tensor
-    for (int y = 0; y < input[0].length; y += 10) {
-      for (int x = 0; x < input[0][y].length; x += 10) {
-        totalR += input[0][y][x][0];
-        totalG += input[0][y][x][1];
-        totalB += input[0][y][x][2];
+    if (input is Float32List) {
+      for (int i = 0; i < input.length; i += 30) {
+        totalR += input[i];
+        totalG += input[i + 1];
+        totalB += input[i + 2];
         count++;
+      }
+    } else {
+      // Fallback/Legacy
+      final List<List<List<List<double>>>> inputList = input;
+      for (int y = 0; y < inputList[0].length; y += 10) {
+        for (int x = 0; x < inputList[0][y].length; x += 10) {
+          totalR += inputList[0][y][x][0];
+          totalG += inputList[0][y][x][1];
+          totalB += inputList[0][y][x][2];
+          count++;
+        }
       }
     }
     
@@ -474,4 +504,10 @@ class GradingMlService {
       'inference_mode': 'simulated',
     };
   }
+}
+
+class PreprocessResult {
+  final Float32List tensor;
+  final double foregroundRatio;
+  PreprocessResult(this.tensor, this.foregroundRatio);
 }
