@@ -11,6 +11,7 @@ import '../services/confidence_validator.dart'; // 👈 Modul 10
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
+import 'corner_adjuster_screen.dart';
 
 class PcdCameraScreen extends StatefulWidget {
   final String? initialFotoNota;
@@ -56,6 +57,10 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   // ─── KONTROL PERANGKAT HARDWARE ───
   bool _isFlashOn = false;
   bool _isBackCamera = true;
+
+  // ─── TEMPORAL FILTERS FOR NOTE SCANNER ───
+  int _stableFrameCount = 0;
+  List<Offset>? _lastStableCorners;
 
   @override
   void initState() {
@@ -197,6 +202,9 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
             int threshold = (minVal + maxVal) ~/ 2 + 10;
             if (threshold < 70) threshold = 70;
 
+            final int contrast = maxVal - minVal;
+            final bool isDocumentPresent = contrast > 60 && maxVal > 150;
+
             final densities = List.generate(gridR, (_) => List.filled(gridC, 0));
             for (int gy = 0; gy < gridR; gy++) {
               for (int gx = 0; gx < gridC; gx++) {
@@ -255,14 +263,14 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               }
             }
 
-            if (largestComp.length >= 25) {
+            if (isDocumentPresent && largestComp.length >= 25) {
               int minSumIdx = 0, maxSumIdx = 0, maxDiffIdx = 0, minDiffIdx = 0;
               double minSum = 9999, maxSum = -9999, maxDiff = -9999, minDiff = 9999;
 
               for (int i = 0; i < largestComp.length; i++) {
                 final cell = largestComp[i];
-                double gx = cell[1] / gridC;
-                double gy = cell[0] / gridR;
+                double gx = cell[1] / (gridC - 1);
+                double gy = cell[0] / (gridR - 1);
                 double sum = gx + gy;
                 double diff = gx - gy;
 
@@ -278,22 +286,33 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               final blCell = largestComp[minDiffIdx];
 
               Offset cellToScreenOffset(List<int> cell) {
-                double nx = 1.0 - (cell[0] / gridR);
-                double ny = cell[1] / gridC;
+                double nx = 1.0 - (cell[0] / (gridR - 1));
+                double ny = cell[1] / (gridC - 1);
                 return Offset(nx, ny);
               }
 
-              newCorners = [
+              final tempCorners = [
                 cellToScreenOffset(tlCell),
                 cellToScreenOffset(trCell),
                 cellToScreenOffset(brCell),
                 cellToScreenOffset(blCell),
               ];
+
+              _stableFrameCount++;
+              if (_stableFrameCount >= 3) {
+                newCorners = tempCorners;
+                _lastStableCorners = tempCorners;
+              } else {
+                newCorners = _lastStableCorners;
+              }
+
               detectedObj = "Terdeteksi: Lembar Kertas/Nota";
               if (luma >= 60 && luma <= 210) {
                 lightColor = AppTheme.hijauMuda;
               }
             } else {
+              _stableFrameCount = 0;
+              _lastStableCorners = null;
               if (luma >= 60 && luma <= 210) {
                 detectedObj = "Sejajarkan nota di area kamera";
                 lightColor = Colors.white;
@@ -387,8 +406,8 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               int padY2 = (maxY < gridR - 1) ? maxY + 1 : gridR - 1;
 
               Offset cellToScreenOffset(int gx, int gy) {
-                double nx = 1.0 - (gy / gridR);
-                double ny = gx / gridC;
+                double nx = 1.0 - (gy / (gridR - 1));
+                double ny = gx / (gridC - 1);
                 return Offset(nx, ny);
               }
 
@@ -486,17 +505,34 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       final XFile photo = await _cameraController!.takePicture();
       final File adjustedPhoto = await _brightnessService.adjustBrightness(File(photo.path));
 
-      setState(() {
-        if (_step == 0) {
-          _fotoNotaPath = adjustedPhoto.path;
-          _detectedNotaCorners = finalCorners;
-          _showLiveCamera = false; 
-        } else if (_step == 1) {
-          _fotoBarangPath = adjustedPhoto.path;
-          _step = 2; 
-          _processAiAndNavigate();
+      if (_step == 0) {
+        if (!mounted) return;
+        final adjustedCorners = await Navigator.push<List<Offset>>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CornerAdjusterScreen(
+              imagePath: adjustedPhoto.path,
+              initialCorners: finalCorners,
+            ),
+          ),
+        );
+
+        if (adjustedCorners != null) {
+          setState(() {
+            _fotoNotaPath = adjustedPhoto.path;
+            _detectedNotaCorners = adjustedCorners;
+            _showLiveCamera = false;
+          });
+        } else {
+          _startLiveStream();
         }
-      });
+      } else if (_step == 1) {
+        setState(() {
+          _fotoBarangPath = adjustedPhoto.path;
+          _step = 2;
+          _processAiAndNavigate();
+        });
+      }
     } catch (e) {
       debugPrint("Error mengambil gambar: $e");
     }
@@ -513,17 +549,37 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         final fileName = '${prefix}_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
         final File savedImage = await File(image.path).copy('${appDir.path}/$fileName');
 
-        setState(() {
-          if (_step == 0) {
-            _fotoNotaPath = savedImage.path;
-            _detectedNotaCorners = null;
-            _showLiveCamera = false;
-          } else if (_step == 1) {
+        if (_step == 0) {
+          if (!mounted) return;
+          final adjustedCorners = await Navigator.push<List<Offset>>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CornerAdjusterScreen(
+                imagePath: savedImage.path,
+                initialCorners: null,
+              ),
+            ),
+          );
+
+          if (adjustedCorners != null) {
+            setState(() {
+              _fotoNotaPath = savedImage.path;
+              _detectedNotaCorners = adjustedCorners;
+              _showLiveCamera = false;
+            });
+          } else {
+            setState(() {
+              _showLiveCamera = true;
+            });
+            _startLiveStream();
+          }
+        } else if (_step == 1) {
+          setState(() {
             _fotoBarangPath = savedImage.path;
             _step = 2;
             _processAiAndNavigate();
-          }
-        });
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error mengambil gambar dari galeri: $e");
