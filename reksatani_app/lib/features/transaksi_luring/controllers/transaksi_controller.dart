@@ -4,6 +4,7 @@ import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../models/hive/komoditas_hive_model.dart';
 import '../../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../../services/hive_service.dart';
+import 'package:reksatani_app/services/master_data_service.dart';
 
 class TransaksiController {
   final _hive = HiveService();
@@ -17,7 +18,12 @@ class TransaksiController {
         .where((p) => p.pengepulId == user.id)
         .toList();
   }
-  List<KomoditasHiveModel> get daftarKomoditas => _hive.komoditasBox.values.toList();
+  List<KomoditasHiveModel> get daftarKomoditas {
+    final allowedNames = {'gabah', 'kopi robusta', 'sawit'};
+    return _hive.komoditasBox.values
+        .where((k) => allowedNames.contains(k.namaKomoditas.toLowerCase()))
+        .toList();
+  }
 
   List<Map<String, dynamic>> getDaftarGrade(KomoditasHiveModel? komoditas) {
     if (komoditas == null) return [];
@@ -136,6 +142,7 @@ class TransaksiController {
 
     // Sedikit delay agar animasi loading di layar terlihat natural
     await Future.delayed(const Duration(milliseconds: 400));
+    MasterDataService().syncAll();
   }
 
   Future<void> updateTransaksi(
@@ -169,6 +176,7 @@ class TransaksiController {
 
     await existingTrx.save();
     await Future.delayed(const Duration(milliseconds: 400));
+    MasterDataService().syncAll();
   }
 
   Future<void> simpanKasbonMurni({
@@ -214,11 +222,13 @@ class TransaksiController {
     await user.save();
 
     await Future.delayed(const Duration(milliseconds: 400));
+    MasterDataService().syncAll();
   }
 
   Future<void> deleteTransaksi(TransaksiHiveModel trx) async {
     if (trx.statusSinkronisasi == 'pending') {
       await _hive.transaksiBox.delete(trx.idLokal);
+      MasterDataService().syncAll();
     }
   }
 }

@@ -209,7 +209,7 @@ class _KomoditasRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)), child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22)))),
+              Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(16)), child: Center(child: Text(AppTheme.getCommodityIcon(data['nama'] as String), style: const TextStyle(fontSize: 22)))),
               const SizedBox(width: 14),
               Expanded(child: Text(data['nama'] as String, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppTheme.textPrimary, letterSpacing: -0.3))),
               Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: AppTheme.bgPage, borderRadius: BorderRadius.circular(20)), child: Text('${(persenKg * 100).toInt()}% dari total', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textSecond))),

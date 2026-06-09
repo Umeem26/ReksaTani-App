@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show Offset;
+import 'package:camera/camera.dart';
 import '../services/document_warping_service.dart';
 import '../services/image_segmentation_service.dart';
 import '../services/ocr_regex_service.dart'; // 👈 Impor service baru Modul 8
@@ -19,11 +21,32 @@ class PcdController {
   })  : _gradingMlService = gradingMlService ?? GradingMlService(),
         confidenceValidator = confidenceValidator ?? ConfidenceValidator();
 
+  /// Memuat model TFLite dari aset perangkat secara aman.
+  Future<void> loadModel() async {
+    await _gradingMlService.loadModel();
+  }
+
+  /// Memproses klasifikasi komoditas langsung dari stream kamera (CameraImage).
+  Future<Map<String, dynamic>> prosesKlasifikasiLive(CameraImage image) async {
+    try {
+      final inputTensor = _gradingMlService.convertCameraImageToTensor(image);
+      return await _gradingMlService.inferFromTensor(inputTensor);
+    } catch (e) {
+      return {
+        'commodity': 'Menganalisis...',
+        'grade': 'A',
+        'confidence': 0.0,
+        'scores': {'gabah': 0.0, 'kopi robusta': 0.0, 'sawit': 0.0},
+        'inference_mode': 'error',
+      };
+    }
+  }
+
   // ─── MODUL 6: Eksekusi Pelurusan Sudut Nota ───
-  Future<String> prosesWarpingNota(String imagePath) async {
+  Future<String> prosesWarpingNota(String imagePath, {List<Offset>? manualCorners}) async {
     try {
       final fileNotaAsli = File(imagePath);
-      final fileNotaLurus = await _warpingService.warpNota(fileNotaAsli);
+      final fileNotaLurus = await _warpingService.warpNota(fileNotaAsli, manualCorners: manualCorners);
       return fileNotaLurus.path;
     } catch (e) {
       return imagePath; 

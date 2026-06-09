@@ -82,8 +82,8 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Hapus Komoditas', style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.merah)),
-        content: Text('Yakin ingin menghapus data $nama?\nSemua riwayat yang terkait tidak akan terhapus, namun tidak bisa dipilih lagi saat transaksi baru.', style: const TextStyle(color: AppTheme.textSecond, height: 1.4)),
+        title: const Text('Hapus Data Komoditas', style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.merah)),
+        content: Text('Apakah Anda yakin ingin menghapus komoditas $nama? Data ini tidak akan bisa dipilih untuk transaksi baru, namun riwayat transaksi sebelumnya tetap tersimpan.', style: const TextStyle(color: AppTheme.textSecond, height: 1.4)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -97,7 +97,7 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
               await _fetchData();
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            child: const Text('Hapus Permanen', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text('Ya, Hapus', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -184,7 +184,7 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
                                     children: [
                                       Row(
                                         children: [
-                                          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22)))),
+                                          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: Center(child: Text(AppTheme.getCommodityIcon(nama), style: const TextStyle(fontSize: 22)))),
                                           const SizedBox(width: 14),
                                           Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,11 +339,23 @@ class _KomoditasFormSheetState extends State<_KomoditasFormSheet> {
                   children: [
                     const Text('Nama Komoditas', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
                     const SizedBox(height: 8),
-                    TextFormField(controller: _namaCtrl, validator: (v) => v!.isEmpty ? 'Wajib diisi' : null, style: const TextStyle(fontWeight: FontWeight.w700), decoration: _inputDeco('Contoh: Biji Kopi')),
+                    TextFormField(
+                      controller: _namaCtrl,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Nama komoditas tidak boleh kosong';
+                        final lower = v.trim().toLowerCase();
+                        if (lower != 'gabah' && lower != 'kopi robusta' && lower != 'sawit') {
+                          return 'Nama komoditas harus salah satu dari: Gabah, Kopi Robusta, atau Sawit';
+                        }
+                        return null;
+                      },
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      decoration: _inputDeco('Contoh: Kopi Robusta'),
+                    ),
                     const SizedBox(height: 16),
                     const Text('Unit Satuan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecond)),
                     const SizedBox(height: 8),
-                    TextFormField(controller: _satuanCtrl, validator: (v) => v!.isEmpty ? 'Wajib diisi' : null, style: const TextStyle(fontWeight: FontWeight.w700), decoration: _inputDeco('Contoh: kg')),
+                    TextFormField(controller: _satuanCtrl, validator: (v) => v!.isEmpty ? 'Satuan tidak boleh kosong' : null, style: const TextStyle(fontWeight: FontWeight.w700), decoration: _inputDeco('Contoh: kg')),
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -361,9 +373,9 @@ class _KomoditasFormSheetState extends State<_KomoditasFormSheet> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(flex: 2, child: TextFormField(controller: _gradesData[index]['gradeCtrl'], validator: (v) => v!.isEmpty ? 'Isi' : null, style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.hijauTua), decoration: _inputDeco('Grade', isSmall: true))),
+                            Expanded(flex: 2, child: TextFormField(controller: _gradesData[index]['gradeCtrl'], validator: (v) => v!.isEmpty ? 'Grade tidak boleh kosong' : null, style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.hijauTua), decoration: _inputDeco('Grade', isSmall: true))),
                             const SizedBox(width: 8),
-                            Expanded(flex: 4, child: TextFormField(controller: _gradesData[index]['hargaCtrl'], keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? 'Isi harga' : null, style: const TextStyle(fontWeight: FontWeight.w800), decoration: _inputDeco('Harga (Rp)', isSmall: true).copyWith(prefixText: 'Rp '))),
+                            Expanded(flex: 4, child: TextFormField(controller: _gradesData[index]['hargaCtrl'], keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? 'Harga tidak boleh kosong' : null, style: const TextStyle(fontWeight: FontWeight.w800), decoration: _inputDeco('Harga (Rp)', isSmall: true).copyWith(prefixText: 'Rp '))),
                             if (_gradesData.length > 1) ...[
                               const SizedBox(width: 8),
                               Padding(padding: const EdgeInsets.only(top: 4), child: IconButton(icon: const Icon(Icons.remove_circle_rounded, color: AppTheme.merah, size: 24), onPressed: () => _hapusGrade(index), padding: EdgeInsets.zero, constraints: const BoxConstraints())),

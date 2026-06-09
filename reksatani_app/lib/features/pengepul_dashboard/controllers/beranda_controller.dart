@@ -81,6 +81,7 @@ class BerandaController {
       trx.statusSinkronisasi = 'pending_delete';
       await trx.save();
     }
+    _svc.syncAll();
   }
 
   Future<void> logout() async {

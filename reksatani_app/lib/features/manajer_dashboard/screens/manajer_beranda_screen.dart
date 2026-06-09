@@ -75,7 +75,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
             Text('Keluar Aplikasi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppTheme.textPrimary)),
           ],
         ),
-        content: const Text('Kamu yakin ingin logout dari akun Manajer Gudang?', style: TextStyle(fontSize: 14, color: AppTheme.textSecond, height: 1.5)),
+        content: const Text('Apakah Anda yakin ingin keluar dari akun Manajer Gudang?', style: TextStyle(fontSize: 14, color: AppTheme.textSecond, height: 1.5)),
         actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
         actions: [
           TextButton(
@@ -91,7 +91,7 @@ class _BerandaManajerScreenState extends State<BerandaManajerScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text('Keluar', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -273,11 +273,22 @@ class _ManajerHeaderModern extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(children: [
-                      Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.analytics_rounded, color: Colors.white, size: 18)),
-                      const SizedBox(width: 10),
-                      const Text('Total Valuasi Transaksi Masuk', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
-                    ]),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.analytics_rounded, color: Colors.white, size: 18)),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Total Valuasi Transaksi Masuk', 
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)), child: const Text('Dasbor Manajer', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
                   ],
                 ),
@@ -368,7 +379,7 @@ class _KomoditasRowModern extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppTheme.border.withOpacity(0.5)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
       child: Row(
         children: [
-          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22)))),
+          Container(width: 48, height: 48, decoration: BoxDecoration(color: AppTheme.hijauSoft, borderRadius: BorderRadius.circular(14)), child: Center(child: Text(AppTheme.getCommodityIcon(namaKomoditas), style: const TextStyle(fontSize: 22)))),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

@@ -37,7 +37,7 @@ dependencies:
   provider: ^6.1.2
   uuid: ^4.5.0
   mongo_dart: ^0.10.8
-  flutter_dotenv: ^6.0.1
+  envied: ^0.5.4
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   path_provider: ^2.1.5
@@ -53,6 +53,7 @@ dependencies:
   camera: ^0.10.5
   google_mlkit_text_recognition: ^0.13.0
   tflite_flutter: ^0.12.1
+  bcrypt: ^1.2.0
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +67,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   hive_generator: ^2.0.1
   build_runner: ^2.4.13
+  envied_generator: ^0.5.4
   flutter_launcher_icons: ^0.14.4
   faker: ^2.2.0
 
@@ -75,7 +77,6 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-      - .env
       - assets/logo.png
       - assets/onboard1.json
       - assets/onboard2.json

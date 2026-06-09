@@ -112,7 +112,7 @@ class _TrenHargaScreenState extends State<TrenHargaScreen> with SingleTickerProv
                                         Container(
                                           padding: const EdgeInsets.all(6),
                                           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.border)),
-                                          child: const Text('🌾', style: TextStyle(fontSize: 14)),
+                                          child: Text(AppTheme.getCommodityIcon(currentItem.namaKomoditas), style: const TextStyle(fontSize: 14)),
                                         ),
                                         const SizedBox(width: 12),
                                         Text('${currentItem.namaKomoditas} - Grade ${currentItem.grade}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.textPrimary)),

@@ -49,6 +49,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.8.2"
+  bcrypt:
+    dependency: "direct main"
+    description:
+      name: bcrypt
+      sha256: "6073a700cbbc59f1d4ab27cd532755e3de5e676c4941f535f351374df849270b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
   boolean_selector:
     dependency: transitive
     description:
@@ -321,6 +329,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.2.4"
+  envied:
+    dependency: "direct main"
+    description:
+      name: envied
+      sha256: bbff9c76120e4dc5e2e36a46690cf0a26feb65e7765633f4e8d916bcd173a450
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.4+1"
+  envied_generator:
+    dependency: "direct dev"
+    description:
+      name: envied_generator
+      sha256: "517b70de08d13dcd40e97b4e5347e216a0b1c75c99e704f3c85c0474a392d14a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.4+1"
+  equatable:
+    dependency: transitive
+    description:
+      name: equatable
+      sha256: "3e0141505477fd8ad55d6eb4e7776d3fe8430be8e497ccb1521370c3f21a3e2b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.8"
   fake_async:
     dependency: transitive
     description:
@@ -398,14 +430,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_dotenv:
-    dependency: "direct main"
-    description:
-      name: flutter_dotenv
-      sha256: d41da11fb497314fbf89811ec30af02d1d898b47980a129f0a8c0a1720460ba2
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.0.1"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:
@@ -1072,6 +1096,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.3"
+  recase:
+    dependency: transitive
+    description:
+      name: recase
+      sha256: e4eb4ec2dcdee52dcf99cb4ceabaffc631d7424ee55e56f280bc039737f89213
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.1.0"
   record_use:
     dependency: transitive
     description:

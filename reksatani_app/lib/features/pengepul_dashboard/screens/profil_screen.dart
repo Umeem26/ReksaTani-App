@@ -40,7 +40,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
             children: [
               const Icon(Icons.cleaning_services_rounded, color: Colors.white, size: 18),
               const SizedBox(width: 10),
-              Expanded(child: Text('$count data tersinkronisasi berhasil dibersihkan.', style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white))),
+              Expanded(child: Text('Merapikan memori! $count riwayat transaksi yang telah tersinkronisasi berhasil dibersihkan.', style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white))),
             ],
           ),
           backgroundColor: AppTheme.hijauTua,
@@ -69,7 +69,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
           ],
         ),
         content: const Text(
-          'Kamu yakin ingin keluar dari akun ini?\nSisa uang jalan dan data tertunda tetap aman di perangkat.',
+          'Apakah Anda yakin ingin keluar dari akun ini?\nSisa uang jalan dan data transaksi yang tertunda akan tetap aman tersimpan di HP Anda.',
           style: TextStyle(fontSize: 14, color: AppTheme.textSecond, height: 1.5),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),

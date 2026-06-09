@@ -54,10 +54,24 @@ class _PasarScreenState extends State<PasarScreen> {
     setState(() {});
   }
 
+  String _getFilterKomoditas() {
+    final c = _controller as dynamic;
+    try { return c.filterKomoditas as String; } catch (_) {}
+    return 'Semua';
+  }
+
+  void _setFilterKomoditas(String k) {
+    final c = _controller as dynamic;
+    try { c.filterKomoditas = k; } catch (_) {}
+    try { c.setFilterKomoditas(k); } catch (_) {}
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = _getDaftarHarga();
     final filterAktif = _getFilter();
+    final filterKomoditasAktif = _getFilterKomoditas();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
@@ -128,6 +142,8 @@ class _PasarScreenState extends State<PasarScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
+                      _buildKomoditasFilterChips(filterKomoditasAktif),
+                      const SizedBox(height: 10),
                       _buildFilterChips(filterAktif),
                       const SizedBox(height: 16),
                       Container(height: 1, color: AppTheme.border.withOpacity(0.5)),
@@ -212,6 +228,44 @@ class _PasarScreenState extends State<PasarScreen> {
     );
   }
 
+  Widget _buildKomoditasFilterChips(String filterKomoditasAktif) {
+    final listKomoditas = ['Semua', 'Gabah', 'Kopi Robusta', 'Sawit'];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: listKomoditas.map((k) {
+          final isSelected = filterKomoditasAktif == k;
+          final emoji = AppTheme.getCommodityIcon(k);
+          final label = k == 'Semua' ? '🌾 Semua Komoditas' : '$emoji $k';
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: InkWell(
+              onTap: () => _setFilterKomoditas(k),
+              borderRadius: BorderRadius.circular(24),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCirc,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppTheme.hijauTua : AppTheme.bgPage,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: isSelected ? AppTheme.hijauTua : AppTheme.border, width: 1.5),
+                  boxShadow: isSelected ? [BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))] : null,
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600, color: isSelected ? Colors.white : AppTheme.textSecond, fontSize: 13),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildEmpty() => Center(
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -236,9 +290,9 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => child;
   @override
-  double get maxExtent => 80.0;
+  double get maxExtent => 130.0;
   @override
-  double get minExtent => 80.0;
+  double get minExtent => 130.0;
   @override
   bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) => true;
 }
@@ -296,7 +350,7 @@ class _HargaCard extends StatelessWidget {
                 Container(
                   width: 56, height: 56,
                   decoration: BoxDecoration(color: AppTheme.bgPage, borderRadius: BorderRadius.circular(16)),
-                  child: const Center(child: Text('🌾', style: TextStyle(fontSize: 26))),
+                  child: Center(child: Text(AppTheme.getCommodityIcon(nama), style: const TextStyle(fontSize: 26))),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
