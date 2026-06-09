@@ -120,6 +120,17 @@ class ConfidenceValidator {
     required String grade,
     String commodity = '',
   }) {
+    if (grade == 'Bukan Komoditas' || commodity == 'Bukan Komoditas' || grade == 'bukan_komoditas' || commodity == 'bukan_komoditas') {
+      return ConfidenceResult(
+        state: ConfidenceState.manualOverride,
+        confidence: 0.0,
+        grade: 'Bukan Komoditas',
+        commodity: 'Bukan Komoditas',
+        retryCount: _retryCount,
+        maxRetry: maxRetry,
+        thresholdUsed: defaultThreshold,
+      );
+    }
     final threshold = getThresholdForGrade(grade);
 
     // ─── CASE 1: Confidence memenuhi threshold → ACCEPTED ───

@@ -76,7 +76,6 @@ class PcdController {
       final hasilGrading = await _gradingMlService.inferGrade(fileBarang);
       return hasilGrading['grade'] as String;
     } catch (e) {
-      // Fallback grade default jika terjadi error
       return 'A'; 
     }
   }
@@ -88,10 +87,16 @@ class PcdController {
     try {
       final fileBarang = File(imagePath);
       final hasilGrading = await _gradingMlService.inferGrade(fileBarang);
+      // Pastikan kedua key (commodity dan komoditas) ada
+      if (hasilGrading.containsKey('komoditas') && !hasilGrading.containsKey('commodity')) {
+        hasilGrading['commodity'] = hasilGrading['komoditas'];
+      }
       return hasilGrading;
     } catch (e) {
       // Fallback: kembalikan grade A dengan confidence rendah agar sweeper aktif
       return {
+        'commodity': 'Bukan Komoditas',
+        'komoditas': 'Bukan Komoditas',
         'grade': 'A',
         'confidence': 0.0,
         'scores': {'A': 0.0, 'B': 0.0, 'C': 0.0},
