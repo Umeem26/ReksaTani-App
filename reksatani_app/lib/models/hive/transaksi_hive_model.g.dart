@@ -37,7 +37,7 @@ class TransaksiHiveModelAdapter extends TypeAdapter<TransaksiHiveModel> {
       createdAt: fields[17] as DateTime,
       waktuDisinkron: fields[18] as DateTime?,
       skorKeyakinan: fields[19] as double?,
-      isManualGrading: fields[20] as bool,
+      isManualGrading: (fields[20] as bool?) ?? false,
     );
   }
 

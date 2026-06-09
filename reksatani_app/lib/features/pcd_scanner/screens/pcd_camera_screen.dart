@@ -11,6 +11,7 @@ import '../services/confidence_validator.dart'; // 👈 Modul 10
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
+import 'corner_adjuster_screen.dart';
 
 class PcdCameraScreen extends StatefulWidget {
   final String? initialFotoNota;
@@ -56,6 +57,11 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   // ─── KONTROL PERANGKAT HARDWARE ───
   bool _isFlashOn = false;
   bool _isBackCamera = true;
+
+  // ─── TEMPORAL FILTERS FOR NOTE SCANNER ───
+  int _stableFrameCount = 0;
+  List<Offset>? _lastStableCorners;
+  bool _isGalleryPick = false;
 
   @override
   void initState() {
@@ -197,6 +203,9 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
             int threshold = (minVal + maxVal) ~/ 2 + 10;
             if (threshold < 70) threshold = 70;
 
+            final int contrast = maxVal - minVal;
+            final bool isDocumentPresent = contrast > 60 && maxVal > 150;
+
             final densities = List.generate(gridR, (_) => List.filled(gridC, 0));
             for (int gy = 0; gy < gridR; gy++) {
               for (int gx = 0; gx < gridC; gx++) {
@@ -255,14 +264,14 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               }
             }
 
-            if (largestComp.length >= 25) {
+            if (isDocumentPresent && largestComp.length >= 25) {
               int minSumIdx = 0, maxSumIdx = 0, maxDiffIdx = 0, minDiffIdx = 0;
               double minSum = 9999, maxSum = -9999, maxDiff = -9999, minDiff = 9999;
 
               for (int i = 0; i < largestComp.length; i++) {
                 final cell = largestComp[i];
-                double gx = cell[1] / gridC;
-                double gy = cell[0] / gridR;
+                double gx = cell[1] / (gridC - 1);
+                double gy = cell[0] / (gridR - 1);
                 double sum = gx + gy;
                 double diff = gx - gy;
 
@@ -278,22 +287,33 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               final blCell = largestComp[minDiffIdx];
 
               Offset cellToScreenOffset(List<int> cell) {
-                double nx = 1.0 - (cell[0] / gridR);
-                double ny = cell[1] / gridC;
+                double nx = 1.0 - (cell[0] / (gridR - 1));
+                double ny = cell[1] / (gridC - 1);
                 return Offset(nx, ny);
               }
 
-              newCorners = [
+              final tempCorners = [
                 cellToScreenOffset(tlCell),
                 cellToScreenOffset(trCell),
                 cellToScreenOffset(brCell),
                 cellToScreenOffset(blCell),
               ];
+
+              _stableFrameCount++;
+              if (_stableFrameCount >= 3) {
+                newCorners = tempCorners;
+                _lastStableCorners = tempCorners;
+              } else {
+                newCorners = _lastStableCorners;
+              }
+
               detectedObj = "Terdeteksi: Lembar Kertas/Nota";
               if (luma >= 60 && luma <= 210) {
                 lightColor = AppTheme.hijauMuda;
               }
             } else {
+              _stableFrameCount = 0;
+              _lastStableCorners = null;
               if (luma >= 60 && luma <= 210) {
                 detectedObj = "Sejajarkan nota di area kamera";
                 lightColor = Colors.white;
@@ -387,8 +407,8 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               int padY2 = (maxY < gridR - 1) ? maxY + 1 : gridR - 1;
 
               Offset cellToScreenOffset(int gx, int gy) {
-                double nx = 1.0 - (gy / gridR);
-                double ny = gx / gridC;
+                double nx = 1.0 - (gy / (gridR - 1));
+                double ny = gx / (gridC - 1);
                 return Offset(nx, ny);
               }
 
@@ -417,13 +437,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
 
               if (_tfliteConfidence > 0.15 && _tfliteLabel != "Mencari objek...") {
                 lightColor = AppTheme.hijauMuda;
+                detectedObj = "Terdeteksi: $_tfliteLabel";
               } else {
                 lightColor = Colors.white;
+                detectedObj = "Mencari Komoditas...";
               }
             } else {
               lightColor = Colors.white;
               _tfliteConfidence = 0.0;
               _tfliteLabel = "Mencari objek...";
+              detectedObj = "Arahkan kamera ke Komoditas";
             }
           }
 
@@ -487,16 +510,37 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       final File adjustedPhoto = await _brightnessService.adjustBrightness(File(photo.path));
 
       setState(() {
-        if (_step == 0) {
-          _fotoNotaPath = adjustedPhoto.path;
-          _detectedNotaCorners = finalCorners;
-          _showLiveCamera = false; 
-        } else if (_step == 1) {
-          _fotoBarangPath = adjustedPhoto.path;
-          _step = 2; 
-          _processAiAndNavigate();
-        }
+        _isGalleryPick = false;
       });
+
+      if (_step == 0) {
+        if (!mounted) return;
+        final adjustedCorners = await Navigator.push<List<Offset>>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CornerAdjusterScreen(
+              imagePath: adjustedPhoto.path,
+              initialCorners: finalCorners,
+            ),
+          ),
+        );
+
+        if (adjustedCorners != null) {
+          setState(() {
+            _fotoNotaPath = adjustedPhoto.path;
+            _detectedNotaCorners = adjustedCorners;
+            _showLiveCamera = false;
+          });
+        } else {
+          _startLiveStream();
+        }
+      } else if (_step == 1) {
+        setState(() {
+          _fotoBarangPath = adjustedPhoto.path;
+          _step = 2;
+          _processAiAndNavigate();
+        });
+      }
     } catch (e) {
       debugPrint("Error mengambil gambar: $e");
     }
@@ -514,16 +558,40 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         final File savedImage = await File(image.path).copy('${appDir.path}/$fileName');
 
         setState(() {
-          if (_step == 0) {
-            _fotoNotaPath = savedImage.path;
-            _detectedNotaCorners = null;
-            _showLiveCamera = false;
-          } else if (_step == 1) {
+          _isGalleryPick = true;
+        });
+
+        if (_step == 0) {
+          if (!mounted) return;
+          final adjustedCorners = await Navigator.push<List<Offset>>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CornerAdjusterScreen(
+                imagePath: savedImage.path,
+                initialCorners: null,
+              ),
+            ),
+          );
+
+          if (adjustedCorners != null) {
+            setState(() {
+              _fotoNotaPath = savedImage.path;
+              _detectedNotaCorners = adjustedCorners;
+              _showLiveCamera = false;
+            });
+          } else {
+            setState(() {
+              _showLiveCamera = true;
+            });
+            _startLiveStream();
+          }
+        } else if (_step == 1) {
+          setState(() {
             _fotoBarangPath = savedImage.path;
             _step = 2;
             _processAiAndNavigate();
-          }
-        });
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error mengambil gambar dari galeri: $e");
@@ -575,28 +643,52 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     final tebakanGrade = hasilGrading['grade'] as String;
     final tebakanCommodity = hasilGrading['commodity'] as String? ?? '';
     double confidence = (hasilGrading['confidence'] as num?)?.toDouble() ?? 0.0;
+    if (!mounted) return;
 
-    // Jika tidak ada objek komoditas terdeteksi pada preview terakhir, keyakinan di-set ke 0%
-    if (_detectedCorners == null) {
+    if (!_isGalleryPick && _detectedCorners == null) {
       confidence = 0.0;
     }
 
     if (mounted) Navigator.pop(context); // Tutup dialog loading
 
+    // Jika tidak dikenali sebagai komoditas pertanian, kita tidak memblokir secara keras.
+    // Sebaliknya kita ubah tebakan komoditas ke 'kelapa_sawit' dengan keyakinan 5% (0.05)
+    // agar memicu Confidence Sweeper Bottom Sheet sehingga user bisa lanjut secara manual.
+    String finalCommodity = tebakanCommodity;
+    String finalGrade = tebakanGrade;
+    double finalConfidence = confidence;
+
+    if (tebakanCommodity == 'Bukan Komoditas' || tebakanGrade == 'Bukan Komoditas') {
+      finalCommodity = 'kelapa_sawit';
+      finalGrade = 'A';
+      finalConfidence = 0.05;
+    }
+
     // ─── MODUL 10: Validasi Confidence Sweeper ───
     final confidenceResult = _pcdController.confidenceValidator.validate(
-      confidence: confidence,
-      grade: tebakanGrade,
-      commodity: tebakanCommodity,
+      confidence: finalConfidence,
+      grade: finalGrade,
+      commodity: finalCommodity,
     );
 
-    if (mounted) {
-      _showConfidenceSweeperSheet(
-        confidenceResult: confidenceResult,
+    if (confidenceResult.state == ConfidenceState.accepted) {
+      _pcdController.confidenceValidator.reset();
+      _navigateKeTransaksi(
         finalNotaPath: finalNotaPath,
         finalBarangPath: finalBarangPath,
+        tebakanGrade: finalGrade,
         dataHasilOcr: dataHasilOcr,
+        tebakanKomoditas: finalCommodity,
       );
+    } else {
+      if (mounted) {
+        _showConfidenceSweeperSheet(
+          confidenceResult: confidenceResult,
+          finalNotaPath: finalNotaPath,
+          finalBarangPath: finalBarangPath,
+          dataHasilOcr: dataHasilOcr,
+        );
+      }
     }
   }
 
@@ -1216,21 +1308,21 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     final int chromadiff = (u - 128).abs() + (v - 128).abs();
     
     // 1. Sawit/Gabah (warna merah/oranye/kuning hangat yang jenuh)
-    if (v > 138 && u < 110) return true;
+    if (v > 132 && u < 115) return true;
 
     // 2. Kopi Robusta (kadar kecerahan rendah dengan warna jenuh cokelat/hijau zaitun)
-    if (y < 80 && chromadiff > 16) return true;
+    if (y < 95 && chromadiff > 12) return true;
 
     // 3. Warna sangat jenuh secara umum (jauh dari abu-abu/netral)
-    if (chromadiff > 24) return true;
+    if (chromadiff > 16) return true;
 
     return false;
   }
 
   String _formatCommodityName(String raw) {
     if (raw == 'gabah') return "Gabah Padi (GKP/GKG)";
-    if (raw == 'kopi robusta') return "Kopi Robusta (Biji Kopi)";
-    if (raw == 'sawit') return "Kelapa Sawit (TBS)";
+    if (raw == 'kopi' || raw == 'kopi robusta') return "Kopi Robusta (Biji Kopi)";
+    if (raw == 'kelapa_sawit' || raw == 'sawit') return "Kelapa Sawit (TBS)";
     return raw;
   }
 }

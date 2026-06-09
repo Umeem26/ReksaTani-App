@@ -53,7 +53,7 @@ void main() {
       const text = "Nota ReksaTani\nNama: Budi Santoso\nDesa: Sukamaju\nKopi Robusta\n120,5 kg @ Rp 8.500";
       final result = service.parseText(text);
 
-      expect(result['berat'], '120');
+      expect(result['berat'], '120.5');
       expect(result['harga'], '8500');
       expect(result['nama'], 'Budi Santoso');
       expect(result['desa'], 'Sukamaju');

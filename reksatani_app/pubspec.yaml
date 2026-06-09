@@ -82,7 +82,10 @@ flutter:
       - assets/onboard2.json
       - assets/onboard3.json
       - assets/onboard4.json
-      - assets/models/grading_model.tflite
+      - assets/models/router_model.tflite
+      - assets/models/gabah_grader.tflite
+      - assets/models/kelapa_sawit_grader.tflite
+      - assets/models/kopi_grader.tflite
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

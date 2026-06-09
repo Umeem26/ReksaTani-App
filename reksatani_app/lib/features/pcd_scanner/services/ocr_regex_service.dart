@@ -21,6 +21,53 @@ class OcrRegexService {
     }
   }
 
+  String cleanTextValue(String value) {
+    // Hentikan jika ada spasi berturut-turut (2 atau lebih) atau tab yang mengindikasikan kolom baru
+    final multiSpaceIndex = value.indexOf(RegExp(r'\s{2,}|\t'));
+    if (multiSpaceIndex != -1) {
+      value = value.substring(0, multiSpaceIndex);
+    }
+    
+    // Pecah per spasi dan saring keyword pengganggu
+    final keywords = {
+      'berat', 'netto', 'net', 'total', 'qty', 'harga', 'rp', 'tgl', 'tanggal',
+      'no', 'telepon', 'hp', 'alamat', 'desa', 'komoditas', 'pcd', 'grade',
+      'kg', 'satuan', 'pcs', 'unit', 'jumlah', 'brt', 'timbangan', 'mitra'
+    };
+    
+    final words = value.split(RegExp(r'\s+'));
+    final cleanWords = <String>[];
+    for (final word in words) {
+      final cleanWord = word.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+      if (keywords.contains(cleanWord)) {
+        break; // Berhenti jika mendeteksi kata kunci kolom lain
+      }
+      cleanWords.add(word);
+    }
+    return cleanWords.join(' ').trim();
+  }
+
+  String formatNumber(double val) {
+    if (val == val.roundToDouble()) {
+      return val.round().toString();
+    } else {
+      return val.toStringAsFixed(1);
+    }
+  }
+
+  double? parseDoubleValue(String rawVal) {
+    String cleanVal = rawVal.trim();
+    if (cleanVal.contains('.') || cleanVal.contains(',')) {
+      final parts = cleanVal.split(RegExp(r'[\.,]'));
+      if (parts.length == 2 && parts[1].length != 3) {
+        cleanVal = '${parts[0]}.${parts[1]}';
+      } else {
+        cleanVal = parts.join('');
+      }
+    }
+    return double.tryParse(cleanVal);
+  }
+
   Map<String, String> parseText(String text) {
     String beratTebakan = '';
     String hargaTebakan = '';
@@ -42,50 +89,39 @@ class OcrRegexService {
 
     // 2. Deteksi Nama Penjual
     final RegExp namaRegex = RegExp(
-      r'(?:nama|petani|penjual|kepada|mitra|customer|client|ybs)\s*[:=\-]*\s*([a-zA-Z \t\.\,]{3,30})',
+      r'(?:nama|petani|penjual|kepada|mitra|customer|client|ybs)\s*[:=\-]*\s*([a-zA-Z \t\.\,]{3,50})',
       caseSensitive: false,
     );
     final matchNama = namaRegex.firstMatch(text);
     if (matchNama != null) {
-      final val = matchNama.group(1)?.trim() ?? '';
-      if (val.isNotEmpty && !RegExp(r'^(rp|no|tgl|tanggal|alamat|telepon|hp|netto|berat)$', caseSensitive: false).hasMatch(val)) {
+      final rawVal = matchNama.group(1) ?? '';
+      final val = cleanTextValue(rawVal);
+      if (val.length >= 3 && !RegExp(r'^(rp|no|tgl|tanggal|alamat|telepon|hp|netto|berat)$', caseSensitive: false).hasMatch(val)) {
         namaTebakan = val;
       }
     }
 
     // 3. Deteksi Desa / Alamat
     final RegExp desaRegex = RegExp(
-      r'(?:desa|alamat|asal|wilayah|lokasi|tempat)\s*[:=\-]*\s*([a-zA-Z \t\.\,]{3,20})',
+      r'(?:desa|alamat|asal|wilayah|lokasi|tempat)\s*[:=\-]*\s*([a-zA-Z \t\.\,]{3,50})',
       caseSensitive: false,
     );
     final matchDesa = desaRegex.firstMatch(text);
     if (matchDesa != null) {
-      final val = matchDesa.group(1)?.trim() ?? '';
-      if (val.isNotEmpty && !RegExp(r'^(rp|no|tgl|tanggal)$', caseSensitive: false).hasMatch(val)) {
+      final rawVal = matchDesa.group(1) ?? '';
+      final val = cleanTextValue(rawVal);
+      if (val.length >= 3 && !RegExp(r'^(rp|no|tgl|tanggal)$', caseSensitive: false).hasMatch(val)) {
         desaTebakan = val;
       }
     }
 
     // 4. Deteksi Angka (Berat, Harga) secara semantik
-    final List<int> numbers = [];
+    final List<double> numbers = [];
     for (final line in lines) {
       final matches = RegExp(r'\d+(?:[\.,]\d+)?').allMatches(line);
       for (final match in matches) {
         final rawNum = match.group(0)!;
-        String cleanNum;
-        if (rawNum.contains('.') || rawNum.contains(',')) {
-          final parts = rawNum.split(RegExp(r'[\.,]'));
-          if (parts.length == 2 && parts[1].length != 3) {
-            // Desimal (misal 120.5 atau 120,50) -> ambil bagian bulat saja
-            cleanNum = parts[0];
-          } else {
-            // Ribuan (misal 8.500 atau 1.200) -> gabung
-            cleanNum = parts.join('');
-          }
-        } else {
-          cleanNum = rawNum;
-        }
-        final val = int.tryParse(cleanNum);
+        final val = parseDoubleValue(rawNum);
         if (val != null && val > 0) {
           numbers.add(val);
         }
@@ -93,10 +129,10 @@ class OcrRegexService {
     }
 
     // --- MATHEMATICAL SOLVER ---
-    int? solvedWeight;
-    int? solvedPrice;
+    double? solvedWeight;
+    double? solvedPrice;
 
-    // Coba exact match dulu: w * p == t
+    // Coba exact match dulu: w * p == t (toleransi pembulatan float < 0.1)
     for (int i = 0; i < numbers.length; i++) {
       for (int j = 0; j < numbers.length; j++) {
         if (i == j) continue;
@@ -107,7 +143,7 @@ class OcrRegexService {
           final t = numbers[k];
 
           if (w >= 10 && w <= 4000 && p >= 1000 && p <= 200000) {
-            if (w * p == t) {
+            if ((w * p - t).abs() < 0.1) {
               solvedWeight = w;
               solvedPrice = p;
               break;
@@ -147,8 +183,8 @@ class OcrRegexService {
     }
 
     if (solvedWeight != null && solvedPrice != null) {
-      beratTebakan = solvedWeight.toString();
-      hargaTebakan = solvedPrice.toString();
+      beratTebakan = formatNumber(solvedWeight);
+      hargaTebakan = solvedPrice.round().toString();
     }
 
     // Pendekatan Regex khusus untuk Berat
@@ -160,18 +196,9 @@ class OcrRegexService {
       final matchBerat = beratRegex.firstMatch(fullTextLower);
       if (matchBerat != null) {
         final rawVal = matchBerat.group(1) ?? '';
-        String cleanVal = rawVal;
-        if (rawVal.contains('.') || rawVal.contains(',')) {
-          final parts = rawVal.split(RegExp(r'[\.,]'));
-          if (parts.length == 2 && parts[1].length != 3) {
-            cleanVal = parts[0];
-          } else {
-            cleanVal = parts.join('');
-          }
-        }
-        final doubleVal = double.tryParse(cleanVal) ?? 0.0;
-        if (doubleVal > 0) {
-          beratTebakan = doubleVal.round().toString();
+        final val = parseDoubleValue(rawVal);
+        if (val != null && val > 0) {
+          beratTebakan = formatNumber(val);
         }
       }
     }
@@ -185,18 +212,9 @@ class OcrRegexService {
       final matchSuffix = beratSuffixRegex.firstMatch(fullTextLower);
       if (matchSuffix != null) {
         final rawVal = matchSuffix.group(1) ?? '';
-        String cleanVal = rawVal;
-        if (rawVal.contains('.') || rawVal.contains(',')) {
-          final parts = rawVal.split(RegExp(r'[\.,]'));
-          if (parts.length == 2 && parts[1].length != 3) {
-            cleanVal = parts[0];
-          } else {
-            cleanVal = parts.join('');
-          }
-        }
-        final doubleVal = double.tryParse(cleanVal) ?? 0.0;
-        if (doubleVal > 0) {
-          beratTebakan = doubleVal.round().toString();
+        final val = parseDoubleValue(rawVal);
+        if (val != null && val > 0) {
+          beratTebakan = formatNumber(val);
         }
       }
     }
@@ -210,18 +228,9 @@ class OcrRegexService {
       final matchHarga = hargaRegex.firstMatch(fullTextLower);
       if (matchHarga != null) {
         final rawVal = matchHarga.group(1) ?? '';
-        String cleanVal = rawVal;
-        if (rawVal.contains('.') || rawVal.contains(',')) {
-          final parts = rawVal.split(RegExp(r'[\.,]'));
-          if (parts.length == 2 && parts[1].length != 3) {
-            cleanVal = parts[0];
-          } else {
-            cleanVal = parts.join('');
-          }
-        }
-        final val = int.tryParse(cleanVal) ?? 0;
-        if (val >= 1000 && val <= 200000) {
-          hargaTebakan = val.toString();
+        final val = parseDoubleValue(rawVal);
+        if (val != null && val >= 1000 && val <= 200000) {
+          hargaTebakan = val.round().toString();
         }
       }
     }
@@ -235,18 +244,9 @@ class OcrRegexService {
       final matchSuffix = hargaSuffixRegex.firstMatch(fullTextLower);
       if (matchSuffix != null) {
         final rawVal = matchSuffix.group(1) ?? '';
-        String cleanVal = rawVal;
-        if (rawVal.contains('.') || rawVal.contains(',')) {
-          final parts = rawVal.split(RegExp(r'[\.,]'));
-          if (parts.length == 2 && parts[1].length != 3) {
-            cleanVal = parts[0];
-          } else {
-            cleanVal = parts.join('');
-          }
-        }
-        final val = int.tryParse(cleanVal) ?? 0;
-        if (val >= 1000 && val <= 200000) {
-          hargaTebakan = val.toString();
+        final val = parseDoubleValue(rawVal);
+        if (val != null && val >= 1000 && val <= 200000) {
+          hargaTebakan = val.round().toString();
         }
       }
     }
@@ -255,8 +255,8 @@ class OcrRegexService {
     if (beratTebakan.isEmpty || hargaTebakan.isEmpty) {
       final uniqueNumbers = numbers.toSet().toList()..sort();
       if (uniqueNumbers.isNotEmpty) {
-        int? detectedHarga;
-        int? detectedBerat;
+        double? detectedHarga;
+        double? detectedBerat;
 
         if (hargaTebakan.isEmpty) {
           for (final num in uniqueNumbers) {
@@ -277,10 +277,10 @@ class OcrRegexService {
             }
           }
         } else {
-          detectedHarga = int.tryParse(hargaTebakan);
+          detectedHarga = double.tryParse(hargaTebakan);
         }
         if (beratTebakan.isEmpty) {
-          final List<int> beratCandidates = uniqueNumbers.where((n) {
+          final List<double> beratCandidates = uniqueNumbers.where((n) {
             if (n == detectedHarga) return false;
             return n >= 10 && n <= 4000;
           }).toList();
@@ -301,10 +301,10 @@ class OcrRegexService {
         }
 
         if (hargaTebakan.isEmpty && detectedHarga != null) {
-          hargaTebakan = detectedHarga.toString();
+          hargaTebakan = detectedHarga.round().toString();
         }
         if (beratTebakan.isEmpty && detectedBerat != null) {
-          beratTebakan = detectedBerat.toString();
+          beratTebakan = formatNumber(detectedBerat);
         }
       }
     }
