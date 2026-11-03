@@ -70,7 +70,8 @@ class GradingMlService {
     try {
       final bytes = await imageFile.readAsBytes();
       
-      // Preprocessing Citra (Resize ke 224x224 dan Normalisasi 1./255)
+      // Preprocessing citra: resize ke 224x224, float RGB [0,255].
+      // Model sudah memiliki layer Rescaling(1/255) di dalam graph, jadi JANGAN dibagi 255 lagi.
       final prepResult = await _preprocessImage(bytes);
       final inputTensor = prepResult.tensor;
 
@@ -84,8 +85,11 @@ class GradingMlService {
       final routerInterpreter = await _loadModel(routerModelPath);
       var routerOutput = List<double>.filled(4, 0.0).reshape([1, 4]); // 4 Kelas Router
       
-      routerInterpreter.run(inputTensor, routerOutput);
+      routerInterpreter.run(inputTensor.buffer, routerOutput);
       List<double> routerScores = List<double>.from(routerOutput[0]);
+      if (kDebugMode) {
+        debugPrint('[ROUTER] ${_formatScores(routerScores)} fg=${prepResult.foregroundRatio.toStringAsFixed(3)}');
+      }
 
       // Cari tebakan komoditas dengan confidence tertinggi
       int routerMaxIdx = 0;
@@ -147,7 +151,7 @@ class GradingMlService {
       final graderInterpreter = await _loadModel(graderPath);
       var graderOutput = List<double>.filled(3, 0.0).reshape([1, 3]); // 3 Kelas (A/B/C)
 
-      graderInterpreter.run(inputTensor, graderOutput);
+      graderInterpreter.run(inputTensor.buffer, graderOutput);
       List<double> graderScores = List<double>.from(graderOutput[0]);
 
       // Cari grade (A/B/C) dengan confidence tertinggi
@@ -180,7 +184,7 @@ class GradingMlService {
   }
 
   /// Memproses klasifikasi komoditas secara real-time langsung dari camera image stream.
-  Future<Map<String, dynamic>> inferFromTensor(dynamic inputTensor) async {
+  Future<Map<String, dynamic>> inferFromTensor(Float32List inputTensor) async {
     if (_isTestMode) {
       return _simulateInference(inputTensor);
     }
@@ -189,7 +193,7 @@ class GradingMlService {
       // TAHAP 1: JALANKAN ROUTER MODEL
       final routerInterpreter = await _loadModel(routerModelPath);
       var routerOutput = List<double>.filled(4, 0.0).reshape([1, 4]);
-      routerInterpreter.run(inputTensor, routerOutput);
+      routerInterpreter.run(inputTensor.buffer, routerOutput);
       List<double> routerScores = List<double>.from(routerOutput[0]);
       
       int routerMaxIdx = 1; // Mulai dari indeks 1 (gabah)
@@ -222,7 +226,7 @@ class GradingMlService {
       
       final graderInterpreter = await _loadModel(graderPath);
       var graderOutput = List<double>.filled(3, 0.0).reshape([1, 3]);
-      graderInterpreter.run(inputTensor, graderOutput);
+      graderInterpreter.run(inputTensor.buffer, graderOutput);
       List<double> graderScores = List<double>.from(graderOutput[0]);
       
       int gradeMaxIdx = 0;
@@ -257,7 +261,8 @@ class GradingMlService {
     }
   }
 
-  /// Mengonversi format CameraImage (YUV420/BGRA) ke tensor format 224x224 RGB ternormalisasi secara efisien.
+  /// Mengonversi format CameraImage (YUV420/BGRA) ke tensor 224x224 float RGB [0,255] (NHWC, flat).
+  /// Saat menjalankan model, kirim `tensor.buffer` (ByteBuffer) agar shape input [1,224,224,3] tidak di-resize.
   Float32List convertCameraImageToTensor(CameraImage image) {
     final int width = image.width;
     final int height = image.height;
@@ -311,9 +316,9 @@ class GradingMlService {
           }
 
           // Konversi YUV ke RGB
-          final double r = (yVal + 1.402 * (vVal - 128)).clamp(0, 255) / 255.0;
-          final double g = (yVal - 0.344136 * (uVal - 128) - 0.714136 * (vVal - 128)).clamp(0, 255) / 255.0;
-          final double b = (yVal + 1.772 * (uVal - 128)).clamp(0, 255) / 255.0;
+          final double r = (yVal + 1.402 * (vVal - 128)).clamp(0, 255).toDouble();
+          final double g = (yVal - 0.344136 * (uVal - 128) - 0.714136 * (vVal - 128)).clamp(0, 255).toDouble();
+          final double b = (yVal + 1.772 * (uVal - 128)).clamp(0, 255).toDouble();
 
           buffer[bufferIdx++] = r;
           buffer[bufferIdx++] = g;
@@ -341,9 +346,9 @@ class GradingMlService {
 
           final int index = sy * rowStride + sx * pixelStride;
           if (index + 2 < bytes.length) {
-            buffer[bufferIdx++] = bytes[index + 2] / 255.0;
-            buffer[bufferIdx++] = bytes[index + 1] / 255.0;
-            buffer[bufferIdx++] = bytes[index] / 255.0;
+            buffer[bufferIdx++] = bytes[index + 2].toDouble();
+            buffer[bufferIdx++] = bytes[index + 1].toDouble();
+            buffer[bufferIdx++] = bytes[index].toDouble();
           } else {
             buffer[bufferIdx++] = 0.0;
             buffer[bufferIdx++] = 0.0;
@@ -353,6 +358,14 @@ class GradingMlService {
       }
       return buffer;
     }
+  }
+
+  String _formatScores(List<double> scores) {
+    final parts = <String>[];
+    for (int i = 0; i < scores.length && i < routerClasses.length; i++) {
+      parts.add('${routerClasses[i]}=${scores[i].toStringAsFixed(4)}');
+    }
+    return parts.join(' ');
   }
 
   /// Membersihkan memori semua interpreter saat service tidak lagi digunakan.
@@ -392,9 +405,9 @@ class GradingMlService {
     for (int y = 0; y < actualHeight; y++) {
       for (int x = 0; x < actualWidth; x++) {
         final int offset = (y * actualWidth + x) * 4;
-        final double r = rgbaBytes[offset] / 255.0;
-        final double g = rgbaBytes[offset + 1] / 255.0;
-        final double b = rgbaBytes[offset + 2] / 255.0;
+        final double r = rgbaBytes[offset].toDouble();
+        final double g = rgbaBytes[offset + 1].toDouble();
+        final double b = rgbaBytes[offset + 2].toDouble();
         
         buffer[bufferIdx++] = r;
         buffer[bufferIdx++] = g;
@@ -427,9 +440,9 @@ class GradingMlService {
       for (int x = 0; x < 224; x++) {
         if (iterator.moveNext()) {
           final pixel = iterator.current;
-          final double r = pixel.r / 255.0;
-          final double g = pixel.g / 255.0;
-          final double b = pixel.b / 255.0;
+          final double r = pixel.r.toDouble();
+          final double g = pixel.g.toDouble();
+          final double b = pixel.b.toDouble();
 
           buffer[bufferIdx++] = r;
           buffer[bufferIdx++] = g;
