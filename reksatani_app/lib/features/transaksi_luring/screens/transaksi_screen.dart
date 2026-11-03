@@ -6,13 +6,16 @@ import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/komoditas_hive_model.dart';
 import '../controllers/transaksi_controller.dart';
 import '../../../shared/widgets/app_theme.dart';
-import '../../pcd_scanner/screens/pcd_camera_screen.dart'; 
+import '../../pcd_scanner/screens/pcd_camera_screen.dart';
+import '../../pcd_scanner/services/commodity_mapper.dart'; 
 
 class TransaksiScreen extends StatefulWidget {
   final TransaksiHiveModel? editTrx;
   final String? fotoNotaPath;
   final String? fotoBarangPath;
+  /// Grade saran AI. Hanya diisi bila hasil pemindaian DITERIMA; null = user wajib memilih.
   final String? gradeTebakanPcd;
+  final double? confidencePcd;
   final String? initialBeratOcr; 
   final String? initialHargaOcr; 
   final String? initialNamaPenjualOcr; 
@@ -27,6 +30,7 @@ class TransaksiScreen extends StatefulWidget {
     this.fotoNotaPath,
     this.fotoBarangPath,
     this.gradeTebakanPcd,
+    this.confidencePcd,
     this.initialBeratOcr, 
     this.initialHargaOcr, 
     this.initialNamaPenjualOcr,
@@ -56,6 +60,13 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   String? _fotoNotaPath;
   String? _fotoBarangPath;
   bool _saving = false;
+  /// Komoditas master data yang cocok dengan label AI (bukan fallback OCR).
+  KomoditasHiveModel? _komoditasDariAi;
+
+  /// Hanya angka dengan satu pemisah desimal (titik atau koma).
+  static final _desimalFormatter = TextInputFormatter.withFunction(
+    (oldValue, newValue) => RegExp(r'^\d*[.,]?\d*$').hasMatch(newValue.text) ? newValue : oldValue,
+  );
 
   List<PetaniHiveModel> get _daftarPetani => _controller.daftarPetani;
   List<KomoditasHiveModel> get _daftarKomoditas => _controller.daftarKomoditas;
@@ -64,6 +75,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   double get _totalBayar => _controller.getTotalBayar(_beratCtrl.text, _hargaCtrl.text);
   bool get _hargaMelebihi => _controller.isHargaMelebihi(_komoditasTerpilih, _gradeTerpilih, _hargaCtrl.text);
   bool get _isEditMode => widget.editTrx != null;
+  bool get _pcdDiterima =>
+      (widget.gradeTebakanPcd?.isNotEmpty ?? false) && (widget.initialKomoditasPcd?.isNotEmpty ?? false);
 
   @override
   void initState() {
@@ -71,7 +84,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     final trx = widget.editTrx;
     if (trx != null) {
       _namaPenjualCtrl.text = trx.namaPetani;
-      _beratCtrl.text = trx.berat.toInt().toString();
+      _beratCtrl.text = trx.berat == trx.berat.roundToDouble() ? trx.berat.toInt().toString() : trx.berat.toString();
       _hargaCtrl.text = trx.hargaBeliSatuan.toInt().toString();
       try {
         _petaniTerpilih = _controller.daftarPetani.firstWhere((p) => p.id == trx.petaniId);
@@ -81,10 +94,6 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         _komoditasTerpilih = _controller.daftarKomoditas.firstWhere((k) => k.namaKomoditas == trx.namaKomoditas);
       } catch (_) {}
       _gradeTerpilih = trx.gradeTerpilih;
-    } else {
-      if (widget.gradeTebakanPcd != null) {
-        _gradeTerpilih = widget.gradeTebakanPcd;
-      }
     }
 
     if (widget.initialBeratOcr != null && widget.initialBeratOcr!.isNotEmpty) {
@@ -146,18 +155,19 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         _desaCtrl.text = widget.initialDesaOcr!;
       }
     }
-    // Pilih komoditas berdasarkan hasil deteksi PCD / ML model
-    if (widget.initialKomoditasPcd != null && widget.initialKomoditasPcd!.isNotEmpty) {
-      try {
-        _komoditasTerpilih = _controller.daftarKomoditas.firstWhere((k) =>
-            k.namaKomoditas.toLowerCase().trim() == widget.initialKomoditasPcd!.toLowerCase().trim());
-      } catch (_) {}
-    } else if (widget.initialKomoditasOcr != null && widget.initialKomoditasOcr!.isNotEmpty) {
-      try {
-        _komoditasTerpilih = _controller.daftarKomoditas.firstWhere((k) =>
-            k.namaKomoditas.toLowerCase().contains(widget.initialKomoditasOcr!.toLowerCase()) ||
-            widget.initialKomoditasOcr!.toLowerCase().contains(k.namaKomoditas.toLowerCase()));
-      } catch (_) {}
+    // Prefill komoditas & grade HANYA bila hasil AI diterima (initialKomoditasPcd + gradeTebakanPcd terisi).
+    // Label ML (gabah/kelapa_sawit/kopi) dipetakan ke master data dengan contains-match;
+    // bila tidak ada yang cocok, pakai komoditas OCR (tanpa grade AI, karena komoditasnya berbeda).
+    if (!_isEditMode && !widget.isMurniKasbon && _pcdDiterima) {
+      _komoditasDariAi = CommodityMapper.match<KomoditasHiveModel>(
+          _controller.daftarKomoditas, (k) => k.namaKomoditas, widget.initialKomoditasPcd);
+      if (_komoditasDariAi != null) {
+        _komoditasTerpilih = _komoditasDariAi;
+        _gradeTerpilih = widget.gradeTebakanPcd;
+      } else {
+        _komoditasTerpilih = CommodityMapper.match<KomoditasHiveModel>(
+            _controller.daftarKomoditas, (k) => k.namaKomoditas, widget.initialKomoditasOcr);
+      }
     }
       
     _fotoNotaPath = widget.fotoNotaPath;
@@ -332,7 +342,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.all(20),
             children: [
-              if (!_isEditMode && !widget.isMurniKasbon) _BannerPcd(gradeTebakan: widget.gradeTebakanPcd),
+              if (!_isEditMode && !widget.isMurniKasbon) _BannerPcd(gradeTebakan: _pcdDiterima ? widget.gradeTebakanPcd : null, confidence: widget.confidencePcd),
               if (!_isEditMode && !widget.isMurniKasbon) const SizedBox(height: 20),
               
               // ── BENTO SECTION: PETANI ──
@@ -416,7 +426,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                       validator: (_) => _komoditasTerpilih == null ? 'Silakan pilih komoditas' : null,
                       onChanged: (k) => setState(() {
                         _komoditasTerpilih = k;
-                        _gradeTerpilih = widget.gradeTebakanPcd;
+                        // Grade AI hanya berlaku untuk komoditas yang dideteksi AI.
+                        _gradeTerpilih = (k != null && identical(k, _komoditasDariAi)) ? widget.gradeTebakanPcd : null;
                         _hargaCtrl.clear();
                       }),
                     ),
@@ -429,10 +440,14 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                             ctrl: _beratCtrl,
                             label: 'Kuantitas (kg)',
                             hint: '0',
-                            type: TextInputType.number,
-                            formatters: [FilteringTextInputFormatter.digitsOnly],
+                            type: const TextInputType.numberWithOptions(decimal: true),
+                            formatters: [_desimalFormatter],
                             onChanged: (_) => setState(() {}),
-                            validator: (v) => (v?.isEmpty ?? true) ? 'Jumlah berat tidak boleh kosong' : null,
+                            validator: (v) {
+                              if (v?.isEmpty ?? true) return 'Jumlah berat tidak boleh kosong';
+                              if (TransaksiController.parseAngka(v!) == null) return 'Format berat tidak valid';
+                              return null;
+                            },
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -491,7 +506,9 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                                 ),
                               ))
                           .toList(),
-                      validator: (_) => _gradeTerpilih == null ? 'Silakan pilih grade kualitas' : null,
+                      validator: (_) => (_gradeTerpilih == null || !_daftarGrade.any((g) => g['grade'] == _gradeTerpilih))
+                          ? 'Silakan pilih grade kualitas'
+                          : null,
                       onChanged: (g) => setState(() {
                         _gradeTerpilih = g;
                         final hMaks = (_daftarGrade.firstWhere((x) => x['grade'] == g, orElse: () => {})['harga_maks'] as num?)?.toInt() ?? 0;
@@ -642,8 +659,10 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
 // ─── KOMPONEN UI TAMBAHAN BENTO ───
 
 class _BannerPcd extends StatelessWidget {
+  /// Grade saran AI; null berarti pemindaian tidak diterima / gagal.
   final String? gradeTebakan;
-  const _BannerPcd({this.gradeTebakan});
+  final double? confidence;
+  const _BannerPcd({this.gradeTebakan, this.confidence});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -665,9 +684,19 @@ class _BannerPcd extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Pemindaian AI Berhasil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: -0.3)),
+                Text(
+                  gradeTebakan != null
+                      ? 'Saran AI: Grade $gradeTebakan (${((confidence ?? 0) * 100).round()}%).'
+                      : 'Pemindaian tidak berhasil.',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: -0.3),
+                ),
                 const SizedBox(height: 2),
-                Text('Sistem mendeteksi kualitas: Grade ${gradeTebakan ?? "-"}', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(
+                  gradeTebakan != null
+                      ? 'Periksa sebelum menyimpan.'
+                      : 'Pilih komoditas dan grade secara manual.',
+                  style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ),

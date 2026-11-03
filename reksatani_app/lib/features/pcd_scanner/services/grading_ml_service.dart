@@ -60,205 +60,159 @@ class GradingMlService {
     }
   }
 
-  /// Melakukan inferensi Dua-Tahap.
-  /// Menerima parameter [imageFile] dan mengembalikan map hasil berupa status komoditas, grade, dan confidence.
-  Future<Map<String, dynamic>> inferGrade(File imageFile) async {
+  /// Ambang keyakinan router: di bawah ini hasil dianggap bukan komoditas.
+  static const double routerThreshold = 0.25;
+
+  /// Rasio piksel non-latar minimum: di bawah ini frame dianggap kosong.
+  static const double minForegroundRatio = 0.01;
+
+  /// Menjalankan pemindaian foto diam (still) dua tahap: router lalu grader.
+  ///
+  /// Melempar [FileSystemException] jika berkas tidak ada. Kesalahan inferensi
+  /// dikembalikan sebagai [ScanStatus.error] tanpa grade (tidak pernah default ke A).
+  Future<ScanResult> scanImage(File imageFile) async {
     if (!await imageFile.exists()) {
       throw FileSystemException("Berkas gambar tidak ditemukan", imageFile.path);
     }
 
     try {
       final bytes = await imageFile.readAsBytes();
-      
       // Preprocessing citra: resize ke 224x224, float RGB [0,255].
       // Model sudah memiliki layer Rescaling(1/255) di dalam graph, jadi JANGAN dibagi 255 lagi.
-      final prepResult = await _preprocessImage(bytes);
-      final inputTensor = prepResult.tensor;
-
+      final prep = await _preprocessImage(bytes);
       if (_isTestMode) {
-        return _simulateInference(inputTensor);
+        return _simulateInference(prep.tensor);
       }
-
-      // ==========================================================
-      // TAHAP 1: JALANKAN ROUTER MODEL (Saringan Komoditas)
-      // ==========================================================
-      final routerInterpreter = await _loadModel(routerModelPath);
-      var routerOutput = List<double>.filled(4, 0.0).reshape([1, 4]); // 4 Kelas Router
-      
-      routerInterpreter.run(inputTensor.buffer, routerOutput);
-      List<double> routerScores = List<double>.from(routerOutput[0]);
-      if (kDebugMode) {
-        debugPrint('[ROUTER] ${_formatScores(routerScores)} fg=${prepResult.foregroundRatio.toStringAsFixed(3)}');
-      }
-
-      // Cari tebakan komoditas dengan confidence tertinggi
-      int routerMaxIdx = 0;
-      double routerMaxScore = -1.0;
-      for (int i = 0; i < routerScores.length; i++) {
-        if (routerScores[i] > routerMaxScore) {
-          routerMaxScore = routerScores[i];
-          routerMaxIdx = i;
-        }
-      }
-
-      String detectedKomoditas = routerClasses[routerMaxIdx];
-
-      // Jika keyakinan router terlalu rendah, degradasi ke bukan_komoditas untuk menghindari false positive (dibuat lebih sensitif di 0.25)
-      double routerThreshold = 0.25;
-      if (detectedKomoditas != 'bukan_komoditas' && routerMaxScore < routerThreshold) {
-        debugPrint("🛑 [GradingMlService] Objek didegradasi ke 'bukan_komoditas' karena keyakinan router terlalu rendah (${(routerMaxScore * 100).toStringAsFixed(1)}% < ${(routerThreshold * 100).toStringAsFixed(1)}%)");
-        detectedKomoditas = 'bukan_komoditas';
-      }
-
-      // ─── FOREGROUND RATIO CHECK (EMPTY FRAME DETECTION) ───
-      if (prepResult.foregroundRatio < 0.01) {
-        debugPrint("🛑 [GradingMlService] Objek didegradasi ke 'bukan_komoditas' karena rasio foreground terlalu kecil (${(prepResult.foregroundRatio * 100).toStringAsFixed(1)}% < 1.0%)");
-        detectedKomoditas = 'bukan_komoditas';
-      }
-
-      // Jika terdeteksi sebagai BUKAN KOMODITAS, langsung hentikan proses dan kembalikan hasil
-      if (detectedKomoditas == 'bukan_komoditas') {
-        debugPrint("🛑 [GradingMlService] Objek ditolak: Bukan Komoditas (Keyakinan: ${(routerMaxScore * 100).toStringAsFixed(1)}%)");
-        return {
-          'komoditas': 'Bukan Komoditas',
-          'grade': 'Bukan Komoditas', // Nilai ini akan dibaca oleh PcdController
-          'confidence': 0.0,
-          'scores': {
-            'A': 0.0,
-            'B': 0.0,
-            'C': 0.0,
-          },
-          'inference_mode': 'native_tflite_router_only',
-        };
-      }
-
-      debugPrint("✅ [GradingMlService] Terdeteksi sebagai '$detectedKomoditas'. Memasuki Tahap 2 (Grading)...");
-
-      // ==========================================================
-      // TAHAP 2: JALANKAN EXPERT GRADER MODEL SESUAI KOMODITAS
-      // ==========================================================
-      String graderPath;
-      if (detectedKomoditas == 'gabah') {
-        graderPath = gabahModelPath;
-      } else if (detectedKomoditas == 'kelapa_sawit') {
-        graderPath = sawitModelPath;
-      } else if (detectedKomoditas == 'kopi') {
-        graderPath = kopiModelPath;
-      } else {
-        throw Exception("Grader untuk komoditas $detectedKomoditas belum tersedia.");
-      }
-
-      final graderInterpreter = await _loadModel(graderPath);
-      var graderOutput = List<double>.filled(3, 0.0).reshape([1, 3]); // 3 Kelas (A/B/C)
-
-      graderInterpreter.run(inputTensor.buffer, graderOutput);
-      List<double> graderScores = List<double>.from(graderOutput[0]);
-
-      // Cari grade (A/B/C) dengan confidence tertinggi
-      int gradeMaxIdx = 0;
-      double gradeMaxScore = -1.0;
-      for (int i = 0; i < graderScores.length; i++) {
-        if (graderScores[i] > gradeMaxScore) {
-          gradeMaxScore = graderScores[i];
-          gradeMaxIdx = i;
-        }
-      }
-
-      String finalGrade = gradeClasses[gradeMaxIdx];
-
-      return {
-        'komoditas': detectedKomoditas,
-        'grade': finalGrade, // Output akhirnya adalah A, B, atau C
-        'confidence': gradeMaxScore,
-        'scores': {
-          'A': graderScores[0],
-          'B': graderScores[1],
-          'C': graderScores[2],
-        },
-        'inference_mode': 'native_tflite_full_pipeline',
-      };
+      return await classify(prep, runGrader: true, source: 'still');
     } catch (e) {
       debugPrint("🚨 [GradingMlService] Terjadi kesalahan saat inferensi grade: $e");
-      throw Exception("Kesalahan inferensi lokal ML: $e");
+      return ScanResult.error('Kesalahan inferensi lokal ML: $e');
     }
   }
 
-  /// Memproses klasifikasi komoditas secara real-time langsung dari camera image stream.
-  Future<Map<String, dynamic>> inferFromTensor(Float32List inputTensor) async {
-    if (_isTestMode) {
-      return _simulateInference(inputTensor);
-    }
-    
-    try {
-      // TAHAP 1: JALANKAN ROUTER MODEL
-      final routerInterpreter = await _loadModel(routerModelPath);
-      var routerOutput = List<double>.filled(4, 0.0).reshape([1, 4]);
-      routerInterpreter.run(inputTensor.buffer, routerOutput);
-      List<double> routerScores = List<double>.from(routerOutput[0]);
-      
-      int routerMaxIdx = 1; // Mulai dari indeks 1 (gabah)
-      double routerMaxScore = routerScores[1];
-      for (int i = 2; i < routerScores.length; i++) {
-        if (routerScores[i] > routerMaxScore) {
-          routerMaxScore = routerScores[i];
-          routerMaxIdx = i;
-        }
-      }
+  /// Kompatibilitas lama: hasil [scanImage] dalam bentuk Map.
+  Future<Map<String, dynamic>> inferGrade(File imageFile) async {
+    return (await scanImage(imageFile)).toMap();
+  }
 
-      debugPrint("📊 [GradingMlService] Live Router: bukan_komoditas: ${(routerScores[0] * 100).toStringAsFixed(1)}%, "
-          "gabah: ${(routerScores[1] * 100).toStringAsFixed(1)}%, "
-          "sawit: ${(routerScores[2] * 100).toStringAsFixed(1)}%, "
-          "kopi: ${(routerScores[3] * 100).toStringAsFixed(1)}%");
-      
-      String detectedKomoditas = routerClasses[routerMaxIdx];
-      
-      // TAHAP 2: JALANKAN EXPERT GRADER MODEL
-      String graderPath;
-      if (detectedKomoditas == 'gabah') {
-        graderPath = gabahModelPath;
-      } else if (detectedKomoditas == 'kelapa_sawit') {
-        graderPath = sawitModelPath;
-      } else if (detectedKomoditas == 'kopi') {
-        graderPath = kopiModelPath;
-      } else {
-        throw Exception("Grader tidak ditemukan");
-      }
-      
-      final graderInterpreter = await _loadModel(graderPath);
-      var graderOutput = List<double>.filled(3, 0.0).reshape([1, 3]);
-      graderInterpreter.run(inputTensor.buffer, graderOutput);
-      List<double> graderScores = List<double>.from(graderOutput[0]);
-      
-      int gradeMaxIdx = 0;
-      double gradeMaxScore = -1.0;
-      for (int i = 0; i < graderScores.length; i++) {
-        if (graderScores[i] > gradeMaxScore) {
-          gradeMaxScore = graderScores[i];
-          gradeMaxIdx = i;
-        }
-      }
-      
-      return {
-        'commodity': detectedKomoditas,
-        'grade': gradeClasses[gradeMaxIdx],
-        'confidence': gradeMaxScore,
-        'scores': {
-          'gabah': routerScores[1],
-          'kopi robusta': routerScores[3],
-          'sawit': routerScores[2],
-        },
-        'inference_mode': 'live_full_pipeline',
-      };
+  /// Klasifikasi live dari tensor kamera. Memakai logika keputusan yang sama
+  /// dengan foto diam, tetapi tanpa grader (label live hanya butuh komoditas).
+  Future<ScanResult> inferFromTensor(PreprocessResult prep) async {
+    if (_isTestMode) {
+      return _simulateInference(prep.tensor);
+    }
+    try {
+      return await classify(prep, runGrader: false, source: 'live');
     } catch (e) {
       debugPrint("🚨 Error pada inferFromTensor: $e");
-      return {
-        'commodity': 'Menganalisis...',
-        'grade': 'A',
-        'confidence': 0.0,
-        'scores': {'gabah': 0.0, 'kopi robusta': 0.0, 'sawit': 0.0},
-        'inference_mode': 'error',
-      };
+      return ScanResult.error('$e');
     }
+  }
+
+  /// Satu-satunya fungsi keputusan untuk jalur live dan still.
+  Future<ScanResult> classify(PreprocessResult prep, {required bool runGrader, String source = ''}) async {
+    final routerInterpreter = await _loadModel(routerModelPath);
+    final routerScores = _run(routerInterpreter, prep.tensor, routerClasses.length);
+    if (kDebugMode) {
+      debugPrint('[ROUTER $source] ${_formatScores(routerScores)} fg=${prep.foregroundRatio.toStringAsFixed(3)}');
+    }
+
+    final decision = decideCommodity(routerScores, prep.foregroundRatio);
+    if (decision.status != ScanStatus.ok || !runGrader) {
+      return decision;
+    }
+
+    final graderInterpreter = await _loadModel(_graderPathFor(decision.commodity!));
+    final graderScores = _run(graderInterpreter, prep.tensor, gradeClasses.length);
+    final gradeIdx = _argmax(graderScores);
+
+    return ScanResult(
+      status: ScanStatus.ok,
+      commodity: decision.commodity,
+      grade: gradeClasses[gradeIdx],
+      routerConfidence: decision.routerConfidence,
+      gradeConfidence: graderScores[gradeIdx],
+      routerScores: routerScores,
+      gradeScores: graderScores,
+      inferenceMode: 'native_tflite_full_pipeline',
+    );
+  }
+
+  /// Keputusan router murni (tanpa I/O) agar bisa diuji: argmax atas SEMUA kelas
+  /// (termasuk kelas 0 bukan_komoditas), lalu ambang router dan cek foreground.
+  ScanResult decideCommodity(List<double> routerScores, double foregroundRatio) {
+    final idx = _argmax(routerScores);
+    final score = routerScores[idx];
+    final label = routerClasses[idx];
+
+    String? reason;
+    if (label == 'bukan_komoditas') {
+      reason = 'Router: bukan komoditas';
+    } else if (score < routerThreshold) {
+      reason = 'Keyakinan router terlalu rendah (${(score * 100).toStringAsFixed(1)}%)';
+    } else if (foregroundRatio < minForegroundRatio) {
+      reason = 'Rasio foreground terlalu kecil (${(foregroundRatio * 100).toStringAsFixed(1)}%)';
+    }
+
+    if (reason != null) {
+      return ScanResult(
+        status: ScanStatus.notCommodity,
+        routerConfidence: score,
+        routerScores: routerScores,
+        message: reason,
+        inferenceMode: 'native_tflite_router_only',
+      );
+    }
+    return ScanResult(
+      status: ScanStatus.ok,
+      commodity: label,
+      routerConfidence: score,
+      routerScores: routerScores,
+      inferenceMode: 'native_tflite_router_only',
+    );
+  }
+
+  String _graderPathFor(String commodity) {
+    switch (commodity) {
+      case 'gabah':
+        return gabahModelPath;
+      case 'kelapa_sawit':
+        return sawitModelPath;
+      case 'kopi':
+        return kopiModelPath;
+    }
+    throw Exception("Grader untuk komoditas $commodity belum tersedia.");
+  }
+
+  /// Menjalankan model dengan input ByteBuffer (shape [1,224,224,3] tetap) dan output [1,n].
+  List<double> _run(Interpreter interpreter, Float32List input, int numClasses) {
+    final output = List<double>.filled(numClasses, 0.0).reshape([1, numClasses]);
+    interpreter.run(input.buffer, output);
+    return List<double>.from(output[0] as List);
+  }
+
+  static int _argmax(List<double> v) {
+    int best = 0;
+    for (int i = 1; i < v.length; i++) {
+      if (v[i] > v[best]) best = i;
+    }
+    return best;
+  }
+
+  /// Tensor kamera + rasio foreground dengan aturan yang sama seperti jalur still.
+  PreprocessResult prepareCameraImage(CameraImage image) {
+    final tensor = convertCameraImageToTensor(image);
+    return PreprocessResult(tensor, foregroundRatioOf(tensor));
+  }
+
+  /// Rasio piksel yang bukan latar putih (salah satu kanal < 240), sama dengan preprocessing still.
+  static double foregroundRatioOf(Float32List rgb) {
+    int fg = 0;
+    final int pixels = rgb.length ~/ 3;
+    for (int i = 0; i < rgb.length; i += 3) {
+      if (rgb[i] < 240 || rgb[i + 1] < 240 || rgb[i + 2] < 240) fg++;
+    }
+    return pixels == 0 ? 0.0 : fg / pixels;
   }
 
   /// Mengonversi format CameraImage (YUV420/BGRA) ke tensor 224x224 float RGB [0,255] (NHWC, flat).
@@ -463,59 +417,42 @@ class GradingMlService {
     return PreprocessResult(buffer, foregroundRatio);
   }
 
-  /// Simulasi logika inferensi (tidak diubah)
-  Map<String, dynamic> _simulateInference(dynamic input) {
+  /// Simulasi untuk test mode (heuristik warna, bukan model sungguhan).
+  ScanResult _simulateInference(Float32List input) {
     double totalR = 0;
     double totalG = 0;
     double totalB = 0;
     int count = 0;
-    
-    if (input is Float32List) {
-      for (int i = 0; i < input.length; i += 30) {
-        totalR += input[i];
-        totalG += input[i + 1];
-        totalB += input[i + 2];
-        count++;
-      }
-    } else {
-      // Fallback/Legacy
-      final List<List<List<List<double>>>> inputList = input;
-      for (int y = 0; y < inputList[0].length; y += 10) {
-        for (int x = 0; x < inputList[0][y].length; x += 10) {
-          totalR += inputList[0][y][x][0];
-          totalG += inputList[0][y][x][1];
-          totalB += inputList[0][y][x][2];
-          count++;
-        }
-      }
+    for (int i = 0; i + 2 < input.length; i += 30) {
+      totalR += input[i];
+      totalG += input[i + 1];
+      totalB += input[i + 2];
+      count++;
     }
-    
-    double avgR = totalR / count;
-    double avgG = totalG / count;
-    double avgB = totalB / count;
+    final double avgR = count == 0 ? 0 : totalR / count;
+    final double avgG = count == 0 ? 0 : totalG / count;
+    final double avgB = count == 0 ? 0 : totalB / count;
 
     String mockGrade = 'B';
-    double mockConfidence = 0.78;
-    Map<String, double> mockScores = {'A': 0.12, 'B': 0.78, 'C': 0.10};
-
-    // Logika kustom berdasarkan warna mock
+    List<double> mockScores = [0.12, 0.78, 0.10];
     if (avgG > avgR * 1.3 && avgG > avgB * 1.3) {
       mockGrade = 'A';
-      mockConfidence = 0.88;
-      mockScores = {'A': 0.88, 'B': 0.08, 'C': 0.04};
+      mockScores = [0.88, 0.08, 0.04];
     } else if (avgR > avgG * 1.5 && avgR > avgB * 1.5) {
       mockGrade = 'C';
-      mockConfidence = 0.85;
-      mockScores = {'A': 0.05, 'B': 0.10, 'C': 0.85};
+      mockScores = [0.05, 0.10, 0.85];
     }
 
-    return {
-      'komoditas': 'gabah',
-      'grade': mockGrade,
-      'confidence': mockConfidence,
-      'scores': mockScores,
-      'inference_mode': 'simulated',
-    };
+    return ScanResult(
+      status: ScanStatus.ok,
+      commodity: 'gabah',
+      grade: mockGrade,
+      routerConfidence: 1.0,
+      gradeConfidence: mockScores[gradeClasses.indexOf(mockGrade)],
+      routerScores: const [0.0, 1.0, 0.0, 0.0],
+      gradeScores: mockScores,
+      inferenceMode: 'simulated',
+    );
   }
 }
 
@@ -523,4 +460,71 @@ class PreprocessResult {
   final Float32List tensor;
   final double foregroundRatio;
   PreprocessResult(this.tensor, this.foregroundRatio);
+}
+
+/// Status eksplisit hasil pemindaian. Tidak ada grade default: [ScanResult.grade]
+/// hanya terisi bila grader benar-benar berjalan.
+enum ScanStatus { ok, lowConfidence, notCommodity, error }
+
+class ScanResult {
+  final ScanStatus status;
+
+  /// Label router: 'gabah' | 'kelapa_sawit' | 'kopi', atau null.
+  final String? commodity;
+
+  /// 'A' | 'B' | 'C', atau null bila grader tidak berjalan / gagal.
+  final String? grade;
+  final double routerConfidence;
+  final double gradeConfidence;
+  final List<double> routerScores;
+  final List<double> gradeScores;
+  final String? message;
+  final String inferenceMode;
+
+  const ScanResult({
+    required this.status,
+    this.commodity,
+    this.grade,
+    this.routerConfidence = 0.0,
+    this.gradeConfidence = 0.0,
+    this.routerScores = const [],
+    this.gradeScores = const [],
+    this.message,
+    this.inferenceMode = '',
+  });
+
+  factory ScanResult.error(String message) =>
+      ScanResult(status: ScanStatus.error, message: message, inferenceMode: 'error');
+
+  bool get isAccepted => status == ScanStatus.ok && commodity != null && grade != null;
+
+  ScanResult withStatus(ScanStatus newStatus) => ScanResult(
+        status: newStatus,
+        commodity: commodity,
+        grade: grade,
+        routerConfidence: routerConfidence,
+        gradeConfidence: gradeConfidence,
+        routerScores: routerScores,
+        gradeScores: gradeScores,
+        message: message,
+        inferenceMode: inferenceMode,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'status': status.name,
+        'commodity': commodity,
+        'komoditas': commodity,
+        'grade': grade,
+        'confidence': gradeConfidence,
+        'router_confidence': routerConfidence,
+        'scores': {
+          for (int i = 0; i < gradeScores.length && i < 3; i++) ['A', 'B', 'C'][i]: gradeScores[i],
+        },
+        'inference_mode': inferenceMode,
+      };
+
+  @override
+  String toString() =>
+      'ScanResult($status, commodity: $commodity, grade: $grade, router: ${routerConfidence.toStringAsFixed(3)}, '
+      'grade: ${gradeConfidence.toStringAsFixed(3)}, msg: $message)';
 }

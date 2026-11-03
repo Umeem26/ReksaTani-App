@@ -27,18 +27,13 @@ class PcdController {
   }
 
   /// Memproses klasifikasi komoditas langsung dari stream kamera (CameraImage).
-  Future<Map<String, dynamic>> prosesKlasifikasiLive(CameraImage image) async {
+  /// Memakai fungsi keputusan yang sama dengan foto diam; gagal -> [ScanStatus.error], tanpa grade.
+  Future<ScanResult> prosesKlasifikasiLive(CameraImage image) async {
     try {
-      final inputTensor = _gradingMlService.convertCameraImageToTensor(image);
-      return await _gradingMlService.inferFromTensor(inputTensor);
+      final prep = _gradingMlService.prepareCameraImage(image);
+      return await _gradingMlService.inferFromTensor(prep);
     } catch (e) {
-      return {
-        'commodity': 'Menganalisis...',
-        'grade': 'A',
-        'confidence': 0.0,
-        'scores': {'gabah': 0.0, 'kopi robusta': 0.0, 'sawit': 0.0},
-        'inference_mode': 'error',
-      };
+      return ScanResult.error('$e');
     }
   }
 
@@ -69,39 +64,14 @@ class PcdController {
     return await _ocrRegexService.ekstrakDataNota(imagePath);
   }
 
-  // ─── MODUL 9: Tebak Grade Komoditas (Kualitas) menggunakan TFLite ───
-  Future<String> prosesTebakGrade(String imagePath) async {
+  // ─── MODUL 9/10: Grading Lengkap (router + grader) ───
+  /// Mengembalikan [ScanResult] dengan status eksplisit. Kegagalan apa pun
+  /// menghasilkan [ScanStatus.error] dengan grade null (tidak pernah Grade A).
+  Future<ScanResult> prosesGradingLengkap(String imagePath) async {
     try {
-      final fileBarang = File(imagePath);
-      final hasilGrading = await _gradingMlService.inferGrade(fileBarang);
-      return hasilGrading['grade'] as String;
+      return await _gradingMlService.scanImage(File(imagePath));
     } catch (e) {
-      return 'A'; 
-    }
-  }
-
-  // ─── MODUL 10: Grading Lengkap + Confidence Score untuk Sweeper ───
-  /// Mengembalikan hasil inferensi lengkap termasuk confidence dan semua skor.
-  /// Digunakan oleh Confidence Sweeper UI untuk menampilkan visual bar.
-  Future<Map<String, dynamic>> prosesGradingLengkap(String imagePath) async {
-    try {
-      final fileBarang = File(imagePath);
-      final hasilGrading = await _gradingMlService.inferGrade(fileBarang);
-      // Pastikan kedua key (commodity dan komoditas) ada
-      if (hasilGrading.containsKey('komoditas') && !hasilGrading.containsKey('commodity')) {
-        hasilGrading['commodity'] = hasilGrading['komoditas'];
-      }
-      return hasilGrading;
-    } catch (e) {
-      // Fallback: kembalikan grade A dengan confidence rendah agar sweeper aktif
-      return {
-        'commodity': 'Bukan Komoditas',
-        'komoditas': 'Bukan Komoditas',
-        'grade': 'A',
-        'confidence': 0.0,
-        'scores': {'A': 0.0, 'B': 0.0, 'C': 0.0},
-        'inference_mode': 'fallback_error',
-      };
+      return ScanResult.error('$e');
     }
   }
 }

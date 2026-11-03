@@ -40,8 +40,15 @@ class TransaksiController {
     return (g['harga_maks'] as num?)?.toDouble() ?? 0;
   }
 
+  /// Parse angka dengan pemisah desimal titik atau koma ("12,5" / "12.5").
+  static double? parseAngka(String text) {
+    final t = text.trim().replaceAll(',', '.');
+    if (t.isEmpty || t == '.') return null;
+    return double.tryParse(t);
+  }
+
   double getTotalBayar(String beratText, String hargaText) {
-    final berat = double.tryParse(beratText) ?? 0;
+    final berat = parseAngka(beratText) ?? 0;
     final harga = double.tryParse(hargaText) ?? 0;
     return berat * harga;
   }
@@ -113,7 +120,7 @@ class TransaksiController {
       namaPetani: namaPenjual.trim(),
       namaKomoditas: komoditasTerpilih?.namaKomoditas ?? '',
       gradeTerpilih: gradeTerpilih ?? '',
-      berat: double.tryParse(beratText) ?? 0,
+      berat: parseAngka(beratText) ?? 0,
       hargaBeliSatuan: double.tryParse(hargaText) ?? 0,
       nominalPotongKasbon: potongan,
       totalBayar: totalBayar,
@@ -161,7 +168,7 @@ class TransaksiController {
     existingTrx.namaPetani      = namaPenjual.trim();
     existingTrx.namaKomoditas   = komoditasTerpilih?.namaKomoditas ?? '';
     existingTrx.gradeTerpilih   = gradeTerpilih ?? '';
-    existingTrx.berat           = double.tryParse(beratText) ?? 0;
+    existingTrx.berat           = parseAngka(beratText) ?? 0;
     existingTrx.hargaBeliSatuan = double.tryParse(hargaText) ?? 0;
     existingTrx.totalBayar      = totalBayar;
     

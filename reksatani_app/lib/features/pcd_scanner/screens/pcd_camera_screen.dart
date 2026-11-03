@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import '../services/image_brightness_service.dart';
 import '../services/confidence_validator.dart'; // 👈 Modul 10
+import '../services/grading_ml_service.dart' show ScanResult, ScanStatus;
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
@@ -423,14 +424,13 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               final int now = DateTime.now().millisecondsSinceEpoch;
               if (now - _lastInferenceTime > 400) {
                 _lastInferenceTime = now;
-                _pcdController.prosesKlasifikasiLive(image).then((hasil) {
+                _pcdController.prosesKlasifikasiLive(image).then((ScanResult hasil) {
                   if (!mounted) return;
-                  final String comm = hasil['commodity'] as String;
-                  final double conf = (hasil['confidence'] as num?)?.toDouble() ?? 0.0;
-                  
+                  // Keputusan sama dengan jalur still; label memakai keyakinan ROUTER untuk komoditas.
+                  final bool found = hasil.status == ScanStatus.ok && hasil.commodity != null;
                   setState(() {
-                    _tfliteLabel = _formatCommodityName(comm);
-                    _tfliteConfidence = conf;
+                    _tfliteLabel = found ? _formatCommodityName(hasil.commodity!) : "Mencari objek...";
+                    _tfliteConfidence = found ? hasil.routerConfidence : 0.0;
                   });
                 });
               }
@@ -623,84 +623,81 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       ),
     );
 
-    String finalNotaPath = _fotoNotaPath!;
-    if (_fotoNotaPath != null) {
-      finalNotaPath = await _pcdController.prosesWarpingNota(
-        _fotoNotaPath!,
-        manualCorners: _detectedNotaCorners,
-      );
+    String finalNotaPath = '';
+    String finalBarangPath = _fotoBarangPath ?? '';
+    Map<String, String> dataHasilOcr = const {};
+    ScanResult scan = ScanResult.error('Foto komoditas belum diambil');
+
+    try {
+      // Alur tanpa nota diperbolehkan: lewati warping & OCR bila nota belum ada.
+      final String? notaPath = _fotoNotaPath;
+      if (notaPath != null && notaPath.isNotEmpty) {
+        finalNotaPath = await _pcdController.prosesWarpingNota(
+          notaPath,
+          manualCorners: _detectedNotaCorners,
+        );
+        dataHasilOcr = await _pcdController.prosesOcrNota(finalNotaPath);
+      }
+
+      final String? barangPath = _fotoBarangPath;
+      if (barangPath != null && barangPath.isNotEmpty) {
+        finalBarangPath = await _pcdController.prosesSegmentasiBarang(barangPath);
+        // ─── MODUL 10: hasil grading dengan status eksplisit ───
+        scan = await _pcdController.prosesGradingLengkap(finalBarangPath);
+      }
+    } catch (e) {
+      debugPrint("Error memproses foto: $e");
+      scan = ScanResult.error('$e');
     }
 
-    String finalBarangPath = _fotoBarangPath!;
-    if (_fotoBarangPath != null) {
-      finalBarangPath = await _pcdController.prosesSegmentasiBarang(_fotoBarangPath!);
-    }
-
-    final dataHasilOcr = await _pcdController.prosesOcrNota(finalNotaPath);
-
-    // ─── MODUL 10: Gunakan prosesGradingLengkap untuk mendapat confidence ───
-    final hasilGrading = await _pcdController.prosesGradingLengkap(finalBarangPath);
-    final tebakanGrade = hasilGrading['grade'] as String;
-    final tebakanCommodity = hasilGrading['commodity'] as String? ?? '';
-    double confidence = (hasilGrading['confidence'] as num?)?.toDouble() ?? 0.0;
     if (!mounted) return;
+    Navigator.pop(context); // Tutup dialog loading
 
+    // Confidence yang divalidasi adalah keyakinan grader. Tanpa kotak live (kamera, bukan galeri)
+    // hasil tidak boleh diterima otomatis.
+    double confidence = scan.gradeConfidence;
     if (!_isGalleryPick && _detectedCorners == null) {
       confidence = 0.0;
     }
 
-    if (mounted) Navigator.pop(context); // Tutup dialog loading
-
-    // Jika tidak dikenali sebagai komoditas pertanian, kita tidak memblokir secara keras.
-    // Sebaliknya kita ubah tebakan komoditas ke 'kelapa_sawit' dengan keyakinan 5% (0.05)
-    // agar memicu Confidence Sweeper Bottom Sheet sehingga user bisa lanjut secara manual.
-    String finalCommodity = tebakanCommodity;
-    String finalGrade = tebakanGrade;
-    double finalConfidence = confidence;
-
-    if (tebakanCommodity == 'Bukan Komoditas' || tebakanGrade == 'Bukan Komoditas') {
-      finalCommodity = 'kelapa_sawit';
-      finalGrade = 'A';
-      finalConfidence = 0.05;
-    }
+    final bool modelOk = scan.status == ScanStatus.ok && scan.grade != null && scan.commodity != null;
 
     // ─── MODUL 10: Validasi Confidence Sweeper ───
     final confidenceResult = _pcdController.confidenceValidator.validate(
-      confidence: finalConfidence,
-      grade: finalGrade,
-      commodity: finalCommodity,
+      confidence: modelOk ? confidence : 0.0,
+      grade: scan.grade ?? '-',
+      commodity: scan.commodity ?? '',
     );
 
-    if (confidenceResult.state == ConfidenceState.accepted) {
+    if (modelOk && confidenceResult.state == ConfidenceState.accepted) {
       _pcdController.confidenceValidator.reset();
       _navigateKeTransaksi(
         finalNotaPath: finalNotaPath,
         finalBarangPath: finalBarangPath,
-        tebakanGrade: finalGrade,
         dataHasilOcr: dataHasilOcr,
-        tebakanKomoditas: finalCommodity,
+        acceptedScan: scan,
       );
     } else {
-      if (mounted) {
-        _showConfidenceSweeperSheet(
-          confidenceResult: confidenceResult,
-          finalNotaPath: finalNotaPath,
-          finalBarangPath: finalBarangPath,
-          dataHasilOcr: dataHasilOcr,
-        );
-      }
+      final ScanResult shown = modelOk ? scan.withStatus(ScanStatus.lowConfidence) : scan;
+      _showConfidenceSweeperSheet(
+        confidenceResult: confidenceResult,
+        scan: shown,
+        finalNotaPath: finalNotaPath,
+        finalBarangPath: finalBarangPath,
+        dataHasilOcr: dataHasilOcr,
+      );
     }
   }
 
-  /// Navigasi langsung ke TransaksiScreen. Dipanggil jika confidence accepted
-  /// atau user memilih "Gunakan Hasil Manual" dari sweeper sheet.
+  /// Navigasi ke TransaksiScreen. Grade & komoditas hanya di-prefill bila
+  /// [acceptedScan] tidak null (hasil diterima); selain itu user wajib memilih manual.
   void _navigateKeTransaksi({
     required String finalNotaPath,
     required String finalBarangPath,
-    required String tebakanGrade,
     required Map<String, String> dataHasilOcr,
-    String? tebakanKomoditas,
+    ScanResult? acceptedScan,
   }) {
+    final ScanResult? accepted = (acceptedScan != null && acceptedScan.isAccepted) ? acceptedScan : null;
     if (!mounted) return;
     _stopLiveStream();
     _cameraController?.dispose();
@@ -710,13 +707,14 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         builder: (_) => TransaksiScreen(
           fotoNotaPath: finalNotaPath,
           fotoBarangPath: finalBarangPath,
-          gradeTebakanPcd: tebakanGrade,
+          gradeTebakanPcd: accepted?.grade,
+          confidencePcd: accepted?.gradeConfidence,
           initialBeratOcr: dataHasilOcr['berat'],
           initialHargaOcr: dataHasilOcr['harga'],
           initialNamaPenjualOcr: dataHasilOcr['nama'],
           initialDesaOcr: dataHasilOcr['desa'],
           initialKomoditasOcr: dataHasilOcr['komoditas'],
-          initialKomoditasPcd: tebakanKomoditas,
+          initialKomoditasPcd: accepted?.commodity,
         ),
       ),
     );
@@ -725,12 +723,25 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   // ─── MODUL 10: Bottom Sheet Confidence Sweeper ───
   void _showConfidenceSweeperSheet({
     required ConfidenceResult confidenceResult,
+    required ScanResult scan,
     required String finalNotaPath,
     required String finalBarangPath,
     required Map<String, String> dataHasilOcr,
   }) {
     final isManualOverride = confidenceResult.state == ConfidenceState.manualOverride;
     final percent = confidenceResult.confidencePercent;
+    // Hanya tampilkan "NN% yakin Grade X" bila model benar-benar menghasilkan grade.
+    final String headline;
+    switch (scan.status) {
+      case ScanStatus.notCommodity:
+        headline = 'Komoditas tidak dikenali';
+        break;
+      case ScanStatus.error:
+        headline = 'Pemindaian gagal';
+        break;
+      default:
+        headline = confidenceResult.label;
+    }
 
     // Warna dinamis berdasarkan confidence level
     Color barColor;
@@ -800,7 +811,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
             ),
             const SizedBox(height: 6),
             Text(
-              confidenceResult.label,
+              headline,
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
@@ -928,17 +939,16 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                 onPressed: () {
                   Navigator.pop(ctx); // Tutup bottom sheet
                   _pcdController.confidenceValidator.reset();
+                  // Hasil tidak diterima: jangan prefill grade/komoditas.
                   _navigateKeTransaksi(
                     finalNotaPath: finalNotaPath,
                     finalBarangPath: finalBarangPath,
-                    tebakanGrade: confidenceResult.grade,
                     dataHasilOcr: dataHasilOcr,
-                    tebakanKomoditas: confidenceResult.commodity,
                   );
                 },
                 icon: const Icon(Icons.edit_rounded, size: 20),
                 label: Text(
-                  isManualOverride ? 'Lanjut Input Manual' : 'Gunakan Hasil Ini',
+                  'Lanjut Input Manual',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 style: OutlinedButton.styleFrom(
