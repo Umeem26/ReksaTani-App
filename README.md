@@ -20,6 +20,13 @@ Dibangun dengan arsitektur **Offline-First**, aplikasi ini menjadikan *local sto
 * **Cloud Database:** MongoDB Atlas (via REST API)
 * **Architecture Pattern:** Clean Architecture / 3-Tier Layer (Presentation, Domain, Data)
 
+## ⚙️ Setup
+
+1. Masuk ke folder aplikasi: `cd reksatani_app`
+2. Salin `.env.example` menjadi `.env`, lalu isi nilai setiap variabel.
+3. Generate file environment: `dart run build_runner build --delete-conflicting-outputs`
+4. Jalankan aplikasi: `flutter run`
+
 ---
 
 ## 👨‍💻 Identitas Tim Pengembang (Kelompok C4)
