@@ -8,11 +8,18 @@ import '../mongodb_service.dart';
 import 'sync_remote.dart';
 
 /// Implementasi [SyncRemote] di atas `mongo_dart`.
+///
+/// Driver tidak punya timeout, jadi setiap operasi dibatasi di sini. Timeout pada
+/// penulisan berarti hasilnya tidak diketahui. Itu aman karena semua penulisan
+/// lewat gerbang ini harus idempoten.
 class MongoRemote implements SyncRemote {
-  MongoRemote({DbCollection Function(String nama)? koleksi})
-      : _koleksi = koleksi ?? MongoDatabase.getCollection;
+  MongoRemote({
+    DbCollection Function(String nama)? koleksi,
+    this.batasOperasi = const Duration(seconds: 20),
+  }) : _koleksi = koleksi ?? MongoDatabase.getCollection;
 
   final DbCollection Function(String nama) _koleksi;
+  final Duration batasOperasi;
 
   /// Memetakan hasil driver ke [RemoteWrite].
   ///
@@ -42,7 +49,8 @@ class MongoRemote implements SyncRemote {
           filter: filter,
           projection: fields == null ? null : {for (final f in fields) f: 1},
         )
-        .toList();
+        .toList()
+        .timeout(batasOperasi);
   }
 
   @override
@@ -52,8 +60,9 @@ class MongoRemote implements SyncRemote {
     Map<String, dynamic> update, {
     bool upsert = false,
   }) async {
-    final hasil =
-        await _koleksi(koleksi).updateOne(filter, update, upsert: upsert);
+    final hasil = await _koleksi(koleksi)
+        .updateOne(filter, update, upsert: upsert)
+        .timeout(batasOperasi);
     return petakan(hasil);
   }
 
@@ -62,7 +71,8 @@ class MongoRemote implements SyncRemote {
     String koleksi,
     Map<String, dynamic> filter,
   ) async {
-    final hasil = await _koleksi(koleksi).deleteOne(filter);
+    final hasil =
+        await _koleksi(koleksi).deleteOne(filter).timeout(batasOperasi);
     return petakan(hasil);
   }
 }

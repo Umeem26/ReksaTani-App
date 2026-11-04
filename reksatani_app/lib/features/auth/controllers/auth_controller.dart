@@ -14,6 +14,9 @@ class AuthController {
     errorMessage.value = null;
 
     try {
+      // Aplikasi bisa dimulai saat offline, jadi koneksi mungkin belum ada.
+      await MongoDatabase.ping();
+
       // 1. Panggil Collection 'users' dari MongoDB
       // Pastikan nama collection-nya benar (asumsi: 'users')
       var usersCollection = MongoDatabase.getCollection('users');
