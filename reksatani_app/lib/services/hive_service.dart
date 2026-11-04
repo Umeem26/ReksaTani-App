@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../models/hive/user_hive_model.dart';
 import '../models/hive/petani_hive_model.dart';
 import '../models/hive/komoditas_hive_model.dart';
@@ -18,7 +22,20 @@ class HiveService {
   static const String _transaksiBoxName = 'transaksiBox';
   static const String _settingsBoxName = 'settingsBox';
 
+  static const String _folderKarantina = 'hive_karantina';
+  static const int _batasSalinanKarantina = 3;
+
+  String? _testPath;
+  final List<String> _dikarantina = [];
+
+  /// Sumber waktu untuk nama salinan karantina.
+  @visibleForTesting
+  DateTime Function() jam = DateTime.now;
+
   Future<void> init({String? testPath}) async {
+    _testPath = testPath;
+    _dikarantina.clear();
+
     if (testPath != null) {
       Hive.init(testPath);
     } else {
@@ -41,23 +58,101 @@ class HiveService {
       Hive.registerAdapter(NotifikasiHiveModelAdapter());
     }
 
-    // ── FIX: Membuka Box dengan Sistem Keamanan Auto-Repair ──
     await _openBoxSafe<UserHiveModel>(_usersBoxName);
     await _openBoxSafe<PetaniHiveModel>(_petaniBoxName);
     await _openBoxSafe<KomoditasHiveModel>(_komoditasBoxName);
     await _openBoxSafe<TransaksiHiveModel>(_transaksiBoxName);
     await _openBoxSafe<NotifikasiHiveModel>('notifikasiBox');
     await _openBoxSafe(_settingsBoxName);
+
+    await _beritahuKarantina();
   }
 
-  // ── INOVASI: Fungsi Ajaib Anti-Korup ──
+  /// Membuka box. Bila gagal, file box disalin dulu ke `hive_karantina/`, baru
+  /// dihapus dan dibuat ulang.
+  ///
+  /// Penyebab tersering kegagalan di sini adalah salah skema adapter, bukan
+  /// korupsi, karena Hive sudah memulihkan checksum rusak sendiri. Jadi datanya
+  /// masih bisa diselamatkan dengan adapter yang benar, dan tidak boleh hilang.
   Future<void> _openBoxSafe<T>(String boxName) async {
     try {
       await Hive.openBox<T>(boxName);
+    } on FileSystemException {
+      rethrow; // I/O sementara atau disk penuh: jangan hapus apa pun.
     } catch (e) {
-      debugPrint('🚨 [HiveService] Box $boxName korup! Melakukan auto-repair...');
-      await Hive.deleteBoxFromDisk(boxName); // Hapus data rusak
-      await Hive.openBox<T>(boxName);        // Buat ulang yang baru
+      final salinan = await _karantina(boxName);
+      if (salinan == null) rethrow; // Gagal menyalin: JANGAN hapus.
+
+      debugPrint('[HiveService] Box $boxName gagal dibuka (${e.runtimeType}). '
+          'Dicadangkan ke ${salinan.path}');
+      await Hive.deleteBoxFromDisk(boxName);
+      await Hive.openBox<T>(boxName);
+      _dikarantina.add(boxName);
+    }
+  }
+
+  /// Menyalin file box tanpa `.lock`. Mengembalikan null bila salinan yang utuh
+  /// tidak bisa dipastikan ada.
+  Future<File?> _karantina(String boxName) async {
+    try {
+      final folderHive =
+          _testPath ?? (await getApplicationDocumentsDirectory()).path;
+      // Hive menyimpan file box dengan nama huruf kecil.
+      final nama = boxName.toLowerCase();
+      final sumber = File(p.join(folderHive, '$nama.hive'));
+      if (!await sumber.exists()) return null;
+
+      final folder = Directory(p.join(folderHive, _folderKarantina));
+      await folder.create(recursive: true);
+
+      final salinan =
+          await sumber.copy(p.join(folder.path, '${nama}_${_stempel(jam())}.hive'));
+      if (await salinan.length() != await sumber.length()) return null;
+
+      await _pangkasKarantina(folder, nama);
+      return salinan;
+    } catch (e) {
+      debugPrint('[HiveService] Gagal mencadangkan $boxName: ${e.runtimeType}');
+      return null;
+    }
+  }
+
+  Future<void> _pangkasKarantina(Directory folder, String nama) async {
+    try {
+      final pola = RegExp('^${RegExp.escape(nama)}_\\d{8}_\\d{6}\\.hive\$');
+      final salinan = await folder
+          .list()
+          .where((e) => e is File && pola.hasMatch(p.basename(e.path)))
+          .toList();
+      // Nama memuat stempel waktu tetap lebar, jadi urut nama sama dengan urut waktu.
+      salinan.sort((a, b) => p.basename(b.path).compareTo(p.basename(a.path)));
+      for (final lama in salinan.skip(_batasSalinanKarantina)) {
+        await lama.delete();
+      }
+    } catch (e) {
+      // Salinan berlebih tidak membahayakan data, jadi tidak perlu menggagalkan init.
+      debugPrint('[HiveService] Gagal memangkas karantina: ${e.runtimeType}');
+    }
+  }
+
+  static String _stempel(DateTime t) {
+    String dua(int n) => n.toString().padLeft(2, '0');
+    return '${t.year.toString().padLeft(4, '0')}${dua(t.month)}${dua(t.day)}'
+        '_${dua(t.hour)}${dua(t.minute)}${dua(t.second)}';
+  }
+
+  Future<void> _beritahuKarantina() async {
+    for (final boxName in _dikarantina) {
+      final label = boxName.replaceAll('Box', '');
+      try {
+        await NotificationService().addNotification(
+          judul: 'Data Lokal Bermasalah',
+          pesan: 'Data lokal $label bermasalah dan telah dicadangkan. Hubungi admin.',
+          tipe: 'sync',
+        );
+      } catch (e) {
+        debugPrint('[HiveService] Gagal membuat notifikasi karantina: ${e.runtimeType}');
+      }
     }
   }
 
@@ -112,16 +207,6 @@ class HiveService {
     await transaksiBox.clear();
     await notifikasiBox.clear();
     await settingsBox.clear();
-  }
-
-  Future<void> repairBoxes() async {
-    try {
-      await init();
-    } catch (e) {
-      debugPrint("🚨 [HiveService] Gagal merepair box: $e");
-      await Hive.deleteBoxFromDisk(_transaksiBoxName);
-      await init();
-    }
   }
 
   List<Map<String, dynamic>> exportTransaksiToJson() {
