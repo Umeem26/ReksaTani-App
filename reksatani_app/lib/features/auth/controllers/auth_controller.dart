@@ -4,6 +4,7 @@ import 'package:bcrypt/bcrypt.dart';
 import '../../../models/hive/user_hive_model.dart';
 import '../../../services/hive_service.dart';
 import '../../../services/mongodb_service.dart'; // Import MongoDB Service temanmu
+import '../../../services/sync/mongo_id.dart';
 
 class AuthController {
   final ValueNotifier<bool> isLoading = ValueNotifier(false);
@@ -66,7 +67,7 @@ class AuthController {
 
       // 5. Jika COCOK, Kita ambil datanya dari MongoDB dan ubah jadi format Lokal (Hive)
       final loggedInUser = UserHiveModel(
-        id: userDoc['_id'].toString(), // ObjectId dari Mongo diubah ke String
+        id: MongoId.kanonik(userDoc['_id']),
         username: userDoc['username'],
         passwordHash: finalPasswordHash,
         role: userDoc['role'], // 'pengepul' atau 'manajer'

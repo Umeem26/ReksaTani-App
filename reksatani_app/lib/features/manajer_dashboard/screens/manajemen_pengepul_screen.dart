@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../services/sync/mongo_id.dart';
 import '../controllers/manajemen_pengepul_controller.dart';
 
 class ManajemenPengepulScreen extends StatefulWidget {
@@ -304,8 +305,9 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
                           final id = item['_id'];
                           final username = item['username'] ?? '';
                           final sisaUangJalan = (item['sisa_uang_jalan'] ?? 0).toDouble();
-                          final lastSync = _getWaktuSyncTerakhir(id.toString());
-                          final history = _getTransaksiAgen(id.toString());
+                          final idAgen = MongoId.kanonik(id);
+                          final lastSync = _getWaktuSyncTerakhir(idAgen);
+                          final history = _getTransaksiAgen(idAgen);
                           final online = _isOnline(lastSync);
 
                           return Container(

@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import 'package:bcrypt/bcrypt.dart';
 import '../../../../services/mongodb_service.dart';
 import '../../../../services/hive_service.dart';
+import '../../../../services/sync/mongo_id.dart';
 import '../../../../models/hive/user_hive_model.dart';
 
 class ManajemenPengepulController {
@@ -14,7 +15,7 @@ class ManajemenPengepulController {
       final docs = await col.find(where.eq('role', 'pengepul')).toList();
       
       for (final d in docs) {
-        final id = d['_id'].toString();
+        final id = MongoId.kanonik(d['_id']);
         final m = UserHiveModel(
           id: id,
           username: d['username'] ?? '',
@@ -93,7 +94,10 @@ class ManajemenPengepulController {
     try {
       final col = MongoDatabase.getCollection('users');
       
-      final existing = await col.findOne(where.eq('username', username.trim()).ne('_id', id));
+      final existing = await col.findOne({
+        'username': username.trim(),
+        '_id': {r'$nin': MongoId.kandidat(id)},
+      });
       if (existing != null) {
         return false;
       }
@@ -110,12 +114,13 @@ class ManajemenPengepulController {
         updater = updater.set('password_hash', passwordHash);
       }
 
-      await col.updateOne(
-        where.eq('_id', id),
-        updater,
-      );
+      final hasil = await col.updateOne(MongoId.filterId(id), updater);
+      // Server menjawab sukses walau filter tidak mengenai dokumen apa pun.
+      if (!hasil.isSuccess || hasil.nMatched == 0) {
+        return false;
+      }
 
-      final m = _hive.usersBox.get(id.toString());
+      final m = _hive.usersBox.get(MongoId.kanonik(id));
       if (m != null) {
         m.username = username.trim();
         if (passwordHash != null) {
@@ -135,9 +140,9 @@ class ManajemenPengepulController {
   Future<bool> hapusPengepul(dynamic id) async {
     try {
       final col = MongoDatabase.getCollection('users');
-      await col.deleteOne(where.eq('_id', id));
+      await col.deleteOne(MongoId.filterId(id));
 
-      await _hive.usersBox.delete(id.toString());
+      await _hive.usersBox.delete(MongoId.kanonik(id));
 
       return true;
     } catch (e) {

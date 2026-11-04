@@ -10,6 +10,7 @@ import '../models/hive/komoditas_hive_model.dart';
 import '../models/hive/transaksi_hive_model.dart';
 import 'notification_service.dart';
 import '../models/hive/notifikasi_hive_model.dart';
+import 'sync/mongo_id.dart';
 
 class HiveService {
   static final HiveService _instance = HiveService._internal();
@@ -24,6 +25,9 @@ class HiveService {
 
   static const String _folderKarantina = 'hive_karantina';
   static const int _batasSalinanKarantina = 3;
+
+  static const String _kunciVersiId = 'idSchemaVersion';
+  static const int _versiIdKanonik = 2;
 
   String? _testPath;
   final List<String> _dikarantina = [];
@@ -66,6 +70,105 @@ class HiveService {
     await _openBoxSafe(_settingsBoxName);
 
     await _beritahuKarantina();
+    await _migrasiIdKanonik();
+  }
+
+  /// Sekali jalan: mengubah literal `ObjectId("<hex>")` di Hive ke bentuk kanonik.
+  ///
+  /// Setiap langkah aman dijalankan ulang, dan versi baru ditulis paling akhir,
+  /// sehingga aplikasi yang mati di tengah akan melanjutkannya pada start berikut.
+  /// `idLokal` sengaja tidak disentuh: nilainya kunci opak yang sudah ada di cloud.
+  Future<void> _migrasiIdKanonik() async {
+    if (settingsBox.get(_kunciVersiId) == _versiIdKanonik) return;
+    try {
+      await _migrasiPetani();
+      await _migrasiUsers();
+      await _migrasiTransaksi();
+      await settingsBox.put(_kunciVersiId, _versiIdKanonik);
+    } catch (e) {
+      // Jangan menghalangi aplikasi terbuka. Dicoba lagi pada start berikutnya.
+      debugPrint('[HiveService] Migrasi id tertunda: ${e.runtimeType}');
+    }
+  }
+
+  Future<void> _migrasiPetani() async {
+    for (final kunciLama in petaniBox.keys.toList()) {
+      final lama = petaniBox.get(kunciLama);
+      if (lama == null) continue;
+      final id = MongoId.kanonik(lama.id);
+      final pengepulId = MongoId.kanonik(lama.pengepulId);
+
+      if (kunciLama == id) {
+        if (lama.id != id || lama.pengepulId != pengepulId) {
+          lama
+            ..id = id
+            ..pengepulId = pengepulId;
+          await lama.save();
+        }
+        continue;
+      }
+
+      // Objek Hive tidak bisa disimpan di dua kunci, jadi perlu objek baru.
+      // Kunci lama baru dihapus setelah kunci baru tertulis.
+      if (!petaniBox.containsKey(id)) {
+        await petaniBox.put(
+          id,
+          PetaniHiveModel(
+            id: id,
+            namaPetani: lama.namaPetani,
+            desa: lama.desa,
+            pengepulId: pengepulId,
+            sisaHutangKasbon: lama.sisaHutangKasbon,
+            waktuDibuat: lama.waktuDibuat,
+          ),
+        );
+      }
+      await petaniBox.delete(kunciLama);
+    }
+  }
+
+  Future<void> _migrasiUsers() async {
+    for (final kunciLama in usersBox.keys.toList()) {
+      final lama = usersBox.get(kunciLama);
+      if (lama == null) continue;
+      final id = MongoId.kanonik(lama.id);
+
+      if (kunciLama == 'currentUser' || kunciLama == id) {
+        if (lama.id != id) {
+          lama.id = id;
+          await lama.save();
+        }
+        continue;
+      }
+
+      if (!usersBox.containsKey(id)) {
+        await usersBox.put(
+          id,
+          UserHiveModel(
+            id: id,
+            username: lama.username,
+            passwordHash: lama.passwordHash,
+            role: lama.role,
+            sisaUangJalan: lama.sisaUangJalan,
+            waktuDibuat: lama.waktuDibuat,
+          ),
+        );
+      }
+      await usersBox.delete(kunciLama);
+    }
+  }
+
+  Future<void> _migrasiTransaksi() async {
+    for (final t in transaksiBox.values.toList()) {
+      final petaniId = MongoId.kanonik(t.petaniId);
+      final pengepulId = MongoId.kanonik(t.pengepulId);
+      if (t.petaniId != petaniId || t.pengepulId != pengepulId) {
+        t
+          ..petaniId = petaniId
+          ..pengepulId = pengepulId;
+        await t.save();
+      }
+    }
   }
 
   /// Membuka box. Bila gagal, file box disalin dulu ke `hive_karantina/`, baru

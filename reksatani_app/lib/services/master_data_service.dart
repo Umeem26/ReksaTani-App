@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart'; // Wajib untuk ChangeNotifier
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import 'dart:io';
@@ -9,6 +11,7 @@ import '../models/hive/komoditas_hive_model.dart';
 import '../models/hive/transaksi_hive_model.dart';
 import '../models/hive/user_hive_model.dart';
 import 'notification_service.dart';
+import 'sync/mongo_id.dart';
 
 /// SRP: Satu-satunya class yang boleh baca/tulis data master
 /// antara MongoDB dan Hive lokal. Sekarang bersifat REACTIVE (ChangeNotifier).
@@ -30,10 +33,10 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
       await _hive.petaniBox.clear();
       for (final d in docs) {
         final m = PetaniHiveModel(
-          id: d['_id'].toString(),
+          id: MongoId.kanonik(d['_id']),
           namaPetani: d['nama_petani'] ?? '',
           desa: d['desa'] ?? '',
-          pengepulId: d['pengepul_id']?.toString() ?? '',
+          pengepulId: MongoId.kanonik(d['pengepul_id']),
           sisaHutangKasbon: (d['sisa_hutang_kasbon'] ?? 0).toDouble(),
           waktuDibuat: DateTime.tryParse(d['waktu_dibuat']?.toString() ?? '') ?? DateTime.now(),
         );
@@ -55,7 +58,7 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
             .toList();
 
         final m = KomoditasHiveModel(
-          id: d['_id'].toString(),
+          id: MongoId.kanonik(d['_id']),
           namaKomoditas: d['nama_komoditas'] ?? '',
           unitSatuan: d['unit_satuan'] ?? 'kg',
           gradeKualitas: grades,
@@ -79,7 +82,7 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
 
       for (final d in docs) {
         final m = UserHiveModel(
-          id: d['_id'].toString(),
+          id: MongoId.kanonik(d['_id']),
           username: d['username'] ?? '',
           passwordHash: '', 
           role: d['role'] ?? 'pengepul',
@@ -101,20 +104,22 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
 
       final col = MongoDatabase.getCollection('transaksi');
       
-      final selector = (user.role == 'manager' || user.role == 'manajer' || user.role == 'admin')
-          ? where.ne('pengepul_id', '') 
-          : where.eq('pengepul_id', user.id);
-          
+      final dynamic selector = (user.role == 'manager' || user.role == 'manajer' || user.role == 'admin')
+          ? where.ne('pengepul_id', '')
+          : MongoId.filterRef('pengepul_id', user.id);
+
       final docs = await col.find(selector).toList();
 
       for (final d in docs) {
+        // Sengaja bukan MongoId.kanonik untuk `_id`: baris lama dari dokumen tanpa
+        // id_lokal sudah tersimpan dengan kunci ini, dan idLokal adalah kunci opak.
         final idLokal = d['id_lokal']?.toString() ?? d['_id'].toString();
         if (_hive.transaksiBox.containsKey(idLokal)) continue;
 
         final m = TransaksiHiveModel(
           idLokal: idLokal,
-          pengepulId: d['pengepul_id']?.toString() ?? '',
-          petaniId: d['petani_id']?.toString() ?? '',
+          pengepulId: MongoId.kanonik(d['pengepul_id']),
+          petaniId: MongoId.kanonik(d['petani_id']),
           namaPengepul: d['nama_pengepul']?.toString() ?? '',
           namaPetani: d['nama_petani']?.toString() ?? '',
           namaKomoditas: d['nama_komoditas']?.toString() ?? '',
@@ -179,8 +184,8 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
         }
         final res = await col.insertOne({
           'id_lokal': t.idLokal,
-          'pengepul_id': t.pengepulId,
-          'petani_id': t.petaniId,
+          'pengepul_id': MongoId.kanonik(t.pengepulId),
+          'petani_id': MongoId.kanonik(t.petaniId),
           'nama_pengepul': t.namaPengepul,
           'nama_petani': t.namaPetani,
           'nama_komoditas': t.namaKomoditas,
@@ -204,10 +209,7 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
 
           if (t.nominalPotongKasbon > 0 && t.petaniId.isNotEmpty) {
             try {
-              await MongoDatabase.getCollection('petani').updateOne(
-                where.eq('_id', t.petaniId),
-                modify.inc('sisa_hutang_kasbon', -t.nominalPotongKasbon),
-              );
+              await _incSaldo('petani', t.petaniId, 'sisa_hutang_kasbon', -t.nominalPotongKasbon);
             } catch (e) {
               print('Error update kasbon petani di MongoDB: $e');
             }
@@ -216,10 +218,7 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
           final uangTunaiKeluar = t.totalBayar - t.nominalPotongKasbon;
           if (uangTunaiKeluar > 0) {
             try {
-              await MongoDatabase.getCollection('users').updateOne(
-                where.eq('_id', t.pengepulId),
-                modify.inc('sisa_uang_jalan', -uangTunaiKeluar),
-              );
+              await _incSaldo('users', t.pengepulId, 'sisa_uang_jalan', -uangTunaiKeluar);
             } catch (e) {
               print('Error update saldo kas agen di MongoDB: $e');
             }
@@ -228,6 +227,18 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
       }
     } catch (e) {
       print('Error uploadPendingTransaksi: $e');
+    }
+  }
+
+  /// Server menjawab sukses walau filter tidak mengenai dokumen apa pun, jadi
+  /// jumlah dokumen yang kena harus diperiksa.
+  Future<void> _incSaldo(String koleksi, String id, String field, double delta) async {
+    final hasil = await MongoDatabase.getCollection(koleksi).updateOne(
+      MongoId.filterId(id),
+      modify.inc(field, delta),
+    );
+    if (hasil.nMatched == 0) {
+      developer.log('Saldo tidak terbarui: $koleksi/$id tidak ditemukan', name: 'MasterDataService');
     }
   }
 
@@ -241,7 +252,7 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
         final res = await coll.updateOne(
           where.eq('id_lokal', t.idLokal),
           modify
-              .set('petani_id', t.petaniId)
+              .set('petani_id', MongoId.kanonik(t.petaniId))
               .set('nama_petani', t.namaPetani)
               .set('nama_komoditas', t.namaKomoditas)
               .set('grade_terpilih', t.gradeTerpilih)
@@ -275,20 +286,14 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
         if (res.isSuccess) {
           if (t.nominalPotongKasbon > 0 && t.petaniId.isNotEmpty) {
             try {
-              await MongoDatabase.getCollection('petani').updateOne(
-                where.eq('_id', t.petaniId),
-                modify.inc('sisa_hutang_kasbon', t.nominalPotongKasbon),
-              );
+              await _incSaldo('petani', t.petaniId, 'sisa_hutang_kasbon', t.nominalPotongKasbon);
             } catch (e) {}
           }
 
           final uangTunaiKeluar = t.totalBayar - t.nominalPotongKasbon;
           if (uangTunaiKeluar > 0) {
             try {
-              await MongoDatabase.getCollection('users').updateOne(
-                where.eq('_id', t.pengepulId),
-                modify.inc('sisa_uang_jalan', uangTunaiKeluar),
-              );
+              await _incSaldo('users', t.pengepulId, 'sisa_uang_jalan', uangTunaiKeluar);
             } catch (e) {}
           }
 
