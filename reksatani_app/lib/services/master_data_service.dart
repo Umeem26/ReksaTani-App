@@ -192,7 +192,8 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
         .where((t) =>
             t.createdAt.year == today.year &&
             t.createdAt.month == today.month &&
-            t.createdAt.day == today.day)
+            t.createdAt.day == today.day &&
+            t.statusSinkronisasi != 'pending_delete')
         .fold(0.0, (s, t) => s + t.berat);
   }
 }

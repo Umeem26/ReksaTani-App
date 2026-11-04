@@ -15,6 +15,7 @@ import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import '../../../../services/notification_service.dart';
 import '../../../../services/master_data_service.dart';
 import '../../../../services/saldo/kasbon_rules.dart';
+import '../../../../services/saldo/transaksi_ditolak.dart';
 import '../../../../../shared/widgets/transaksi_detail_sheet.dart';
 import 'notifikasi_screen.dart';
 import 'package:provider/provider.dart';
@@ -271,8 +272,15 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                       ),
                                     );
                                     if (ok == true && mounted) {
-                                      await _controller.hapusTransaksi(t);
-                                      setState(() {});
+                                      try {
+                                        await _controller.hapusTransaksi(t);
+                                      } on TransaksiDitolak catch (e) {
+                                        if (!context.mounted) return;
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text(e.pesan, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)), backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating),
+                                        );
+                                      }
+                                      if (mounted) setState(() {});
                                     }
                                   }
                                 : null,

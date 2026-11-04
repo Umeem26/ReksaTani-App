@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../../shared/widgets/connectivity_wrapper.dart';
 import '../../../../services/master_data_service.dart';
 import '../../../../services/saldo/kasbon_rules.dart';
+import '../../../../services/saldo/transaksi_ditolak.dart';
 import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
@@ -186,7 +187,14 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                                     ),
                                   );
                                   if (ok == true && mounted) {
-                                    await _ctrl.hapusTransaksi(listTampil[i]);
+                                    try {
+                                      await _ctrl.hapusTransaksi(listTampil[i]);
+                                    } on TransaksiDitolak catch (e) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text(e.pesan, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)), backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating),
+                                      );
+                                    }
                                   }
                                 }
                               : null,

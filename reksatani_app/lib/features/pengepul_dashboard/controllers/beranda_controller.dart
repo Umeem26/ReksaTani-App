@@ -4,15 +4,17 @@ import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../services/hive_service.dart';
 import '../../../../../services/master_data_service.dart';
 import '../../../../../services/saldo/kasbon_rules.dart';
+import '../../../../../services/saldo/transaksi_ledger_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 
 class BerandaController {
   final _svc  = MasterDataService();
   final _hive = HiveService();
+  final _ledger = TransaksiLedgerService();
 
   UserHiveModel get user => _hive.usersBox.get('currentUser')!;
-  
-  int get jumlahTransaksi => _hive.transaksiBox.length;
+
+  int get jumlahTransaksi => _svc.getRiwayatTransaksi().length;
   double get totalBerat => _svc.totalBeratHariIni;
   int get pending => _svc.jumlahPending;
 
@@ -66,30 +68,9 @@ class BerandaController {
     await _svc.syncAll();
   }
 
+  /// Melempar `TransaksiDitolak` bila aturan uang menolaknya.
   Future<void> hapusTransaksi(TransaksiHiveModel trx) async {
-    if (trx.nominalPotongKasbon > 0 && trx.petaniId.isNotEmpty) {
-      try {
-        final petani = _hive.petaniBox.values.firstWhere((p) => p.id == trx.petaniId);
-        petani.sisaHutangKasbon += trx.nominalPotongKasbon;
-        await petani.save();
-      } catch (_) {}
-    }
-
-    final uangTunaiKeluar = trx.totalBayar - trx.nominalPotongKasbon;
-    if (uangTunaiKeluar > 0) {
-      final user = _hive.usersBox.get('currentUser');
-      if (user != null) {
-        user.sisaUangJalan += uangTunaiKeluar;
-        await user.save();
-      }
-    }
-
-    if (trx.statusSinkronisasi == 'pending') {
-      await _hive.transaksiBox.delete(trx.idLokal);
-    } else if (trx.statusSinkronisasi == 'synced' || trx.statusSinkronisasi == 'pending_update') {
-      trx.statusSinkronisasi = 'pending_delete';
-      await trx.save();
-    }
+    await _ledger.hapus(trx);
     _svc.syncAll();
   }
 

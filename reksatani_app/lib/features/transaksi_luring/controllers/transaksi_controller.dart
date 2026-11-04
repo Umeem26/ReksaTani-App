@@ -302,11 +302,4 @@ class TransaksiController {
     await Future.delayed(const Duration(milliseconds: 400));
     MasterDataService().syncAll();
   }
-
-  Future<void> deleteTransaksi(TransaksiHiveModel trx) async {
-    if (trx.statusSinkronisasi == 'pending') {
-      await _hive.transaksiBox.delete(trx.idLokal);
-      MasterDataService().syncAll();
-    }
-  }
 }

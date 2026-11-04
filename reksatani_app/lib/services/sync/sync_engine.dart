@@ -223,8 +223,11 @@ class SyncEngine {
 
     for (final t in _hive.getPendingDeleteTransaksi()) {
       try {
-        final hasil =
-            await remote.deleteOne('transaksi', {'id_lokal': t.idLokal});
+        // Baris hasil pull dari dokumen tanpa id_lokal: kuncinya adalah `_id`.
+        final filter = MongoId.idLokalBuatanAplikasi(t.idLokal)
+            ? <String, dynamic>{'id_lokal': t.idLokal}
+            : MongoId.filterId(t.idLokal);
+        final hasil = await remote.deleteOne('transaksi', filter);
         if (!hasil.ok) {
           masalah.add(SyncIssue(
             tahap: _tahapHapus,
