@@ -19,10 +19,13 @@ class ManajemenPengepulController {
   static const String _sisa = 'sisa_uang_jalan';
 
   /// Pesan untuk layar bila edit tidak berhasil.
-  static String pesanGagalEdit(HasilEditPengepul hasil) =>
-      hasil == HasilEditPengepul.tidakDitemukan
-          ? 'Data agen tidak ditemukan. Muat ulang daftar lalu coba lagi.'
-          : 'Gagal menyimpan data. Username tersebut sudah digunakan. Silakan gunakan username lain.';
+  static String pesanGagalEdit(HasilEditPengepul hasil) => switch (hasil) {
+        HasilEditPengepul.tidakDitemukan =>
+          'Data agen tidak ditemukan. Muat ulang daftar lalu coba lagi.',
+        HasilEditPengepul.usernameDipakai =>
+          'Gagal menyimpan data. Username tersebut sudah digunakan. Silakan gunakan username lain.',
+        _ => 'Gagal menyimpan data. Periksa koneksi lalu coba lagi.',
+      };
 
   /// Selisih saldo dari isian form.
   ///

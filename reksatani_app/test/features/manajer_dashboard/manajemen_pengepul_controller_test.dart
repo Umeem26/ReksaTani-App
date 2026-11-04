@@ -190,7 +190,13 @@ void main() {
     test('koneksi gagal: gagal, bukan tidakDitemukan', () async {
       remote.gagalSebelum('updateOne', 1, koleksi: 'users');
 
-      expect(await edit(lama: 0, baru: 5), HasilEditPengepul.gagal);
+      final hasil = await edit(lama: 0, baru: 5);
+
+      expect(hasil, HasilEditPengepul.gagal);
+      expect(
+        ManajemenPengepulController.pesanGagalEdit(hasil),
+        'Gagal menyimpan data. Periksa koneksi lalu coba lagi.',
+      );
     });
 
     test('ditolak server: gagal, dan tidak mencoba jalur lain', () async {
