@@ -53,11 +53,16 @@ class FakeRemote implements SyncRemote {
   final Map<String, Set<String>> _unik = {};
   final List<_Injeksi> _injeksi = [];
   final Map<String, List<Map<String, dynamic>>> _sisipanBalapan = {};
+  final Map<String, List<int>> _tolakan = {};
 
   /// Semua panggilan, berurutan.
   final List<PanggilanRemote> panggilan = [];
 
   bool online = true;
+
+  /// Dijalankan sekali, setelah tulisan berikutnya diterapkan dan sebelum balasan
+  /// sampai ke klien. Untuk mensimulasikan agen yang mengedit selama sync berjalan.
+  Future<void> Function()? saatMenungguBalasan;
 
   // ── Pengaturan tes ──────────────────────────────────────────────
 
@@ -83,6 +88,11 @@ class FakeRemote implements SyncRemote {
   /// Ini mensimulasikan aplikasi mati atau balasan yang hilang.
   void gagalSesudah(String op, int n, {String? koleksi}) =>
       _injeksi.add(_Injeksi(op, koleksi, true, n));
+
+  /// Tulisan berikutnya ke [koleksi] ditolak server: tidak diterapkan, tanpa
+  /// exception, dengan `ok: false` dan [kode].
+  void tolakBerikutnya(String koleksi, int kode) =>
+      _tolakan.putIfAbsent(koleksi, () => []).add(kode);
 
   /// Mensimulasikan balapan dua upsert: pada upsert berikutnya ke [koleksi],
   /// [dokumen] milik perangkat lain masuk tepat setelah filter tidak menemukan
@@ -138,6 +148,10 @@ class FakeRemote implements SyncRemote {
 
     final hasil = _terapkanUpdate(koleksi, filter, update, upsert);
 
+    final hook = saatMenungguBalasan;
+    saatMenungguBalasan = null;
+    if (hook != null) await hook();
+
     if (injeksi != null) {
       throw RemoteGagal('updateOne', sesudahDiterapkan: true);
     }
@@ -191,6 +205,11 @@ class FakeRemote implements SyncRemote {
     Map<String, dynamic> update,
     bool upsert,
   ) {
+    final tolakan = _tolakan[koleksi];
+    if (tolakan != null && tolakan.isNotEmpty) {
+      return RemoteWrite(ok: false, errorCode: tolakan.removeAt(0));
+    }
+
     final konflik = _periksaOperator(update);
     if (konflik != null) return RemoteWrite(ok: false, errorCode: konflik);
 

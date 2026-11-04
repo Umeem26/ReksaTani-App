@@ -2,7 +2,6 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart'; // Wajib untuk ChangeNotifier
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
-import 'dart:io';
 import '../services/hive_service.dart';
 import '../services/mongodb_service.dart';
 import '../services/cloudinary_service.dart';
@@ -12,6 +11,9 @@ import '../models/hive/transaksi_hive_model.dart';
 import '../models/hive/user_hive_model.dart';
 import 'notification_service.dart';
 import 'sync/mongo_id.dart';
+import 'sync/mongo_remote.dart';
+import 'sync/sync_engine.dart';
+import 'sync/sync_report.dart';
 
 /// SRP: Satu-satunya class yang boleh baca/tulis data master
 /// antara MongoDB dan Hive lokal. Sekarang bersifat REACTIVE (ChangeNotifier).
@@ -23,8 +25,23 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
   final _hive = HiveService();
   final _cloudinary = CloudinaryService();
 
+  SyncEngine? _engine;
+  SyncEngine get _engineAktif => _engine ??= SyncEngine(
+        remote: MongoRemote(),
+        hive: _hive,
+        unggahFoto: _cloudinary.uploadImage,
+      );
+
+  /// Menyuntikkan engine dengan remote palsu, supaya tes tidak menyentuh jaringan.
+  @visibleForTesting
+  set engine(SyncEngine engine) => _engine = engine;
+
   // Flag penanda agar tidak terjadi tumpang tindih saat sync
   bool isSyncing = false;
+
+  /// Hasil siklus sinkronisasi terakhir.
+  SyncReport? laporanTerakhir;
+  final List<SyncIssue> _masalahSiklus = [];
 
   // ── SYNC MongoDB → Hive ────────────────────────────────────────
   Future<void> syncPetani() async {
@@ -157,79 +174,6 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
     return DateTime.tryParse(val.toString());
   }
 
-  Future<void> uploadPendingTransaksi() async {
-    final pending = _hive.getPendingTransaksi();
-    if (pending.isEmpty) return;
-    try {
-      final col = MongoDatabase.getCollection('transaksi');
-      for (final t in pending) {
-        if (t.fotoNota.isNotEmpty && !t.fotoNota.startsWith('http')) {
-          if (await File(t.fotoNota).exists()) {
-            final url = await _cloudinary.uploadImage(t.fotoNota);
-            if (url != null) {
-              t.fotoNota = url;
-              await t.save();
-            }
-          }
-        }
-
-        if (t.fotoFisikBarang.isNotEmpty && !t.fotoFisikBarang.startsWith('http')) {
-          if (await File(t.fotoFisikBarang).exists()) {
-            final url = await _cloudinary.uploadImage(t.fotoFisikBarang);
-            if (url != null) {
-              t.fotoFisikBarang = url;
-              await t.save();
-            }
-          }
-        }
-        final res = await col.insertOne({
-          'id_lokal': t.idLokal,
-          'pengepul_id': MongoId.kanonik(t.pengepulId),
-          'petani_id': MongoId.kanonik(t.petaniId),
-          'nama_pengepul': t.namaPengepul,
-          'nama_petani': t.namaPetani,
-          'nama_komoditas': t.namaKomoditas,
-          'grade_terpilih': t.gradeTerpilih,
-          'berat': t.berat,
-          'harga_beli_satuan': t.hargaBeliSatuan,
-          'nominal_potong_kasbon': t.nominalPotongKasbon,
-          'total_bayar': t.totalBayar,
-          'foto_fisik_barang': t.fotoFisikBarang,
-          'foto_nota': t.fotoNota,
-          'latitude': t.latitude,
-          'longitude': t.longitude,
-          'status_sinkronisasi': 'synced',
-          'created_at': t.createdAt.toIso8601String(),
-        });
-        
-        if (res.isSuccess) {
-          t.statusSinkronisasi = 'synced';
-          t.waktuDisinkron = DateTime.now();
-          await t.save();
-
-          if (t.nominalPotongKasbon > 0 && t.petaniId.isNotEmpty) {
-            try {
-              await _incSaldo('petani', t.petaniId, 'sisa_hutang_kasbon', -t.nominalPotongKasbon);
-            } catch (e) {
-              print('Error update kasbon petani di MongoDB: $e');
-            }
-          }
-
-          final uangTunaiKeluar = t.totalBayar - t.nominalPotongKasbon;
-          if (uangTunaiKeluar > 0) {
-            try {
-              await _incSaldo('users', t.pengepulId, 'sisa_uang_jalan', -uangTunaiKeluar);
-            } catch (e) {
-              print('Error update saldo kas agen di MongoDB: $e');
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('Error uploadPendingTransaksi: $e');
-    }
-  }
-
   /// Server menjawab sukses walau filter tidak mengenai dokumen apa pun, jadi
   /// jumlah dokumen yang kena harus diperiksa.
   Future<void> _incSaldo(String koleksi, String id, String field, double delta) async {
@@ -239,38 +183,11 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
     );
     if (hasil.nMatched == 0) {
       developer.log('Saldo tidak terbarui: $koleksi/$id tidak ditemukan', name: 'MasterDataService');
-    }
-  }
-
-  Future<void> uploadPendingUpdateTransaksi() async {
-    try {
-      final updates = _hive.getPendingUpdateTransaksi();
-      if (updates.isEmpty) return;
-
-      final coll = MongoDatabase.getCollection('transaksi');
-      for (final t in updates) {
-        final res = await coll.updateOne(
-          where.eq('id_lokal', t.idLokal),
-          modify
-              .set('petani_id', MongoId.kanonik(t.petaniId))
-              .set('nama_petani', t.namaPetani)
-              .set('nama_komoditas', t.namaKomoditas)
-              .set('grade_terpilih', t.gradeTerpilih)
-              .set('berat', t.berat)
-              .set('harga_beli_satuan', t.hargaBeliSatuan)
-              .set('total_bayar', t.totalBayar)
-              .set('status_sinkronisasi', 'synced')
-              .set('waktu_disinkron', DateTime.now().toIso8601String()),
-        );
-
-        if (res.isSuccess) {
-          t.statusSinkronisasi = 'synced';
-          t.waktuDisinkron = DateTime.now();
-          await t.save();
-        }
-      }
-    } catch (e) {
-      print('Error uploadPendingUpdateTransaksi: $e');
+      _masalahSiklus.add(SyncIssue(
+        tahap: 'push_hapus',
+        jenis: 'saldo_tidak_terbarui',
+        pesan: '$koleksi/$id',
+      ));
     }
   }
 
@@ -311,24 +228,33 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
     isSyncing = true;
     notifyListeners(); // Beritahu UI kalau loading spinner bisa dimunculkan
 
+    _masalahSiklus.clear();
+    var terkirim = 0;
+
     try {
       // PERBAIKAN ERROR 2: Gunakan fungsi ping() bawaanmu yang sudah dilengkapi auto-reconnect!
-      final isDbReady = await MongoDatabase.ping();
+      final isDbReady = await _engineAktif.remote.ping();
       if (!isDbReady) {
          // Jika ping gagal (tidak ada internet), batalkan proses sync secara halus
-         return; 
+         _masalahSiklus.add(const SyncIssue(
+           tahap: 'ping',
+           jenis: 'offline',
+           pesan: 'Database tidak terjangkau',
+         ));
+         return;
       }
 
       final pendingCount = _hive.getPendingTransaksi().length;
-      
+
       await syncPetani();
       await syncKomoditas();
       await syncAgents();
-      await uploadPendingTransaksi();
-      await uploadPendingUpdateTransaksi();
+      final laporanPush = await _engineAktif.pushTransaksi();
+      terkirim = laporanPush.terkirim;
+      _masalahSiklus.addAll(laporanPush.masalah);
       await uploadPendingDeleteTransaksi();
       final trxBaru = await syncRiwayatTransaksi();
-      
+
       final remainingCount = _hive.getPendingTransaksi().length;
       final successCount = pendingCount - remainingCount;
       
@@ -356,7 +282,17 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
 
     } catch (e) {
       print('Auto-Sync failed: $e');
+      _masalahSiklus.add(SyncIssue(
+        tahap: 'siklus',
+        jenis: 'siklus_gagal',
+        pesan: e.runtimeType.toString(),
+      ));
     } finally {
+      laporanTerakhir = SyncReport(
+        masalah: _masalahSiklus,
+        terkirim: terkirim,
+        selesai: DateTime.now(),
+      );
       isSyncing = false;
       notifyListeners(); // 🔴 PENTING: BERITAHU SELURUH UI UNTUK RENDER ULANG!
     }
