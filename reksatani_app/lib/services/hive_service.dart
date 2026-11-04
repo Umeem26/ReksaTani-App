@@ -120,6 +120,7 @@ class HiveService {
             pengepulId: pengepulId,
             sisaHutangKasbon: lama.sisaHutangKasbon,
             waktuDibuat: lama.waktuDibuat,
+            statusSinkronisasi: lama.statusSinkronisasi,
           ),
         );
       }
@@ -284,6 +285,10 @@ class HiveService {
       tipe: 'sync',
     );
   }
+
+  /// Petani yang masih tampil di layar: selain yang menunggu dihapus.
+  Iterable<PetaniHiveModel> get petaniAktif => petaniBox.values
+      .where((p) => p.statusSinkronisasi != 'pending_delete');
 
   List<TransaksiHiveModel> getPendingTransaksi() {
     return transaksiBox.values

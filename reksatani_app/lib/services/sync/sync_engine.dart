@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 
 import '../../models/hive/komoditas_hive_model.dart';
 import '../../models/hive/petani_hive_model.dart';
@@ -43,6 +44,11 @@ class SyncEngine {
   static const String _tahapPush = 'push_transaksi';
   static const String _tahapHapus = 'push_hapus';
   static const String _tahapRekonsiliasi = 'rekonsiliasi';
+  static const String _tahapPushPetani = 'push_petani';
+  static const String _tahapHapusPetani = 'push_hapus_petani';
+
+  /// Penanda sync pertama sesudah petani punya antrean.
+  static const String _kunciAntreanPetani = 'petaniAntreanAktif';
 
   static const String _dasarKasbon = 'saldo_dasar_kasbon';
   static const String _sisaKasbon = 'sisa_hutang_kasbon';
@@ -72,12 +78,15 @@ class SyncEngine {
   Future<SyncReport> siklus() async {
     final masalah = <SyncIssue>[];
 
+    // Petani dulu, supaya transaksi yang merujuk petani baru punya dokumennya.
+    await pushPetani(masalah);
     final push = await pushTransaksi();
     masalah.addAll(push.masalah);
     final hapus = await pushHapusTransaksi();
     masalah.addAll(hapus.masalah);
 
     final konteks = await _rekonsiliasiSaldo(masalah);
+    await _pushHapusPetani(konteks, masalah);
 
     await _tarikKomoditas(masalah);
     await _tarikAgen(konteks, masalah);
@@ -90,6 +99,159 @@ class SyncEngine {
       riwayatBaru: riwayatBaru,
       selesai: _jam(),
     );
+  }
+
+  // ── Push petani ─────────────────────────────────────────────────
+
+  /// Mengirim petani yang dibuat atau diubah di perangkat ini. Kegagalan satu
+  /// baris dicatat, barisnya tetap di antrean, dan baris lain tetap berjalan.
+  Future<void> pushPetani(List<SyncIssue> masalah) async {
+    final antrean = _hive.petaniBox.values
+        .where((p) =>
+            p.statusSinkronisasi == 'pending' ||
+            p.statusSinkronisasi == 'pending_update')
+        .toList();
+
+    for (final p in antrean) {
+      try {
+        await _kirimPetani(p, masalah);
+      } catch (e) {
+        _catat(masalah, _tahapPushPetani, 'koneksi_gagal', e, idLokal: p.id);
+      }
+    }
+  }
+
+  Future<void> _kirimPetani(PetaniHiveModel p, List<SyncIssue> masalah) async {
+    final statusAwal = p.statusSinkronisasi;
+    final namaAwal = p.namaPetani;
+    final desaAwal = p.desa;
+    final baru = statusAwal == 'pending';
+
+    final isi = {'nama_petani': namaAwal, 'desa': desaAwal};
+    final hasil = baru
+        // `_id` persis, bukan kandidat: upsert dengan `$in` akan membuat `_id`
+        // baru. Baris `pending` selalu ber-id buatan perangkat.
+        ? await remote.updateOne(
+            'petani',
+            {'_id': p.id},
+            {
+              r'$set': isi,
+              r'$setOnInsert': {
+                'pengepul_id': MongoId.kanonik(p.pengepulId),
+                _dasarKasbon: 0.0,
+                _sisaKasbon: 0.0,
+                'waktu_dibuat': p.waktuDibuat.toIso8601String(),
+              },
+            },
+            upsert: true,
+          )
+        : await remote.updateOne(
+            'petani',
+            MongoId.filterId(p.id),
+            {r'$set': isi},
+          );
+
+    if (!hasil.ok) {
+      masalah.add(SyncIssue(
+        tahap: _tahapPushPetani,
+        idLokal: p.id,
+        jenis: 'ditolak_server',
+        pesan: 'Kode ${hasil.errorCode}',
+      ));
+      return;
+    }
+
+    if (!hasil.kenaDokumen) {
+      masalah.add(SyncIssue(
+        tahap: _tahapPushPetani,
+        idLokal: p.id,
+        jenis: 'dokumen_hilang',
+        pesan: 'petani/${p.id} sudah tidak ada di cloud',
+      ));
+      // Kasbon tidak boleh hilang tanpa jejak, jadi barisnya dipertahankan.
+      if (p.isInBox && p.sisaHutangKasbon <= 0) await p.delete();
+      return;
+    }
+
+    if (!p.isInBox) return;
+
+    // Agen bisa mengubah baris selama pengiriman berjalan. Perubahan itu belum
+    // terkirim, jadi baris harus tetap di antrean.
+    final diubahSaatKirim = p.statusSinkronisasi != statusAwal ||
+        p.namaPetani != namaAwal ||
+        p.desa != desaAwal;
+    if (diubahSaatKirim) return;
+
+    p.statusSinkronisasi = 'synced';
+    await p.save();
+  }
+
+  /// Menghapus dokumen petani yang ditandai `pending_delete`, sesudah rekonsiliasi.
+  ///
+  /// Saat ditandai, kasbon di perangkat ini nol. Kasbon yang masuk dari perangkat
+  /// lain baru terlihat sekarang, dan dalam hal itu penghapusan dibatalkan: baris
+  /// kembali tampil dengan saldo dari pull di siklus yang sama.
+  Future<void> _pushHapusPetani(
+    _KonteksSaldo? konteks,
+    List<SyncIssue> masalah,
+  ) async {
+    final antrean = _hive.petaniBox.values
+        .where((p) => p.statusSinkronisasi == 'pending_delete')
+        .toList();
+    if (antrean.isEmpty) return;
+
+    // Rekonsiliasi gagal berarti kasbon cloud tidak diketahui. Coba lagi nanti.
+    final user = _hive.usersBox.get('currentUser');
+    if (konteks == null && user?.role == 'pengepul') return;
+
+    for (final p in antrean) {
+      try {
+        final docs = await remote.find(
+          'petani',
+          MongoId.filterId(p.id),
+          fields: const [_dasarKasbon, _sisaKasbon],
+        );
+        if (docs.isNotEmpty && _kasbonCloud(docs.first, p.id, konteks) > _toleransi) {
+          masalah.add(SyncIssue(
+            tahap: _tahapHapusPetani,
+            idLokal: p.id,
+            jenis: 'hapus_petani_ditolak',
+            pesan: 'petani/${p.id} punya kasbon di cloud',
+          ));
+          p.statusSinkronisasi = 'synced';
+          await p.save();
+          continue;
+        }
+
+        final hasil = await remote.deleteOne('petani', MongoId.filterId(p.id));
+        if (!hasil.ok) {
+          masalah.add(SyncIssue(
+            tahap: _tahapHapusPetani,
+            idLokal: p.id,
+            jenis: 'ditolak_server',
+            pesan: 'Kode ${hasil.errorCode}',
+          ));
+          continue;
+        }
+        await p.delete();
+      } catch (e) {
+        _catat(masalah, _tahapHapusPetani, 'koneksi_gagal', e, idLokal: p.id);
+      }
+    }
+  }
+
+  /// Kasbon menurut cloud plus baris yang belum terkirim dari perangkat ini.
+  double _kasbonCloud(
+    Map<String, dynamic> dok,
+    String id,
+    _KonteksSaldo? konteks,
+  ) {
+    final dasar = dok[_dasarKasbon];
+    if (konteks != null && dasar is num && konteks.cakupanPetani.contains(id)) {
+      final efektif = SaldoLedger.efektif(konteks.dokumen, _barisBelumTerkirim());
+      return SaldoLedger.saldo(dasar.toDouble(), efektif.deltaKasbon(id));
+    }
+    return _angka(dok[_sisaKasbon]);
   }
 
   // ── Push transaksi ──────────────────────────────────────────────
@@ -531,9 +693,13 @@ class SyncEngine {
           continue;
         }
 
+        // Perubahan lokal yang belum terkirim tidak boleh tertimpa nilai cloud.
+        if (lama.statusSinkronisasi == 'synced') {
+          lama
+            ..namaPetani = d['nama_petani'] ?? ''
+            ..desa = d['desa'] ?? '';
+        }
         lama
-          ..namaPetani = d['nama_petani'] ?? ''
-          ..desa = d['desa'] ?? ''
           ..pengepulId = MongoId.kanonik(d['pengepul_id'])
           ..sisaHutangKasbon = kasbon
           ..waktuDibuat = _waktuDibuat(d) ?? lama.waktuDibuat;
@@ -545,13 +711,45 @@ class SyncEngine {
       }
       await _hive.petaniBox.putAll({for (final m in baru) m.id: m});
 
-      final kunciHilang = _hive.petaniBox.keys
-          .where((k) => !idCloud.contains(k))
-          .toList();
-      await _hive.petaniBox.deleteAll(kunciHilang);
+      await _rapikanPetaniDiLuarCloud(idCloud, user);
     } catch (e) {
       _catat(masalah, 'pull_petani', 'koneksi_gagal', e);
     }
+  }
+
+  /// Baris yang tidak ada di cloud: antrean dipertahankan, baris `synced` berarti
+  /// sudah dihapus di cloud.
+  ///
+  /// Sebelum ada antrean, petani yang insert-nya gagal tampak `synced` juga
+  /// karena nilai default adapter. Jadi pada sync pertama, baris milik agen ini
+  /// yang id-nya buatan perangkat dikirim ulang, bukan dihapus. Harganya: petani
+  /// yang benar-benar dihapus di cloud bisa hidup kembali satu kali.
+  Future<void> _rapikanPetaniDiLuarCloud(
+    Set<String> idCloud,
+    UserHiveModel? user,
+  ) async {
+    final syncPertama = _hive.settingsBox.get(_kunciAntreanPetani) != true;
+    final hilang = <dynamic>[];
+
+    for (final kunci in _hive.petaniBox.keys.toList()) {
+      if (idCloud.contains(kunci)) continue;
+      final p = _hive.petaniBox.get(kunci);
+      if (p == null || p.statusSinkronisasi != 'synced') continue;
+
+      final idBuatanPerangkat = ObjectId.tryParse(p.id) == null;
+      if (syncPertama &&
+          idBuatanPerangkat &&
+          user != null &&
+          MongoId.sama(p.pengepulId, user.id)) {
+        p.statusSinkronisasi = 'pending';
+        await p.save();
+        continue;
+      }
+      hilang.add(kunci);
+    }
+
+    await _hive.petaniBox.deleteAll(hilang);
+    if (syncPertama) await _hive.settingsBox.put(_kunciAntreanPetani, true);
   }
 
   double _kasbonLokal(

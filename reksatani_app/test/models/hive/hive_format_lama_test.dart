@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:reksatani_app/models/hive/petani_hive_model.dart';
 import 'package:reksatani_app/models/hive/transaksi_hive_model.dart';
 
 /// Menulis baris transaksi seperti versi aplikasi sebelum `3c4a6fa`:
@@ -58,6 +59,34 @@ class _AdapterTransaksiTanpaField20 extends TypeAdapter<TransaksiHiveModel> {
       ..write(obj.waktuDisinkron)
       ..writeByte(19)
       ..write(obj.skorKeyakinan);
+  }
+}
+
+/// Menulis baris petani seperti sebelum ada antrean: field 0 sampai 5.
+class _AdapterPetaniTanpaField6 extends TypeAdapter<PetaniHiveModel> {
+  @override
+  final int typeId = 1;
+
+  @override
+  PetaniHiveModel read(BinaryReader reader) =>
+      throw UnimplementedError('Hanya dipakai untuk menulis');
+
+  @override
+  void write(BinaryWriter writer, PetaniHiveModel obj) {
+    writer
+      ..writeByte(6)
+      ..writeByte(0)
+      ..write(obj.id)
+      ..writeByte(1)
+      ..write(obj.namaPetani)
+      ..writeByte(2)
+      ..write(obj.desa)
+      ..writeByte(3)
+      ..write(obj.pengepulId)
+      ..writeByte(4)
+      ..write(obj.sisaHutangKasbon)
+      ..writeByte(5)
+      ..write(obj.waktuDibuat);
   }
 }
 
@@ -128,6 +157,43 @@ void main() {
       final lagi = await Hive.openBox<TransaksiHiveModel>('transaksiBox');
 
       expect(lagi.get('t1')!.isManualGrading, isTrue);
+    });
+
+    test('petani tanpa field 6 terbuka sebagai synced, kasbonnya utuh', () async {
+      Hive.registerAdapter<PetaniHiveModel>(
+        _AdapterPetaniTanpaField6(),
+        override: true,
+      );
+      final lama = await Hive.openBox<PetaniHiveModel>('petaniBox');
+      await lama.put(
+        'p1',
+        PetaniHiveModel(
+          id: 'p1',
+          namaPetani: 'Pak Tani',
+          desa: 'Desa',
+          pengepulId: 'agen',
+          sisaHutangKasbon: 12500,
+          waktuDibuat: DateTime(2026),
+        ),
+      );
+      await lama.close();
+
+      Hive.registerAdapter<PetaniHiveModel>(
+        PetaniHiveModelAdapter(),
+        override: true,
+      );
+      final baru = await Hive.openBox<PetaniHiveModel>('petaniBox');
+
+      final p = baru.get('p1')!;
+      expect(p.statusSinkronisasi, 'synced');
+      expect(p.sisaHutangKasbon, 12500);
+      expect(p.namaPetani, 'Pak Tani');
+
+      p.statusSinkronisasi = 'pending';
+      await p.save();
+      await baru.close();
+      final lagi = await Hive.openBox<PetaniHiveModel>('petaniBox');
+      expect(lagi.get('p1')!.statusSinkronisasi, 'pending');
     });
   });
 }

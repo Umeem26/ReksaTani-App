@@ -17,7 +17,7 @@ class TransaksiController {
   List<PetaniHiveModel> get daftarPetani {
     final user = _hive.usersBox.get('currentUser');
     if (user == null) return [];
-    return _hive.petaniBox.values
+    return _hive.petaniAktif
         .where((p) => p.pengepulId == user.id)
         .toList();
   }

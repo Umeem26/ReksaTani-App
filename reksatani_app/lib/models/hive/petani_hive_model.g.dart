@@ -23,13 +23,14 @@ class PetaniHiveModelAdapter extends TypeAdapter<PetaniHiveModel> {
       pengepulId: fields[3] as String,
       sisaHutangKasbon: fields[4] as double,
       waktuDibuat: fields[5] as DateTime,
+      statusSinkronisasi: fields[6] == null ? 'synced' : fields[6] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, PetaniHiveModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class PetaniHiveModelAdapter extends TypeAdapter<PetaniHiveModel> {
       ..writeByte(4)
       ..write(obj.sisaHutangKasbon)
       ..writeByte(5)
-      ..write(obj.waktuDibuat);
+      ..write(obj.waktuDibuat)
+      ..writeByte(6)
+      ..write(obj.statusSinkronisasi);
   }
 
   @override

@@ -5,10 +5,9 @@ import '../../../../../services/master_data_service.dart';
 import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../shared/widgets/app_theme.dart';
 import '../../../../../services/hive_service.dart';
-import '../../../../../services/mongodb_service.dart';
+import '../../../../../services/petani_service.dart';
+import '../../../../../services/saldo/transaksi_ditolak.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:uuid/uuid.dart';
-import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 
 class ManajemenPetaniScreen extends StatefulWidget {
   const ManajemenPetaniScreen({super.key});
@@ -19,6 +18,7 @@ class ManajemenPetaniScreen extends StatefulWidget {
 
 class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
   final _hiveService = HiveService();
+  final _petaniService = PetaniService();
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
 
@@ -38,37 +38,9 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
         petaniLama: petani,
         onSimpan: (nama, desa) async {
           if (petani == null) {
-            final id = const Uuid().v4();
-            final currentUser = _hiveService.usersBox.get('currentUser')!;
-            final baru = PetaniHiveModel(
-              id: id,
-              namaPetani: nama,
-              desa: desa,
-              pengepulId: currentUser.id,
-              sisaHutangKasbon: 0.0,
-              waktuDibuat: DateTime.now(),
-            );
-            await _hiveService.petaniBox.put(id, baru);
-            try {
-              final col = MongoDatabase.getCollection('petani');
-              await col.insertOne({
-                '_id': id,
-                'nama_petani': nama,
-                'desa': desa,
-                'pengepul_id': currentUser.id,
-                'sisa_hutang_kasbon': 0.0,
-                'saldo_dasar_kasbon': 0.0,
-                'created_at': DateTime.now().toIso8601String(),
-              });
-            } catch (_) {}
+            await _petaniService.tambah(nama: nama, desa: desa);
           } else {
-            petani.namaPetani = nama;
-            petani.desa = desa;
-            await petani.save();
-            try {
-              final col = MongoDatabase.getCollection('petani');
-              await col.updateOne(where.eq('_id', petani.id), modify.set('nama_petani', nama).set('desa', desa));
-            } catch (_) {}
+            await _petaniService.ubah(petani, nama: nama, desa: desa);
           }
           if (mounted) {
             Navigator.pop(context);
@@ -91,13 +63,20 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w700))),
           ElevatedButton(
             onPressed: () async {
-              final idHapus = petani.id;
-              await petani.delete();
+              String? penolakan;
               try {
-                final col = MongoDatabase.getCollection('petani');
-                await col.deleteOne(where.eq('_id', idHapus));
-              } catch (_) {}
-              if (mounted) { Navigator.pop(context); setState(() {}); }
+                await _petaniService.hapus(petani);
+              } on TransaksiDitolak catch (e) {
+                penolakan = e.pesan;
+              }
+              if (!mounted) return;
+              Navigator.pop(context);
+              setState(() {});
+              if (penolakan != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(penolakan, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)), backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
             child: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -161,7 +140,7 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
             builder: (context, Box<PetaniHiveModel> box, _) {
               if (user == null) return const Center(child: Text('User tidak ditemukan'));
               
-              final listPetani = box.values.where((p) {
+              final listPetani = _hiveService.petaniAktif.where((p) {
                 final isMilikUser = p.pengepulId == user.id;
                 final matchSearch = p.namaPetani.toLowerCase().contains(_searchQuery) || p.desa.toLowerCase().contains(_searchQuery);
                 return isMilikUser && matchSearch;

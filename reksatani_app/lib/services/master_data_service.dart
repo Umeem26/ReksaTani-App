@@ -158,7 +158,7 @@ class MasterDataService extends ChangeNotifier { // <--- 2. Tambahkan extends Ch
         .toList();
   }
 
-  List<PetaniHiveModel> getDaftarPetani() => _hive.petaniBox.values.toList();
+  List<PetaniHiveModel> getDaftarPetani() => _hive.petaniAktif.toList();
 
   List<UserHiveModel> getDaftarAgen() => _hive.usersBox.values.where((u) => u.role == 'pengepul').toList();
 

@@ -56,7 +56,7 @@ class BerandaController {
   List<TransaksiHiveModel> get riwayatTerbaru => _svc.getRiwayatTransaksi().take(3).toList();
   List<PetaniHiveModel> get mitraTerbaru {
     final userId = user.id;
-    return _hive.petaniBox.values
+    return _hive.petaniAktif
         .where((p) => p.pengepulId == userId)
         .toList()
         .reversed
