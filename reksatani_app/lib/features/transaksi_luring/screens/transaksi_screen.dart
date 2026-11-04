@@ -6,6 +6,7 @@ import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/komoditas_hive_model.dart';
 import '../controllers/transaksi_controller.dart';
 import '../../../services/saldo/kasbon_rules.dart';
+import '../../../services/saldo/transaksi_ditolak.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../../pcd_scanner/screens/pcd_camera_screen.dart';
 import '../../pcd_scanner/services/commodity_mapper.dart'; 
@@ -219,33 +220,50 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       return;
     }
 
-    final uangTunaiKeluar = KasbonRules.tunaiKeluar(
-      totalBayar: _totalBayar,
-      potongan: KasbonRules.potongan(
-        sisaKasbon: _petaniTerpilih?.sisaHutangKasbon ?? 0,
+    final bool kasCukup;
+    if (_isEditMode) {
+      // Saldo yang sudah negatif tidak boleh menghalangi edit yang tidak menambah pengeluaran.
+      final kasSetelahEdit = _controller
+          .pratinjauEdit(widget.editTrx!, petaniTerpilih: _petaniTerpilih, totalBayar: _totalBayar)
+          .uangJalan;
+      kasCukup = kasSetelahEdit >= 0 || kasSetelahEdit >= _controller.sisaUangJalan;
+    } else {
+      final uangTunaiKeluar = KasbonRules.tunaiKeluar(
         totalBayar: _totalBayar,
-      ),
-    );
+        potongan: KasbonRules.potongan(
+          sisaKasbon: _petaniTerpilih?.sisaHutangKasbon ?? 0,
+          totalBayar: _totalBayar,
+        ),
+      );
+      kasCukup = _controller.sisaUangJalan >= uangTunaiKeluar;
+    }
 
-    if (_controller.sisaUangJalan < uangTunaiKeluar) {
+    if (!kasCukup) {
       _showSnack('Saldo Uang Jalan Anda tidak mencukupi untuk menyelesaikan transaksi ini (Sisa saldo: Rp ${_fmt(_controller.sisaUangJalan.toInt())}).', isError: true);
       return;
     }
 
     setState(() => _saving = true);
     if (_isEditMode) {
-      await _controller.updateTransaksi(
-        widget.editTrx!,
-        petaniTerpilih: _petaniTerpilih,
-        namaPenjual: _namaPenjualCtrl.text,
-        komoditasTerpilih: _komoditasTerpilih,
-        gradeTerpilih: _gradeTerpilih,
-        beratText: _beratCtrl.text,
-        hargaText: _hargaCtrl.text,
-        totalBayar: _totalBayar,
-        fotoNotaPath: _fotoNotaPath ?? '',
-        fotoBarangPath: _fotoBarangPath ?? '',
-      );
+      try {
+        await _controller.updateTransaksi(
+          widget.editTrx!,
+          petaniTerpilih: _petaniTerpilih,
+          namaPenjual: _namaPenjualCtrl.text,
+          komoditasTerpilih: _komoditasTerpilih,
+          gradeTerpilih: _gradeTerpilih,
+          beratText: _beratCtrl.text,
+          hargaText: _hargaCtrl.text,
+          totalBayar: _totalBayar,
+          fotoNotaPath: _fotoNotaPath ?? '',
+          fotoBarangPath: _fotoBarangPath ?? '',
+        );
+      } on TransaksiDitolak catch (e) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        _showSnack(e.pesan, isError: true);
+        return;
+      }
     } else {
       await _controller.simpanTransaksi(
         petaniTerpilih: _petaniTerpilih,

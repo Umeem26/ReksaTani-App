@@ -5,6 +5,8 @@ import '../../../../../models/hive/komoditas_hive_model.dart';
 import '../../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../../services/hive_service.dart';
 import '../../../../../services/saldo/kasbon_rules.dart';
+import '../../../../../services/saldo/transaksi_ditolak.dart';
+import '../../../../../services/sync/mongo_id.dart';
 import 'package:reksatani_app/services/master_data_service.dart';
 
 class TransaksiController {
@@ -168,6 +170,29 @@ class TransaksiController {
     required String fotoNotaPath,
     required String fotoBarangPath,
   }) async {
+    if (KasbonRules.isPencairan(existingTrx.namaKomoditas)) {
+      throw const TransaksiDitolak(
+        'pencairan_tidak_bisa_diedit',
+        'Pencairan kasbon tidak bisa diedit.',
+      );
+    }
+    if (existingTrx.statusSinkronisasi == 'pending_delete') {
+      throw const TransaksiDitolak(
+        'sudah_dihapus',
+        'Transaksi ini sedang menunggu dihapus.',
+      );
+    }
+
+    final user = _hive.usersBox.get('currentUser')!;
+    final petaniLama = _petaniDari(existingTrx);
+    final efek = pratinjauEdit(
+      existingTrx,
+      petaniTerpilih: petaniTerpilih,
+      totalBayar: totalBayar,
+    );
+
+    // Transaksi ditulis dulu. Bila aplikasi mati sebelum saldo tersimpan, sync
+    // berikutnya memperbaiki saldo, karena transaksi adalah sumber kebenaran.
     existingTrx.petaniId        = petaniTerpilih?.id ?? '';
     existingTrx.namaPetani      = namaPenjual.trim();
     existingTrx.namaKomoditas   = komoditasTerpilih?.namaKomoditas ?? '';
@@ -175,7 +200,8 @@ class TransaksiController {
     existingTrx.berat           = parseAngka(beratText) ?? 0;
     existingTrx.hargaBeliSatuan = double.tryParse(hargaText) ?? 0;
     existingTrx.totalBayar      = totalBayar;
-    
+    existingTrx.nominalPotongKasbon = efek.potonganBaru;
+
     if (fotoNotaPath.isNotEmpty) existingTrx.fotoNota = fotoNotaPath;
     if (fotoBarangPath.isNotEmpty) existingTrx.fotoFisikBarang = fotoBarangPath;
     
@@ -186,9 +212,50 @@ class TransaksiController {
     }
 
     await existingTrx.save();
+
+    final kasbonLama = efek.kasbonPetaniLama;
+    if (petaniLama != null && kasbonLama != null) {
+      petaniLama.sisaHutangKasbon = kasbonLama;
+      await petaniLama.save();
+    }
+    final kasbonBaru = efek.kasbonPetaniBaru;
+    if (petaniTerpilih != null && kasbonBaru != null) {
+      petaniTerpilih.sisaHutangKasbon = kasbonBaru;
+      await petaniTerpilih.save();
+    }
+    if (MongoId.sama(existingTrx.pengepulId, user.id)) {
+      user.sisaUangJalan = efek.uangJalan;
+      await user.save();
+    }
+
     await Future.delayed(const Duration(milliseconds: 400));
     MasterDataService().syncAll();
   }
+
+  /// Keadaan saldo bila [trx] diedit, tanpa menulis apa pun. Dipakai layar untuk
+  /// memeriksa kecukupan kas: pembanding yang benar adalah kas sesudah tunai
+  /// lama dikembalikan, bukan kas sekarang.
+  EfekEdit pratinjauEdit(
+    TransaksiHiveModel trx, {
+    required PetaniHiveModel? petaniTerpilih,
+    required double totalBayar,
+  }) {
+    final petaniSama =
+        petaniTerpilih != null && MongoId.sama(petaniTerpilih.id, trx.petaniId);
+    final petaniLama = petaniSama ? petaniTerpilih : _petaniDari(trx);
+    return KasbonRules.hitungEdit(
+      totalLama: trx.totalBayar,
+      potonganLama: trx.nominalPotongKasbon,
+      totalBaru: totalBayar,
+      uangJalan: sisaUangJalan,
+      petaniSama: petaniSama,
+      kasbonPetaniLama: petaniLama?.sisaHutangKasbon,
+      kasbonPetaniBaru: petaniTerpilih?.sisaHutangKasbon,
+    );
+  }
+
+  PetaniHiveModel? _petaniDari(TransaksiHiveModel trx) =>
+      trx.petaniId.isEmpty ? null : _hive.petaniBox.get(MongoId.kanonik(trx.petaniId));
 
   Future<void> simpanKasbonMurni({
     required PetaniHiveModel petaniTerpilih,

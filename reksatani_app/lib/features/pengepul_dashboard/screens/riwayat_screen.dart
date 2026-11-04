@@ -160,7 +160,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                         itemCount: listTampil.length,
                         itemBuilder: (_, i) => _TransaksiCardPremium(
                           trx: listTampil[i],
-                          onEdit: listTampil[i].statusSinkronisasi != 'pending_delete'
+                          onEdit: listTampil[i].statusSinkronisasi != 'pending_delete' && !KasbonRules.isPencairan(listTampil[i].namaKomoditas)
                               ? () async {
                                   final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: listTampil[i])));
                                   if (changed == true && mounted) setState(() {});

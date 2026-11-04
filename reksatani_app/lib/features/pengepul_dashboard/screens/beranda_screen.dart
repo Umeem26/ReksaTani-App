@@ -245,7 +245,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     else
                       ...riwayat.map((t) => _TransaksiRow(
                             trx: t,
-                            onEdit: t.statusSinkronisasi != 'pending_delete'
+                            onEdit: t.statusSinkronisasi != 'pending_delete' && !KasbonRules.isPencairan(t.namaKomoditas)
                                 ? () async {
                                     final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: t)));
                                     if (changed == true && mounted) setState(() {});
