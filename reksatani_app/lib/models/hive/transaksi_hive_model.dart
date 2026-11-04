@@ -64,7 +64,7 @@ class TransaksiHiveModel extends HiveObject {
   @HiveField(19)
   double? skorKeyakinan;
 
-  @HiveField(20)
+  @HiveField(20, defaultValue: false)
   bool isManualGrading;
 
   TransaksiHiveModel({
