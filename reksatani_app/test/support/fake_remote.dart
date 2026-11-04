@@ -18,8 +18,9 @@ class _Injeksi {
   final String? koleksi;
   final bool sesudah;
   int sisa;
+  int lewati;
 
-  _Injeksi(this.op, this.koleksi, this.sesudah, this.sisa);
+  _Injeksi(this.op, this.koleksi, this.sesudah, this.sisa, this.lewati);
 }
 
 /// Satu panggilan yang tercatat, untuk ditegaskan di tes.
@@ -80,14 +81,15 @@ class FakeRemote implements SyncRemote {
   void buatIndexUnik(String koleksi, String field) =>
       _unik.putIfAbsent(koleksi, () => {}).add(field);
 
-  /// [n] panggilan [op] berikutnya gagal sebelum diterapkan.
-  void gagalSebelum(String op, int n, {String? koleksi}) =>
-      _injeksi.add(_Injeksi(op, koleksi, false, n));
+  /// [n] panggilan [op] berikutnya gagal sebelum diterapkan, sesudah melewati
+  /// [lewati] panggilan yang cocok.
+  void gagalSebelum(String op, int n, {String? koleksi, int lewati = 0}) =>
+      _injeksi.add(_Injeksi(op, koleksi, false, n, lewati));
 
   /// [n] panggilan [op] berikutnya diterapkan, lalu klien menerima exception.
   /// Ini mensimulasikan aplikasi mati atau balasan yang hilang.
   void gagalSesudah(String op, int n, {String? koleksi}) =>
-      _injeksi.add(_Injeksi(op, koleksi, true, n));
+      _injeksi.add(_Injeksi(op, koleksi, true, n, 0));
 
   /// Tulisan berikutnya ke [koleksi] ditolak server: tidak diterapkan, tanpa
   /// exception, dengan `ok: false` dan [kode].
@@ -192,6 +194,10 @@ class FakeRemote implements SyncRemote {
   _Injeksi? _ambilInjeksi(String op, String koleksi) {
     for (final i in _injeksi) {
       if (i.sisa > 0 && i.op == op && (i.koleksi == null || i.koleksi == koleksi)) {
+        if (i.lewati > 0) {
+          i.lewati--;
+          continue;
+        }
         i.sisa--;
         return i;
       }

@@ -57,6 +57,7 @@ class _ManajemenPetaniScreenState extends State<ManajemenPetaniScreen> {
                 'desa': desa,
                 'pengepul_id': currentUser.id,
                 'sisa_hutang_kasbon': 0.0,
+                'saldo_dasar_kasbon': 0.0,
                 'created_at': DateTime.now().toIso8601String(),
               });
             } catch (_) {}

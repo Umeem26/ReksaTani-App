@@ -30,11 +30,15 @@ class SyncReport {
   /// Jumlah baris yang berhasil sampai ke cloud pada siklus ini.
   final int terkirim;
 
+  /// Jumlah baris riwayat dari cloud yang baru masuk ke perangkat ini.
+  final int riwayatBaru;
+
   final DateTime selesai;
 
   SyncReport({
     required List<SyncIssue> masalah,
     required this.terkirim,
+    this.riwayatBaru = 0,
     required this.selesai,
   }) : masalah = List.unmodifiable(masalah);
 

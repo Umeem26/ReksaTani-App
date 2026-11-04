@@ -74,8 +74,29 @@ void main() {
     hasilFoto = {};
     fotoDiunggah = [];
     engine = buatEngine();
-    remote.tanam('petani', {'_id': _oidPetani, 'sisa_hutang_kasbon': 100000.0});
-    remote.tanam('users', {'_id': _oidAgen, 'sisa_uang_jalan': 1000000.0});
+    remote.tanam('petani', {
+      '_id': _oidPetani,
+      'pengepul_id': _oidAgen.oid,
+      'saldo_dasar_kasbon': 100000.0,
+      'sisa_hutang_kasbon': 100000.0,
+    });
+    remote.tanam('users', {
+      '_id': _oidAgen,
+      'role': 'pengepul',
+      'saldo_dasar_uang_jalan': 1000000.0,
+      'sisa_uang_jalan': 1000000.0,
+    });
+    await hive.usersBox.put(
+      'currentUser',
+      UserHiveModel(
+        id: _oidAgen.oid,
+        username: 'agen',
+        passwordHash: '',
+        role: 'pengepul',
+        sisaUangJalan: 1000000,
+        waktuDibuat: DateTime(2026),
+      ),
+    );
   });
 
   tearDown(() async {
@@ -87,8 +108,8 @@ void main() {
     test('satu dokumen, saldo berubah sekali, baris synced', () async {
       await hive.transaksiBox.put(_idLokal, _trx());
 
-      final pertama = await engine.pushTransaksi();
-      await engine.pushTransaksi();
+      final pertama = await engine.siklus();
+      await engine.siklus();
 
       expect(pertama.sukses, isTrue);
       expect(pertama.terkirim, 1);
@@ -103,11 +124,11 @@ void main() {
     test('baris yang terkirim ulang tidak memotong saldo lagi', () async {
       final t = _trx();
       await hive.transaksiBox.put(_idLokal, t);
-      await engine.pushTransaksi();
+      await engine.siklus();
 
       t.statusSinkronisasi = 'pending';
       await t.save();
-      await engine.pushTransaksi();
+      await engine.siklus();
 
       expect(remote.dokumen('transaksi'), hasLength(1));
       expect(kasbonCloud(), 90000);
@@ -127,35 +148,81 @@ void main() {
       expect(remote.dokumen('transaksi'), hasLength(1));
       expect(hive.transaksiBox.get(_idLokal)!.statusSinkronisasi, 'pending');
 
-      final ulang = await buatEngine().pushTransaksi();
+      // Aplikasi mati di sini, jadi saldo belum tersentuh.
+      expect(kasbonCloud(), 100000);
+      expect(uangJalanCloud(), 1000000);
+
+      final ulang = await buatEngine().siklus();
 
       expect(ulang.sukses, isTrue);
       expect(remote.dokumen('transaksi'), hasLength(1));
       expect(hive.transaksiBox.get(_idLokal)!.statusSinkronisasi, 'synced');
-      // Sampai C8, saldo tidak turun pada kasus ini: dokumen sudah ada saat
-      // diulang, jadi $inc tidak dijalankan. Yang dijamin C6 hanya tidak dobel.
-      // C8 mengganti asersi ini menjadi saldo yang benar lewat rekonsiliasi.
-      expect(kasbonCloud(), 100000);
-      expect(uangJalanCloud(), 1000000);
+      expect(kasbonCloud(), 90000);
+      expect(uangJalanCloud(), 960000);
     });
 
-    test(r'$inc gagal setelah upsert: tercatat, dan tidak dobel saat diulang', () async {
-      final t = _trx();
-      await hive.transaksiBox.put(_idLokal, t);
+    test('balasan upsert hilang di tengah siklus: saldo benar di siklus itu juga', () async {
+      await hive.transaksiBox.put(_idLokal, _trx());
+      remote.gagalSesudah('updateOne', 1, koleksi: 'transaksi');
+
+      final gagal = await engine.siklus();
+
+      expect(gagal.terkirim, 0);
+      expect(hive.transaksiBox.get(_idLokal)!.statusSinkronisasi, 'pending');
+      expect(kasbonCloud(), 90000);
+      expect(uangJalanCloud(), 960000);
+      // Baris yang masih pending dan dokumennya tidak boleh terhitung dua kali.
+      expect(hive.usersBox.get('currentUser')!.sisaUangJalan, 960000);
+    });
+
+    test('tulisan saldo gagal setelah upsert: tercatat, lalu benar pada sync berikutnya', () async {
+      await hive.transaksiBox.put(_idLokal, _trx());
       remote.gagalSebelum('updateOne', 1, koleksi: 'petani');
 
-      final hasil = await engine.pushTransaksi();
+      final hasil = await engine.siklus();
 
       expect(hasil.masalah.single.jenis, 'saldo_tidak_terbarui');
-      expect(hasil.masalah.single.idLokal, _idLokal);
+      expect(hasil.masalah.single.tahap, 'rekonsiliasi');
+      expect(hasil.terkirim, 1);
+      expect(kasbonCloud(), 100000);
       expect(uangJalanCloud(), 960000);
 
-      t.statusSinkronisasi = 'pending';
-      await t.save();
-      await buatEngine().pushTransaksi();
+      final ulang = await buatEngine().siklus();
 
+      expect(ulang.sukses, isTrue);
+      expect(kasbonCloud(), 90000);
       expect(uangJalanCloud(), 960000);
       expect(remote.dokumen('transaksi'), hasLength(1));
+    });
+
+    test('balasan tulisan saldo hilang: sync berikutnya tidak mengubah apa pun', () async {
+      await hive.transaksiBox.put(_idLokal, _trx());
+      remote.gagalSesudah('updateOne', 1, koleksi: 'petani');
+
+      await engine.siklus();
+      expect(kasbonCloud(), 90000);
+
+      final jumlahTulis = remote.panggilanTulis('petani').length;
+      final ulang = await buatEngine().siklus();
+
+      expect(ulang.sukses, isTrue);
+      expect(kasbonCloud(), 90000);
+      expect(remote.panggilanTulis('petani'), hasLength(jumlahTulis));
+    });
+
+    test(r'siklus tidak pernah memakai $inc pada saldo', () async {
+      await hive.transaksiBox.put(_idLokal, _trx());
+      await hive.transaksiBox.put(
+        '${_oidAgen.oid}_2',
+        _trx(idLokal: '${_oidAgen.oid}_2', status: 'pending_delete'),
+      );
+
+      await engine.siklus();
+
+      final inc = remote.panggilan.where(
+        (p) => p.update?.containsKey(r'$inc') ?? false,
+      );
+      expect(inc, isEmpty);
     });
 
     test('gagal sebelum diterapkan: tidak ada dokumen, tetap pending', () async {
@@ -288,14 +355,19 @@ void main() {
       expect(upsert, [true, false]);
     });
 
-    test('kalah balapan tidak memotong saldo: dokumen milik pihak lain', () async {
+    test('kalah balapan: saldo tetap terhitung sekali', () async {
       remote.buatIndexUnik('transaksi', 'id_lokal');
-      remote.balapanUpsert('transaksi', {'id_lokal': _idLokal});
+      remote.balapanUpsert('transaksi', {
+        'id_lokal': _idLokal,
+        'pengepul_id': _oidAgen.oid,
+      });
       await hive.transaksiBox.put(_idLokal, _trx());
 
-      await engine.pushTransaksi();
+      await engine.siklus();
 
-      expect(kasbonCloud(), 100000);
+      expect(remote.dokumen('transaksi'), hasLength(1));
+      expect(kasbonCloud(), 90000);
+      expect(uangJalanCloud(), 960000);
     });
   });
 
@@ -305,7 +377,7 @@ void main() {
       await hive.transaksiBox.put(_idLokal, t);
       remote.tolakBerikutnya('transaksi', 121);
 
-      final hasil = await engine.pushTransaksi();
+      final hasil = await engine.siklus();
 
       expect(hasil.terkirim, 0);
       expect(hasil.masalah.single.jenis, 'ditolak_server');
@@ -332,11 +404,11 @@ void main() {
         _trx()..petaniId = ObjectId().oid,
       );
 
-      final hasil = await engine.pushTransaksi();
+      final hasil = await engine.siklus();
 
       final masalah = hasil.masalah.single;
       expect(masalah.jenis, 'saldo_tidak_terbarui');
-      expect(masalah.tahap, 'push_transaksi');
+      expect(masalah.tahap, 'rekonsiliasi');
       expect(hasil.terkirim, 1);
     });
   });
@@ -467,17 +539,6 @@ void main() {
 
   group('MasterDataService mendelegasikan ke engine', () {
     test('syncAll memakai engine suntikan, tanpa jaringan', () async {
-      await hive.usersBox.put(
-        'currentUser',
-        UserHiveModel(
-          id: _oidAgen.oid,
-          username: 'agen',
-          passwordHash: '',
-          role: 'pengepul',
-          sisaUangJalan: 0,
-          waktuDibuat: DateTime(2026),
-        ),
-      );
       await hive.transaksiBox.put(_idLokal, _trx());
       final svc = MasterDataService()..engine = engine;
 
