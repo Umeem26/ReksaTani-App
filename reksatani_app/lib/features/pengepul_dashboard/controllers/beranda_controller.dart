@@ -3,6 +3,7 @@ import '../../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../services/hive_service.dart';
 import '../../../../../services/master_data_service.dart';
+import '../../../../../services/saldo/kasbon_rules.dart';
 import '../../auth/controllers/auth_controller.dart';
 
 class BerandaController {
@@ -25,7 +26,15 @@ class BerandaController {
             t.createdAt.month == today.month &&
             t.createdAt.day == today.day &&
             t.statusSinkronisasi != 'pending_delete')
-        .fold(0.0, (s, t) => s + (t.totalBayar - t.nominalPotongKasbon));
+        .fold(
+          0.0,
+          (s, t) =>
+              s +
+              KasbonRules.tunaiKeluar(
+                totalBayar: t.totalBayar,
+                potongan: t.nominalPotongKasbon,
+              ),
+        );
   }
 
   double get totalPotonganKasbonHariIni {

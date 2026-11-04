@@ -4,6 +4,7 @@ import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../models/hive/komoditas_hive_model.dart';
 import '../../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../../services/hive_service.dart';
+import '../../../../../services/saldo/kasbon_rules.dart';
 import 'package:reksatani_app/services/master_data_service.dart';
 
 class TransaksiController {
@@ -106,8 +107,10 @@ class TransaksiController {
   }) async {
     final user = _hive.usersBox.get('currentUser')!;
     final now  = DateTime.now();
-    final sisaKasbon  = petaniTerpilih?.sisaHutangKasbon ?? 0;
-    final potongan    = sisaKasbon > 0 ? sisaKasbon.clamp(0, totalBayar).toDouble() : 0.0;
+    final potongan = KasbonRules.potongan(
+      sisaKasbon: petaniTerpilih?.sisaHutangKasbon ?? 0,
+      totalBayar: totalBayar,
+    );
 
     // Panggil pencarian GPS di sini
     final koordinat = await _getKoordinatGPS();
@@ -141,7 +144,8 @@ class TransaksiController {
       await petaniTerpilih.save();
     }
 
-    final uangTunaiKeluar = totalBayar - potongan;
+    final uangTunaiKeluar =
+        KasbonRules.tunaiKeluar(totalBayar: totalBayar, potongan: potongan);
     if (uangTunaiKeluar > 0) {
       user.sisaUangJalan -= uangTunaiKeluar;
       await user.save();
@@ -204,7 +208,7 @@ class TransaksiController {
       petaniId: petaniTerpilih.id,
       namaPengepul: user.username,
       namaPetani: petaniTerpilih.namaPetani.trim(),
-      namaKomoditas: 'Pencairan Kasbon Baru', // Label penanda jenis transaksi keuangan
+      namaKomoditas: KasbonRules.labelPencairan,
       gradeTerpilih: '-',
       berat: 0,
       hargaBeliSatuan: 0,

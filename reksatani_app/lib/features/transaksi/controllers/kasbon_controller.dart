@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/user_hive_model.dart';
+import '../../../services/saldo/kasbon_rules.dart';
 
 class KasbonController extends ChangeNotifier {
   PetaniHiveModel? _selectedPetani;
@@ -19,21 +20,28 @@ class KasbonController extends ChangeNotifier {
   double get uangJalanAgen => _uangJalanAgen;
 
   double get totalBayar => _berat * _hargaPerKg;
-  
+
+  double get _potongan => KasbonRules.potongan(
+        sisaKasbon: _selectedPetani?.sisaHutangKasbon ?? 0,
+        totalBayar: totalBayar,
+      );
+
+  double get _tunaiKeluar =>
+      KasbonRules.tunaiKeluar(totalBayar: totalBayar, potongan: _potongan);
+
   double get sisaKasbonPetani {
     if (_selectedPetani == null) return 0.0;
-    final sisa = _selectedPetani!.sisaHutangKasbon - totalBayar;
-    return sisa < 0 ? 0 : sisa;
+    return _selectedPetani!.sisaHutangKasbon - _potongan;
   }
 
   double get sisaUangJalanSetelah {
-    return _uangJalanAgen - totalBayar;
+    return _uangJalanAgen - _tunaiKeluar;
   }
 
-  bool get isValid => totalBayar <= _uangJalanAgen && _selectedPetani != null && _berat > 0;
+  bool get isValid => _tunaiKeluar <= _uangJalanAgen && _selectedPetani != null && _berat > 0;
   String? get error {
     if (_selectedPetani == null) return "Pilih petani terlebih dahulu";
-    if (totalBayar > _uangJalanAgen) return "Uang jalan agen tidak mencukupi!";
+    if (_tunaiKeluar > _uangJalanAgen) return "Uang jalan agen tidak mencukupi!";
     if (_berat <= 0) return "Berat harus lebih dari 0";
     return null;
   }

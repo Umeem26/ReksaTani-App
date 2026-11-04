@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../shared/widgets/connectivity_wrapper.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../services/saldo/kasbon_rules.dart';
 import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
@@ -296,7 +297,7 @@ class _TransaksiCardPremium extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = trx.statusSinkronisasi;
-    final isKasbonMurni = trx.namaKomoditas.toLowerCase().contains('pencairan kasbon');
+    final isKasbonMurni = KasbonRules.isPencairan(trx.namaKomoditas);
 
     // Pengaturan Detail Badge Status Sinkronisasi
     String badgeLabel = 'Tersinkron';

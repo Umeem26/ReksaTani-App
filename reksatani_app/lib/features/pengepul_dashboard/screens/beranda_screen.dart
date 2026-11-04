@@ -14,6 +14,7 @@ import '../../../../../services/mongodb_service.dart';
 import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import '../../../../services/notification_service.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../services/saldo/kasbon_rules.dart';
 import '../../../../../shared/widgets/transaksi_detail_sheet.dart';
 import 'notifikasi_screen.dart';
 import 'package:provider/provider.dart';
@@ -734,7 +735,7 @@ class _TransaksiRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = trx.statusSinkronisasi;
-    final isKasbonMurni = trx.namaKomoditas.toLowerCase().contains('pencairan kasbon');
+    final isKasbonMurni = KasbonRules.isPencairan(trx.namaKomoditas);
     
     Color badgeBg = AppTheme.hijauSoft;
     Color badgeDot = AppTheme.hijauMuda;

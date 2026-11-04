@@ -5,6 +5,7 @@ import '../../../models/hive/transaksi_hive_model.dart';
 import '../../../models/hive/petani_hive_model.dart';
 import '../../../models/hive/komoditas_hive_model.dart';
 import '../controllers/transaksi_controller.dart';
+import '../../../services/saldo/kasbon_rules.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../../pcd_scanner/screens/pcd_camera_screen.dart';
 import '../../pcd_scanner/services/commodity_mapper.dart'; 
@@ -218,9 +219,13 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       return;
     }
 
-    final sisaKasbon = _petaniTerpilih?.sisaHutangKasbon ?? 0;
-    final potongan = sisaKasbon > 0 ? sisaKasbon.clamp(0, _totalBayar).toDouble() : 0.0;
-    final uangTunaiKeluar = _totalBayar - potongan;
+    final uangTunaiKeluar = KasbonRules.tunaiKeluar(
+      totalBayar: _totalBayar,
+      potongan: KasbonRules.potongan(
+        sisaKasbon: _petaniTerpilih?.sisaHutangKasbon ?? 0,
+        totalBayar: _totalBayar,
+      ),
+    );
 
     if (_controller.sisaUangJalan < uangTunaiKeluar) {
       _showSnack('Saldo Uang Jalan Anda tidak mencukupi untuk menyelesaikan transaksi ini (Sisa saldo: Rp ${_fmt(_controller.sisaUangJalan.toInt())}).', isError: true);

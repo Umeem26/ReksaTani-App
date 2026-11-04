@@ -48,13 +48,23 @@ void main() {
       expect(controller.sisaKasbonPetani, 0.0);
     });
 
-    test('Validation should fail if total > uang jalan', () {
+    test('Validation should fail if tunai keluar > uang jalan', () {
+      controller.setSelectedPetani(mockPetani);
+      controller.setBerat(100.0);
+      controller.setHargaPerKg(10000.0);
+
+      // Total 1.000.000, kasbon 500.000 terpotong, jadi tunai 500.000 > uang jalan 0.
+      expect(controller.isValid, isFalse);
+      expect(controller.error, contains("Uang jalan agen tidak mencukupi"));
+    });
+
+    test('Kasbon covering the whole total needs no cash', () {
       controller.setSelectedPetani(mockPetani);
       controller.setBerat(10.0);
       controller.setHargaPerKg(1000.0);
-      
-      expect(controller.isValid, isFalse);
-      expect(controller.error, contains("Uang jalan agen tidak mencukupi"));
+
+      expect(controller.isValid, isTrue);
+      expect(controller.sisaUangJalanSetelah, 0.0);
     });
 
     test('Auto-fill injection should update state', () {

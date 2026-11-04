@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/hive/transaksi_hive_model.dart';
+import '../../services/saldo/kasbon_rules.dart';
 import 'app_theme.dart';
 
 class TransaksiDetailSheet extends StatelessWidget {
@@ -21,7 +22,7 @@ class TransaksiDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final bool isSynced = trx.statusSinkronisasi == 'synced';
-    final bool isKasbonMurni = trx.namaKomoditas.toLowerCase().contains('pencairan kasbon');
+    final bool isKasbonMurni = KasbonRules.isPencairan(trx.namaKomoditas);
 
     return Container(
       height: size.height * 0.88, 
