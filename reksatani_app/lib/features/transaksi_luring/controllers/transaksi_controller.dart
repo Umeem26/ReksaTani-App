@@ -51,16 +51,52 @@ class TransaksiController {
     return double.tryParse(t);
   }
 
+  /// Satu-satunya rumus total. Dipakai untuk data dan untuk tampilan di layar.
+  /// Dibulatkan ke dua desimal seperti saldo, supaya galat `double` tidak terbawa.
   double getTotalBayar(String beratText, String hargaText) {
     final berat = parseAngka(beratText) ?? 0;
-    final harga = double.tryParse(hargaText) ?? 0;
-    return berat * harga;
+    final harga = parseAngka(hargaText) ?? 0;
+    return ((berat * harga) * 100).round() / 100;
   }
 
   bool isHargaMelebihi(KomoditasHiveModel? komoditas, String? gradeTerpilih, String hargaText) {
-    final harga = double.tryParse(hargaText) ?? 0;
+    final harga = parseAngka(hargaText) ?? 0;
     final maks = getHargaMaksGrade(komoditas, gradeTerpilih);
     return maks > 0 && harga > maks;
+  }
+
+  /// Menolak berat yang tidak bisa menjadi total yang sah.
+  void _periksaBerat(String beratText) {
+    final berat = parseAngka(beratText);
+    if (berat == null || !berat.isFinite || berat <= 0) {
+      throw const TransaksiDitolak('berat_tidak_sah', 'Berat harus lebih dari nol.');
+    }
+  }
+
+  /// Aturan harga pembelian. Komoditas dan grade ikut diperiksa, karena tanpa
+  /// keduanya batas harga bernilai 0, yang berarti tidak ada batas sama sekali.
+  void _periksaHarga(
+    KomoditasHiveModel? komoditas,
+    String? grade,
+    String hargaText,
+  ) {
+    if (komoditas == null) {
+      throw const TransaksiDitolak('komoditas_kosong', 'Silakan pilih komoditas.');
+    }
+    if (!getDaftarGrade(komoditas).any((g) => g['grade'] == grade)) {
+      throw const TransaksiDitolak('grade_tidak_dikenal', 'Silakan pilih grade kualitas.');
+    }
+    final harga = parseAngka(hargaText);
+    if (harga == null || !harga.isFinite || harga <= 0) {
+      throw const TransaksiDitolak('harga_tidak_sah', 'Harga harus lebih dari nol.');
+    }
+    if (isHargaMelebihi(komoditas, grade, hargaText)) {
+      final maks = getHargaMaksGrade(komoditas, grade).toInt();
+      throw TransaksiDitolak(
+        'harga_melebihi',
+        'Harga melebihi batas maksimal Grade $grade (Rp $maks).',
+      );
+    }
   }
 
   // ─── FUNGSI BARU: MENGAMBIL KOORDINAT DENGAN TIMEOUT 7 DETIK ───
@@ -97,6 +133,10 @@ class TransaksiController {
     }
   }
 
+  /// Total dihitung di sini dari berat dan harga, tidak diterima dari luar.
+  ///
+  /// Melempar [TransaksiDitolak] bila aturan dilanggar, sebelum ada yang ditulis.
+  /// [izinkanTanpaFoto] adalah jawaban agen atas peringatan foto di layar.
   Future<void> simpanTransaksi({
     required PetaniHiveModel? petaniTerpilih,
     required String namaPenjual,
@@ -104,10 +144,18 @@ class TransaksiController {
     required String? gradeTerpilih,
     required String beratText,
     required String hargaText,
-    required double totalBayar,
     required String fotoNotaPath,
     required String fotoBarangPath,
+    required bool izinkanTanpaFoto,
   }) async {
+    final fotoKurang = fotoNotaPath.isEmpty || fotoBarangPath.isEmpty;
+    if (fotoKurang && !izinkanTanpaFoto) {
+      throw const TransaksiDitolak('foto_kurang', 'Foto nota atau barang belum ada.');
+    }
+    _periksaBerat(beratText);
+    _periksaHarga(komoditasTerpilih, gradeTerpilih, hargaText);
+
+    final totalBayar = getTotalBayar(beratText, hargaText);
     final user = _hive.usersBox.get('currentUser')!;
     final now  = DateTime.now();
     final potongan = KasbonRules.potongan(
@@ -131,14 +179,18 @@ class TransaksiController {
       namaKomoditas: komoditasTerpilih?.namaKomoditas ?? '',
       gradeTerpilih: gradeTerpilih ?? '',
       berat: parseAngka(beratText) ?? 0,
-      hargaBeliSatuan: double.tryParse(hargaText) ?? 0,
+      hargaBeliSatuan: parseAngka(hargaText) ?? 0,
       nominalPotongKasbon: potongan,
       totalBayar: totalBayar,
       fotoFisikBarang: fotoBarang,
       fotoNota: fotoNota,
+      // Foto yang ada tetap harus diunggah dulu. Tahap foto yang menetapkan
+      // `dilewati` sesudahnya bila salah satunya memang kosong.
       statusFoto: FotoTertunda.adalahPathLokal(fotoNota) || FotoTertunda.adalahPathLokal(fotoBarang)
           ? 'pending'
-          : 'ok',
+          : fotoKurang
+              ? 'dilewati'
+              : 'ok',
       // Masukkan hasil GPS ke model
       latitude: koordinat['lat'] ?? 0.0,
       longitude: koordinat['lng'] ?? 0.0,
@@ -174,7 +226,6 @@ class TransaksiController {
     required String? gradeTerpilih,
     required String beratText,
     required String hargaText,
-    required double totalBayar,
     required String fotoNotaPath,
     required String fotoBarangPath,
   }) async {
@@ -191,6 +242,17 @@ class TransaksiController {
       );
     }
 
+    _periksaBerat(beratText);
+    // Hanya bila komoditas, grade, atau harga berubah. Tanpa ini, mengoreksi berat
+    // transaksi lama akan ditolak hanya karena batas harganya sudah diturunkan.
+    final aturanHargaBerlaku = komoditasTerpilih?.namaKomoditas != existingTrx.namaKomoditas ||
+        gradeTerpilih != existingTrx.gradeTerpilih ||
+        parseAngka(hargaText) != existingTrx.hargaBeliSatuan;
+    if (aturanHargaBerlaku) {
+      _periksaHarga(komoditasTerpilih, gradeTerpilih, hargaText);
+    }
+
+    final totalBayar = getTotalBayar(beratText, hargaText);
     final user = _hive.usersBox.get('currentUser')!;
     final petaniLama = _petaniDari(existingTrx);
     final efek = pratinjauEdit(
@@ -215,7 +277,7 @@ class TransaksiController {
     existingTrx.namaKomoditas   = komoditasTerpilih?.namaKomoditas ?? '';
     existingTrx.gradeTerpilih   = gradeTerpilih ?? '';
     existingTrx.berat           = parseAngka(beratText) ?? 0;
-    existingTrx.hargaBeliSatuan = double.tryParse(hargaText) ?? 0;
+    existingTrx.hargaBeliSatuan = parseAngka(hargaText) ?? 0;
     existingTrx.totalBayar      = totalBayar;
     existingTrx.nominalPotongKasbon = efek.potonganBaru;
 
@@ -284,9 +346,13 @@ class TransaksiController {
     required PetaniHiveModel petaniTerpilih,
     required String nominalKasbonText,
   }) async {
+    final double nominalKasbon = double.tryParse(nominalKasbonText) ?? 0.0;
+    if (!nominalKasbon.isFinite || nominalKasbon <= 0) {
+      throw const TransaksiDitolak('nominal_tidak_sah', 'Nominal kasbon harus lebih dari nol.');
+    }
+
     final user = _hive.usersBox.get('currentUser')!;
     final now  = DateTime.now();
-    final double nominalKasbon = double.tryParse(nominalKasbonText) ?? 0.0;
 
     // Ambil koordinat GPS murni luring untuk mencatat lokasi pencairan uang
     final koordinat = await _getKoordinatGPS();

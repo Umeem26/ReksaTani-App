@@ -10,12 +10,14 @@ import 'package:reksatani_app/services/sync/sync_engine.dart';
 
 import 'fake_remote.dart';
 
+/// Batasnya sengaja jauh di atas nominal tes saldo, yang memakai berat 1 sehingga
+/// harga sama dengan total. Tes aturan harga memakai komoditasnya sendiri.
 final komoditasGabah = KomoditasHiveModel(
   id: 'gabah',
   namaKomoditas: 'Gabah',
   unitSatuan: 'kg',
   gradeKualitas: const [
-    {'grade': 'A', 'harga_maks': 100000.0},
+    {'grade': 'A', 'harga_maks': 100000000.0},
   ],
   diperbaruiOleh: '',
   waktuPembaruan: DateTime(2026),

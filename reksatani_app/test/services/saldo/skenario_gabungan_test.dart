@@ -52,9 +52,9 @@ void main() {
         gradeTerpilih: 'A',
         beratText: '1',
         hargaText: total.toStringAsFixed(0),
-        totalBayar: total,
         fotoNotaPath: '',
         fotoBarangPath: '',
+        izinkanTanpaFoto: true,
       );
       await tungguSync();
       return hp.hive.transaksiBox.values.firstWhere((t) => !lama.contains(t.idLokal));
@@ -170,7 +170,6 @@ void main() {
       gradeTerpilih: 'A',
       beratText: '1',
       hargaText: '170000',
-      totalBayar: 170000,
       fotoNotaPath: '',
       fotoBarangPath: '',
     );

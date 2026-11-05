@@ -366,9 +366,9 @@ void main() {
         gradeTerpilih: 'A',
         beratText: '1',
         hargaText: '10000',
-        totalBayar: 10000,
         fotoNotaPath: '',
         fotoBarangPath: '',
+        izinkanTanpaFoto: true,
       );
       await tungguSync();
       expect(hp.petani(oid.oid).sisaHutangKasbon, 0);

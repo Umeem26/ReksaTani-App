@@ -205,13 +205,10 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         return;
       }
 
-      setState(() => _saving = true);
-      await _controller.simpanKasbonMurni(
-        petaniTerpilih: _petaniTerpilih!,
-        nominalKasbonText: _nominalKasbonCtrl.text,
-      );
-      setState(() => _saving = false);
-      _showSuksesSheet();
+      await _jalankanSimpan(() => _controller.simpanKasbonMurni(
+            petaniTerpilih: _petaniTerpilih!,
+            nominalKasbonText: _nominalKasbonCtrl.text,
+          ));
       return;
     }
 
@@ -243,43 +240,79 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       return;
     }
 
-    setState(() => _saving = true);
     if (_isEditMode) {
-      try {
-        await _controller.updateTransaksi(
-          widget.editTrx!,
+      await _jalankanSimpan(() => _controller.updateTransaksi(
+            widget.editTrx!,
+            petaniTerpilih: _petaniTerpilih,
+            namaPenjual: _namaPenjualCtrl.text,
+            komoditasTerpilih: _komoditasTerpilih,
+            gradeTerpilih: _gradeTerpilih,
+            beratText: _beratCtrl.text,
+            hargaText: _hargaCtrl.text,
+            fotoNotaPath: _fotoNotaPath ?? '',
+            fotoBarangPath: _fotoBarangPath ?? '',
+          ));
+      return;
+    }
+
+    final fotoKurang = (_fotoNotaPath ?? '').isEmpty || (_fotoBarangPath ?? '').isEmpty;
+    if (fotoKurang && !await _konfirmasiTanpaFoto()) return;
+    if (!mounted) return;
+
+    await _jalankanSimpan(() => _controller.simpanTransaksi(
           petaniTerpilih: _petaniTerpilih,
           namaPenjual: _namaPenjualCtrl.text,
           komoditasTerpilih: _komoditasTerpilih,
           gradeTerpilih: _gradeTerpilih,
           beratText: _beratCtrl.text,
           hargaText: _hargaCtrl.text,
-          totalBayar: _totalBayar,
           fotoNotaPath: _fotoNotaPath ?? '',
           fotoBarangPath: _fotoBarangPath ?? '',
-        );
-      } on TransaksiDitolak catch (e) {
-        if (!mounted) return;
-        setState(() => _saving = false);
-        _showSnack(e.pesan, isError: true);
-        return;
-      }
-    } else {
-      await _controller.simpanTransaksi(
-        petaniTerpilih: _petaniTerpilih,
-        namaPenjual: _namaPenjualCtrl.text,
-        komoditasTerpilih: _komoditasTerpilih,
-        gradeTerpilih: _gradeTerpilih,
-        beratText: _beratCtrl.text,
-        hargaText: _hargaCtrl.text,
-        totalBayar: _totalBayar,
-        fotoNotaPath: _fotoNotaPath ?? '',
-        fotoBarangPath: _fotoBarangPath ?? '',
-      );
+          izinkanTanpaFoto: fotoKurang,
+        ));
+  }
+
+  /// Satu tempat untuk semua penyimpanan, supaya tombol tidak pernah macet di
+  /// keadaan menyimpan bila ada yang gagal.
+  Future<void> _jalankanSimpan(Future<void> Function() simpan) async {
+    setState(() => _saving = true);
+    var berhasil = false;
+    try {
+      await simpan();
+      berhasil = true;
+    } on TransaksiDitolak catch (e) {
+      if (mounted) _showSnack(e.pesan, isError: true);
+    } catch (_) {
+      if (mounted) _showSnack('Gagal menyimpan transaksi. Silakan coba lagi.', isError: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    if (!mounted) return;
-    setState(() => _saving = false);
-    _showSuksesSheet();
+    if (berhasil && mounted) _showSuksesSheet();
+  }
+
+  /// True bila agen memilih menyimpan tanpa foto. Menutup dialog berarti tidak.
+  Future<bool> _konfirmasiTanpaFoto() async {
+    final lanjut = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Foto Belum Lengkap', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: const Text('Foto nota atau barang belum ada. Simpan tanpa foto?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Simpan tanpa foto', style: TextStyle(color: AppTheme.textSecond)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.hijauTua, foregroundColor: Colors.white, elevation: 0),
+            child: const Text('Ambil foto'),
+          ),
+        ],
+      ),
+    );
+    return lanjut ?? false;
   }
 
   void _showSuksesSheet() {

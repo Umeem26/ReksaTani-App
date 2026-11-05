@@ -38,9 +38,9 @@ void main() {
       gradeTerpilih: 'A',
       beratText: '1',
       hargaText: total.toStringAsFixed(0),
-      totalBayar: total,
       fotoNotaPath: '',
       fotoBarangPath: '',
+      izinkanTanpaFoto: true,
     );
     await tungguSync();
     return barisBaru(lama);
@@ -119,7 +119,6 @@ void main() {
         gradeTerpilih: 'A',
         beratText: '1',
         hargaText: '130000',
-        totalBayar: 130000,
         fotoNotaPath: '',
         fotoBarangPath: '',
       );

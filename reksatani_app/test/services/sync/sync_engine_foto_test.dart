@@ -448,9 +448,9 @@ void main() {
         gradeTerpilih: 'A',
         beratText: '1',
         hargaText: '1000',
-        totalBayar: 1000,
         fotoNotaPath: asli,
         fotoBarangPath: '',
+        izinkanTanpaFoto: true,
       );
       await tungguSync();
 
@@ -476,7 +476,6 @@ void main() {
         gradeTerpilih: 'A',
         beratText: '10',
         hargaText: '5000',
-        totalBayar: 50000,
         fotoNotaPath: buatFile('baru.jpg'),
         fotoBarangPath: '',
       );
@@ -505,7 +504,6 @@ void main() {
         gradeTerpilih: 'A',
         beratText: '10',
         hargaText: '5000',
-        totalBayar: 50000,
         fotoNotaPath: 'https://cdn/n.jpg',
         fotoBarangPath: 'https://cdn/b.jpg',
       );

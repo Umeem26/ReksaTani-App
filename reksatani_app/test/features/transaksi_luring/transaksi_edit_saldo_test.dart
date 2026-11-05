@@ -31,9 +31,9 @@ void main() {
       gradeTerpilih: 'A',
       beratText: '1',
       hargaText: total.toStringAsFixed(0),
-      totalBayar: total,
       fotoNotaPath: '',
       fotoBarangPath: '',
+      izinkanTanpaFoto: true,
     );
     await tungguSync();
     return hp.hive.transaksiBox.values.last;
@@ -52,7 +52,6 @@ void main() {
       gradeTerpilih: 'A',
       beratText: '1',
       hargaText: total.toStringAsFixed(0),
-      totalBayar: total,
       fotoNotaPath: '',
       fotoBarangPath: '',
     );
