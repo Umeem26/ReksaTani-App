@@ -4,6 +4,7 @@ import '../models/hive/petani_hive_model.dart';
 import 'hive_service.dart';
 import 'master_data_service.dart';
 import 'saldo/transaksi_ditolak.dart';
+import 'sync/mongo_id.dart';
 
 /// Satu jalur untuk menambah, mengubah, dan menghapus petani dari layar mana pun.
 ///
@@ -53,13 +54,27 @@ class PetaniService {
   /// Selalu lewat `pending_delete`, juga untuk baris `pending`: upsert-nya bisa
   /// saja sudah sampai ke server walau statusnya belum tersimpan.
   ///
-  /// Melempar [TransaksiDitolak] bila petani masih punya kasbon, dan dalam hal
-  /// itu tidak ada yang berubah.
+  /// Melempar [TransaksiDitolak] bila petani masih punya kasbon atau sudah punya
+  /// transaksi, dan dalam hal itu tidak ada yang berubah. Tanpa aturan kedua,
+  /// menghapus transaksi yang pernah memotong kasbon sesudahnya tidak punya
+  /// dokumen untuk mengembalikan hutangnya.
+  ///
+  /// Baris `pending_delete` tidak dihitung, karena transaksinya sudah dihapus.
+  /// Hive tidak selalu lengkap, jadi mesin sinkron memeriksa lagi di cloud.
   Future<void> hapus(PetaniHiveModel petani) async {
     if (petani.sisaHutangKasbon > 0) {
       throw const TransaksiDitolak(
         'petani_berkasbon',
         'Petani ini masih punya kasbon. Lunasi dulu sebelum menghapusnya.',
+      );
+    }
+    final punyaTransaksi = _hive.transaksiBox.values.any((t) =>
+        t.statusSinkronisasi != 'pending_delete' &&
+        MongoId.sama(t.petaniId, petani.id));
+    if (punyaTransaksi) {
+      throw const TransaksiDitolak(
+        'petani_punya_transaksi',
+        'Petani ini sudah punya transaksi, jadi tidak bisa dihapus.',
       );
     }
     petani.statusSinkronisasi = 'pending_delete';

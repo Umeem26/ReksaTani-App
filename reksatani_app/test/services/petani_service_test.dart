@@ -6,6 +6,7 @@ import 'package:reksatani_app/features/pengepul_dashboard/controllers/beranda_co
 import 'package:reksatani_app/services/master_data_service.dart';
 import 'package:reksatani_app/services/petani_service.dart';
 import 'package:reksatani_app/services/saldo/transaksi_ditolak.dart';
+import 'package:reksatani_app/services/saldo/transaksi_ledger_service.dart';
 
 import '../support/fake_remote.dart';
 import '../support/saldo_harness.dart';
@@ -354,11 +355,16 @@ void main() {
       expect(hp.hive.petaniBox.containsKey(oid.oid), isFalse);
     });
 
-    test('transaksi pending yang memotong petani tetap sampai sebelum dihapus', () async {
-      final oid = ObjectId();
-      tanamPetani(remote, oid, oidAgen.oid, 10000);
-      await hp.sinkron();
-      remote.online = false;
+  });
+
+  group('C16: petani yang punya transaksi tidak bisa dihapus', () {
+    late ObjectId oid;
+
+    Matcher ditolakKarenaTransaksi() => throwsA(
+          isA<TransaksiDitolak>().having((e) => e.kode, 'kode', 'petani_punya_transaksi'),
+        );
+
+    Future<void> beli() async {
       await TransaksiController().simpanTransaksi(
         petaniTerpilih: hp.petani(oid.oid),
         namaPenjual: 'Pak',
@@ -371,16 +377,163 @@ void main() {
         izinkanTanpaFoto: true,
       );
       await tungguSync();
-      expect(hp.petani(oid.oid).sisaHutangKasbon, 0);
+    }
+
+    // Tanpa kasbon, supaya yang teruji hanya aturan transaksi.
+    setUp(() async {
+      oid = ObjectId();
+      tanamPetani(remote, oid, oidAgen.oid, 0);
+      await hp.sinkron();
+    });
+
+    test('kasbon sudah lunas oleh transaksi: ditolak, ini kasus hutang yang bisa hilang', () async {
+      final lunas = ObjectId();
+      tanamPetani(remote, lunas, oidAgen.oid, 10000);
+      await hp.sinkron();
+      oid = lunas;
+      await beli();
+      final p = hp.petani(lunas.oid);
+      expect(p.sisaHutangKasbon, 0);
+
+      await expectLater(svc.hapus(p), ditolakKarenaTransaksi());
+
+      expect(p.statusSinkronisasi, 'synced');
+      await hp.sinkron();
+      expect(dok('petani', lunas), isNotNull);
+    });
+
+    test('transaksi yang belum terkirim juga menghalangi', () async {
+      remote.online = false;
+      await beli();
+
+      await expectLater(svc.hapus(hp.petani(oid.oid)), ditolakKarenaTransaksi());
+      expect(MasterDataService().getDaftarPetani(), hasLength(1));
+    });
+
+    test('bentuk id lama pada baris transaksi tetap dikenali', () async {
+      await beli();
+      final t = hp.hive.transaksiBox.values.single;
+      t.petaniId = 'ObjectId("${oid.oid}")';
+      await t.save();
+
+      await expectLater(svc.hapus(hp.petani(oid.oid)), ditolakKarenaTransaksi());
+    });
+
+    test('kasbon yang ada tetap memakai pesan kasbon', () async {
+      await beli();
+      final p = hp.petani(oid.oid);
+      p.sisaHutangKasbon = 1;
+
+      await expectLater(
+        svc.hapus(p),
+        throwsA(isA<TransaksiDitolak>().having((e) => e.kode, 'kode', 'petani_berkasbon')),
+      );
+    });
+
+    test('cache lokal sudah dibersihkan: cloud membatalkan penghapusan', () async {
+      await beli();
+      await hp.sinkron();
+      await hp.hive.transaksiBox.clear();
+      remote.online = false;
+
       await svc.hapus(hp.petani(oid.oid));
       await tungguSync();
+      expect(MasterDataService().getDaftarPetani(), isEmpty);
 
       remote.online = true;
       await hp.sinkron();
 
-      expect(remote.dokumen('transaksi'), hasLength(1));
+      expect(dok('petani', oid), isNotNull);
+      expect(hp.petani(oid.oid).statusSinkronisasi, 'synced');
+      expect(MasterDataService().getDaftarPetani(), hasLength(1));
+      expect(
+        MasterDataService().laporanTerakhir!.masalah.map((m) => m.jenis),
+        contains('hapus_petani_ditolak'),
+      );
+    });
+
+    test('transaksi agen lain tanpa potongan: dibatalkan walau kasbon tetap nol', () async {
+      remote.online = false;
+      await svc.hapus(hp.petani(oid.oid));
+      await tungguSync();
+      remote.tanam('transaksi', {
+        'id_lokal': 'lain_1',
+        'pengepul_id': 'agen-lain',
+        'petani_id': oid.oid,
+        'nama_komoditas': 'Gabah',
+        'total_bayar': 5000.0,
+        'nominal_potong_kasbon': 0.0,
+      });
+
+      remote.online = true;
+      await hp.sinkron();
+
+      expect(dok('petani', oid)!['sisa_hutang_kasbon'], 0);
+      expect(hp.petani(oid.oid).statusSinkronisasi, 'synced');
+    });
+
+    test('tanpa transaksi sama sekali: tetap bisa dihapus', () async {
+      await svc.hapus(hp.petani(oid.oid));
+      await tungguSync();
+      await hp.sinkron();
+
+      expect(dok('petani', oid), isNull);
+    });
+
+    test('semua transaksinya sudah dihapus agen: boleh dihapus', () async {
+      await beli();
+      await hp.sinkron();
+      await TransaksiLedgerService().hapus(hp.hive.transaksiBox.values.single);
+      await hp.sinkron();
+      expect(remote.dokumen('transaksi'), isEmpty);
+
+      await svc.hapus(hp.petani(oid.oid));
+      await tungguSync();
+      await hp.sinkron();
+
       expect(dok('petani', oid), isNull);
       expect(hp.hive.petaniBox.containsKey(oid.oid), isFalse);
+    });
+
+    test('hapus transaksi belum sampai: petani menunggu, lalu keduanya terhapus', () async {
+      await beli();
+      await hp.sinkron();
+      remote.online = false;
+      await TransaksiLedgerService().hapus(hp.hive.transaksiBox.values.single);
+      final p = hp.petani(oid.oid);
+      await svc.hapus(p);
+      await tungguSync();
+      remote.online = true;
+      remote.gagalSebelum('deleteOne', 1, koleksi: 'transaksi');
+
+      await hp.sinkron();
+
+      expect(remote.dokumen('transaksi'), hasLength(1));
+      expect(dok('petani', oid), isNotNull);
+      expect(p.statusSinkronisasi, 'pending_delete');
+
+      await hp.sinkron();
+
+      expect(remote.dokumen('transaksi'), isEmpty);
+      expect(dok('petani', oid), isNull);
+      expect(hp.hive.petaniBox.containsKey(oid.oid), isFalse);
+    });
+
+    test('pemeriksaan cloud gagal: tidak dihapus, dicoba lagi', () async {
+      remote.online = false;
+      await svc.hapus(hp.petani(oid.oid));
+      await tungguSync();
+      remote.online = true;
+      // Rekonsiliasi membaca transaksi dua kali. Yang gagal adalah pemeriksaan C16.
+      remote.gagalSebelum('find', 1, koleksi: 'transaksi', lewati: 2);
+
+      await hp.sinkron();
+
+      expect(dok('petani', oid), isNotNull);
+      expect(hp.petani(oid.oid).statusSinkronisasi, 'pending_delete');
+
+      await hp.sinkron();
+      expect(dok('petani', oid), isNull);
     });
   });
 

@@ -224,9 +224,13 @@ class SyncEngine {
 
   /// Menghapus dokumen petani yang ditandai `pending_delete`, sesudah rekonsiliasi.
   ///
-  /// Saat ditandai, kasbon di perangkat ini nol. Kasbon yang masuk dari perangkat
-  /// lain baru terlihat sekarang, dan dalam hal itu penghapusan dibatalkan: baris
-  /// kembali tampil dengan saldo dari pull di siklus yang sama.
+  /// Saat ditandai, perangkat ini tidak melihat kasbon maupun transaksi. Yang masuk
+  /// dari perangkat lain, atau yang sudah terhapus dari cache, baru terlihat
+  /// sekarang, dan dalam hal itu penghapusan dibatalkan: baris kembali tampil
+  /// dengan saldo dari pull di siklus yang sama.
+  ///
+  /// Transaksi yang hapusnya belum sampai ke cloud tidak membatalkan apa pun,
+  /// tetapi petaninya menunggu siklus berikutnya.
   Future<void> _pushHapusPetani(
     _KonteksSaldo? konteks,
     List<SyncIssue> masalah,
@@ -249,17 +253,31 @@ class SyncEngine {
           MongoId.filterId(p.id),
           fields: const [_dasarKasbon, _sisaKasbon],
         );
-        if (docs.isNotEmpty && _kasbonCloud(docs.first, p.id, konteks) > _toleransi) {
+        final dokTrx = await remote.find(
+          'transaksi',
+          MongoId.filterRef('petani_id', p.id),
+          fields: const ['id_lokal'],
+        );
+        final menungguHapus = dokTrx.where(_barisMenungguHapus);
+        final punyaTransaksi = dokTrx.length > menungguHapus.length ||
+            _barisBelumTerkirim().any((t) =>
+                t.statusSinkronisasi != 'pending_delete' &&
+                MongoId.sama(t.petaniId, p.id));
+        final punyaKasbon =
+            docs.isNotEmpty && _kasbonCloud(docs.first, p.id, konteks) > _toleransi;
+
+        if (punyaKasbon || punyaTransaksi) {
           masalah.add(SyncIssue(
             tahap: _tahapHapusPetani,
             idLokal: p.id,
             jenis: 'hapus_petani_ditolak',
-            pesan: 'petani/${p.id} punya kasbon di cloud',
+            pesan: 'petani/${p.id} punya kasbon atau transaksi di cloud',
           ));
           p.statusSinkronisasi = 'synced';
           await p.save();
           continue;
         }
+        if (menungguHapus.isNotEmpty) continue;
 
         final hasil = await remote.deleteOne('petani', MongoId.filterId(p.id));
         if (!hasil.ok) {
@@ -277,6 +295,10 @@ class SyncEngine {
       }
     }
   }
+
+  bool _barisMenungguHapus(Map<String, dynamic> dokTransaksi) =>
+      _hive.transaksiBox.get(SaldoLedger.kunciDokumen(dokTransaksi))?.statusSinkronisasi ==
+      'pending_delete';
 
   /// Kasbon menurut cloud plus baris yang belum terkirim dari perangkat ini.
   double _kasbonCloud(
