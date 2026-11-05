@@ -203,6 +203,25 @@ void main() {
       expect(hive.transaksiBox.get(kedua)!.statusFoto, 'dilewati');
     });
 
+    test('foto lama yang tertunda tidak menahan baris uang baru', () async {
+      final baruId = '${_agen}_1730000000001';
+      final nota = buatFile('lama.jpg');
+      remote.tanam('transaksi', {'id_lokal': _idLokal, 'pengepul_id': _agen});
+      await hive.transaksiBox.put(_idLokal, _trx(nota: nota, status: 'synced'));
+      await hive.transaksiBox.put(baruId, _trx(idLokal: baruId, statusFoto: 'ok'));
+      var barisBaruSudahTerkirim = false;
+      unggahKhusus = (_) async {
+        barisBaruSudahTerkirim =
+            remote.dokumen('transaksi').any((d) => d['id_lokal'] == baruId);
+        return null;
+      };
+
+      await engine.siklus();
+
+      expect(diunggah, [nota]);
+      expect(barisBaruSudahTerkirim, isTrue);
+    });
+
     test('rekonsiliasi dan pull selesai sebelum foto diunggah', () async {
       final t = _trx(nota: buatFile('nota.jpg'));
       await hive.transaksiBox.put(_idLokal, t);
