@@ -43,4 +43,25 @@ class SyncReport {
   }) : masalah = List.unmodifiable(masalah);
 
   bool get sukses => masalah.isEmpty;
+
+  /// Masalah yang tidak berarti sinkronisasi gagal: data sudah sampai, atau
+  /// masalahnya butuh tindakan di luar perangkat dan tidak sembuh dengan coba ulang.
+  static const Set<String> _bukanKegagalan = {
+    'belum_dimigrasi',
+    'kasbon_negatif',
+    'saldo_tidak_terbarui',
+    'foto_gagal',
+    'hapus_petani_ditolak',
+  };
+
+  /// Masalah pertama yang berarti data belum sampai atau server tidak terjangkau.
+  /// Jenis yang tidak dikenal dianggap kegagalan, supaya tidak terlewat.
+  SyncIssue? get kegagalanPertama {
+    for (final m in masalah) {
+      if (!_bukanKegagalan.contains(m.jenis)) return m;
+    }
+    return null;
+  }
+
+  bool get gagalSinkron => kegagalanPertama != null;
 }

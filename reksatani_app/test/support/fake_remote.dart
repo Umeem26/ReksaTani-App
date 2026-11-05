@@ -65,6 +65,13 @@ class FakeRemote implements SyncRemote {
   /// sampai ke klien. Untuk mensimulasikan agen yang mengedit selama sync berjalan.
   Future<void> Function()? saatMenungguBalasan;
 
+  /// Bila diisi, setiap `find` menunggu future ini. Untuk mensimulasikan socket
+  /// setengah mati yang tidak pernah menjawab.
+  Future<void>? gantungFind;
+
+  /// Seperti [gantungFind], untuk `ping`.
+  Future<void>? gantungPing;
+
   // ── Pengaturan tes ──────────────────────────────────────────────
 
   /// Menanam dokumen apa adanya, tanpa memeriksa unique index, seperti data lama.
@@ -109,6 +116,8 @@ class FakeRemote implements SyncRemote {
 
   @override
   Future<bool> ping() async {
+    final gantung = gantungPing;
+    if (gantung != null) await gantung;
     final injeksi = _ambilInjeksi('ping', '');
     if (injeksi != null) throw RemoteGagal('ping', sesudahDiterapkan: false);
     return online;
@@ -121,6 +130,8 @@ class FakeRemote implements SyncRemote {
     List<String>? fields,
   }) async {
     panggilan.add(PanggilanRemote('find', koleksi, filter, null, false));
+    final gantung = gantungFind;
+    if (gantung != null) await gantung;
     _pastikanOnline('find');
     final injeksi = _ambilInjeksi('find', koleksi);
     if (injeksi != null) throw RemoteGagal('find', sesudahDiterapkan: false);

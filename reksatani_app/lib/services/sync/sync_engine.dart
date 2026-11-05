@@ -48,6 +48,10 @@ class SyncEngine {
   /// Unggahan yang menggantung tidak boleh menahan baris lain selamanya.
   final Duration batasUnggahFoto;
 
+  /// Berubah setiap ada siklus baru atau pembatalan. Perulangan per baris berhenti
+  /// bila nilainya tidak lagi sama dengan saat ia mulai.
+  int _generasi = 0;
+
   static const String _tahapFoto = 'foto';
   static const String _tahapPush = 'push_transaksi';
   static const String _tahapHapus = 'push_hapus';
@@ -84,34 +88,52 @@ class SyncEngine {
   ///
   /// Kegagalan satu tahap dicatat dan tidak menghentikan tahap lain.
   Future<SyncReport> siklus() async {
+    final generasi = ++_generasi;
     final masalah = <SyncIssue>[];
+    var terkirim = 0;
+    var riwayatBaru = 0;
+    _KonteksSaldo? konteks;
 
-    // Petani dulu, supaya transaksi yang merujuk petani baru punya dokumennya.
-    await pushPetani(masalah);
-    final push = await pushTransaksi();
-    masalah.addAll(push.masalah);
-    final hapus = await pushHapusTransaksi();
-    masalah.addAll(hapus.masalah);
+    final tahap = <Future<void> Function()>[
+      // Petani dulu, supaya transaksi yang merujuk petani baru punya dokumennya.
+      () => pushPetani(masalah),
+      () async {
+        final push = await pushTransaksi();
+        masalah.addAll(push.masalah);
+        terkirim = push.terkirim;
+      },
+      () async {
+        final hapus = await pushHapusTransaksi();
+        masalah.addAll(hapus.masalah);
+      },
+      () async => konteks = await _rekonsiliasiSaldo(masalah),
+      () => _pushHapusPetani(konteks, masalah),
+      () => _tarikKomoditas(masalah),
+      () => _tarikAgen(konteks, masalah),
+      () => _tarikPetani(konteks, masalah),
+      () async => riwayatBaru = await _tarikRiwayat(masalah),
+      // Terakhir: unggahan bisa memakan beberapa menit dan tidak boleh menahan
+      // rekonsiliasi maupun pull saat sinyal buruk.
+      () => unggahFotoTertunda(masalah),
+    ];
 
-    final konteks = await _rekonsiliasiSaldo(masalah);
-    await _pushHapusPetani(konteks, masalah);
-
-    await _tarikKomoditas(masalah);
-    await _tarikAgen(konteks, masalah);
-    await _tarikPetani(konteks, masalah);
-    final riwayatBaru = await _tarikRiwayat(masalah);
-
-    // Terakhir: unggahan bisa memakan beberapa menit dan tidak boleh menahan
-    // rekonsiliasi maupun pull saat sinyal buruk.
-    await unggahFotoTertunda(masalah);
+    for (final jalankan in tahap) {
+      if (generasi != _generasi) break;
+      await jalankan();
+    }
 
     return SyncReport(
       masalah: masalah,
-      terkirim: push.terkirim,
+      terkirim: terkirim,
       riwayatBaru: riwayatBaru,
       selesai: _jam(),
     );
   }
+
+  /// Dipanggil saat siklus melewati batas waktunya. `Future.timeout` hanya
+  /// berhenti menunggu, jadi siklus lama harus diberi tahu supaya berhenti pada
+  /// tahap atau baris berikutnya, dan tidak berjalan berbarengan dengan yang baru.
+  void batalkanSiklus() => _generasi++;
 
   // ── Push petani ─────────────────────────────────────────────────
 
@@ -124,7 +146,9 @@ class SyncEngine {
             p.statusSinkronisasi == 'pending_update')
         .toList();
 
+    final generasi = _generasi;
     for (final p in antrean) {
+      if (generasi != _generasi) break;
       try {
         await _kirimPetani(p, masalah);
       } catch (e) {
@@ -216,7 +240,9 @@ class SyncEngine {
     final user = _hive.usersBox.get('currentUser');
     if (konteks == null && user?.role == 'pengepul') return;
 
+    final generasi = _generasi;
     for (final p in antrean) {
+      if (generasi != _generasi) break;
       try {
         final docs = await remote.find(
           'petani',
@@ -316,7 +342,9 @@ class SyncEngine {
       ..._hive.getPendingUpdateTransaksi(),
     ];
 
+    final generasi = _generasi;
     for (final t in antrean) {
+      if (generasi != _generasi) break;
       try {
         if (await _kirimTransaksi(t, masalah)) terkirim++;
       } catch (e) {
@@ -394,7 +422,9 @@ class SyncEngine {
     final masalah = <SyncIssue>[];
     var terkirim = 0;
 
+    final generasi = _generasi;
     for (final t in _hive.getPendingDeleteTransaksi()) {
+      if (generasi != _generasi) break;
       try {
         // Baris hasil pull dari dokumen tanpa id_lokal: kuncinya adalah `_id`.
         final filter = MongoId.idLokalBuatanAplikasi(t.idLokal)
@@ -887,7 +917,9 @@ class SyncEngine {
         .where((t) => t.statusFoto == 'pending' && t.statusSinkronisasi == 'synced')
         .toList();
 
+    final generasi = _generasi;
     for (final t in antrean) {
+      if (generasi != _generasi) break;
       try {
         await _prosesFotoBaris(t, masalah);
       } catch (e) {

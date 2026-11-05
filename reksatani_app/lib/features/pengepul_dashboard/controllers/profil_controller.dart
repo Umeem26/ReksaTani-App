@@ -16,6 +16,7 @@ class ProfilController extends ChangeNotifier {
   UserHiveModel get user => _hive.usersBox.get('currentUser')!;
   bool get isConnected => _isConnected;
   bool get isChecking => _isChecking;
+  String get ringkasanSinkron => MasterDataService().ringkasanSinkron;
 
   ProfilController() {
     cekKoneksi();
