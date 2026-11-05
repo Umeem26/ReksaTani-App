@@ -54,14 +54,18 @@ class ProfilController extends ChangeNotifier {
     }
   }
 
-  // Membersihkan transaksi yang sudah tersinkronisasi dari memori lokal
+  // Membersihkan transaksi yang sudah tersinkronisasi dari memori lokal.
+  // Baris yang fotonya belum terunggah dipertahankan, karena hanya baris itu yang
+  // tahu letak file fotonya.
   Future<int> bersihkanCacheTersinkronisasi() async {
     final box = _hive.transaksiBox;
     final keysToDelete = <dynamic>[];
 
     for (final key in box.keys) {
       final trx = box.get(key);
-      if (trx != null && trx.statusSinkronisasi == 'synced') {
+      if (trx != null &&
+          trx.statusSinkronisasi == 'synced' &&
+          trx.statusFoto != 'pending') {
         keysToDelete.add(key);
       }
     }

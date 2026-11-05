@@ -67,6 +67,14 @@ class TransaksiHiveModel extends HiveObject {
   @HiveField(20, defaultValue: false)
   bool isManualGrading;
 
+  /// `pending`: perangkat ini masih harus mengunggah foto.
+  /// `hilang`: file foto lokal sudah tidak ada.
+  /// `dilewati`: disimpan tanpa foto lengkap, atas izin agen.
+  /// `menunggu_asal`: baris hasil pull, perangkat asal masih mengunggahnya.
+  /// `ok`: selain itu.
+  @HiveField(21, defaultValue: 'ok')
+  String statusFoto;
+
   TransaksiHiveModel({
     required this.idLokal,
     this.id,
@@ -89,5 +97,6 @@ class TransaksiHiveModel extends HiveObject {
     this.waktuDisinkron,
     this.skorKeyakinan,
     this.isManualGrading = false,
+    this.statusFoto = 'ok',
   });
 }

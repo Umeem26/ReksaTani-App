@@ -49,16 +49,11 @@ void main() {
   late Directory dir;
   late FakeRemote remote;
   late SyncEngine engine;
-  late Map<String, String?> hasilFoto;
-  late List<String> fotoDiunggah;
 
   SyncEngine buatEngine() => SyncEngine(
         remote: remote,
         hive: hive,
-        unggahFoto: (path) async {
-          fotoDiunggah.add(path);
-          return hasilFoto[path];
-        },
+        unggahFoto: (_) async => null,
         jam: () => DateTime(2026, 2, 1, 9),
       );
 
@@ -71,8 +66,6 @@ void main() {
     dir = await Directory.systemTemp.createTemp('sync_engine_push');
     await hive.init(testPath: dir.path);
     remote = FakeRemote();
-    hasilFoto = {};
-    fotoDiunggah = [];
     engine = buatEngine();
     remote.tanam('petani', {
       '_id': _oidPetani,
@@ -496,44 +489,6 @@ void main() {
 
       expect(set['foto_nota'], '');
       expect(set['foto_fisik_barang'], 'https://res.cloudinary.com/x/barang.jpg');
-    });
-  });
-
-  group('Foto pada jalur lama (retry terpisah datang di C13)', () {
-    test('unggah berhasil: URL tersimpan di baris dan terkirim', () async {
-      final foto = File('${dir.path}/nota.jpg')..writeAsStringSync('x');
-      hasilFoto[foto.path] = 'https://cdn/nota.jpg';
-      final t = _trx(fotoNota: foto.path);
-      await hive.transaksiBox.put(_idLokal, t);
-
-      await engine.pushTransaksi();
-
-      expect(t.fotoNota, 'https://cdn/nota.jpg');
-      expect(remote.dokumen('transaksi').single['foto_nota'], 'https://cdn/nota.jpg');
-    });
-
-    test('unggah gagal: data uang tetap terkirim tanpa path lokal', () async {
-      final foto = File('${dir.path}/nota.jpg')..writeAsStringSync('x');
-      final t = _trx(fotoNota: foto.path);
-      await hive.transaksiBox.put(_idLokal, t);
-
-      final hasil = await engine.pushTransaksi();
-
-      expect(hasil.terkirim, 1);
-      expect(hasil.masalah.single.jenis, 'foto_gagal');
-      expect(remote.dokumen('transaksi').single['foto_nota'], '');
-      expect(t.statusSinkronisasi, 'synced');
-    });
-
-    test('URL tidak diunggah ulang', () async {
-      await hive.transaksiBox.put(
-        _idLokal,
-        _trx(fotoNota: 'https://cdn/lama.jpg'),
-      );
-
-      await engine.pushTransaksi();
-
-      expect(fotoDiunggah, isEmpty);
     });
   });
 

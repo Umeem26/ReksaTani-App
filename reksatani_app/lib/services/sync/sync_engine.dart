@@ -8,6 +8,7 @@ import '../../models/hive/komoditas_hive_model.dart';
 import '../../models/hive/petani_hive_model.dart';
 import '../../models/hive/transaksi_hive_model.dart';
 import '../../models/hive/user_hive_model.dart';
+import '../foto/foto_tertunda.dart';
 import '../hive_service.dart';
 import '../saldo/saldo_ledger.dart';
 import 'mongo_id.dart';
@@ -15,6 +16,8 @@ import 'sync_remote.dart';
 import 'sync_report.dart';
 
 typedef UnggahFoto = Future<String?> Function(String path);
+
+enum _HasilFoto { kosong, siap, terunggah, hilang, gagal }
 
 /// Yang perlu diingat dari rekonsiliasi untuk menghitung saldo lokal setelah pull.
 class _KonteksSaldo {
@@ -32,6 +35,7 @@ class SyncEngine {
     required HiveService hive,
     required UnggahFoto unggahFoto,
     DateTime Function()? jam,
+    this.batasUnggahFoto = const Duration(seconds: 60),
   })  : _hive = hive,
         _unggahFoto = unggahFoto,
         _jam = jam ?? DateTime.now;
@@ -41,6 +45,10 @@ class SyncEngine {
   final UnggahFoto _unggahFoto;
   final DateTime Function() _jam;
 
+  /// Unggahan yang menggantung tidak boleh menahan baris lain selamanya.
+  final Duration batasUnggahFoto;
+
+  static const String _tahapFoto = 'foto';
   static const String _tahapPush = 'push_transaksi';
   static const String _tahapHapus = 'push_hapus';
   static const String _tahapRekonsiliasi = 'rekonsiliasi';
@@ -92,6 +100,10 @@ class SyncEngine {
     await _tarikAgen(konteks, masalah);
     await _tarikPetani(konteks, masalah);
     final riwayatBaru = await _tarikRiwayat(masalah);
+
+    // Terakhir: unggahan bisa memakan beberapa menit dan tidak boleh menahan
+    // rekonsiliasi maupun pull saat sinyal buruk.
+    await unggahFotoTertunda(masalah);
 
     return SyncReport(
       masalah: masalah,
@@ -278,6 +290,7 @@ class SyncEngine {
         'total_bayar': t.totalBayar,
         'foto_nota': _urlAtauKosong(t.fotoNota),
         'foto_fisik_barang': _urlAtauKosong(t.fotoFisikBarang),
+        'status_foto': t.statusFoto,
         'status_sinkronisasi': 'synced',
         'waktu_disinkron': sekarang.toIso8601String(),
       },
@@ -319,8 +332,6 @@ class SyncEngine {
     List<SyncIssue> masalah,
   ) async {
     final statusAwal = t.statusSinkronisasi;
-    await _unggahFotoBaris(t, masalah);
-
     final sekarang = _jam();
     final update = bangunUpdateTransaksi(t, sekarang);
     final hasil = await _tulisTransaksi(t, update);
@@ -399,7 +410,11 @@ class SyncEngine {
           ));
           continue;
         }
+        final nota = t.fotoNota;
+        final barang = t.fotoFisikBarang;
         await _hive.transaksiBox.delete(t.idLokal);
+        await FotoTertunda.hapusSalinan(nota);
+        await FotoTertunda.hapusSalinan(barang);
         terkirim++;
       } catch (e) {
         _catat(masalah, _tahapHapus, 'koneksi_gagal', e, idLokal: t.idLokal);
@@ -788,7 +803,11 @@ class SyncEngine {
 
       for (final d in docs) {
         final kunci = SaldoLedger.kunciDokumen(d);
-        if (_hive.transaksiBox.containsKey(kunci)) continue;
+        final lokal = _hive.transaksiBox.get(kunci);
+        if (lokal != null) {
+          await _segarkanFoto(lokal, d);
+          continue;
+        }
 
         final m = TransaksiHiveModel(
           idLokal: kunci,
@@ -802,8 +821,9 @@ class SyncEngine {
           hargaBeliSatuan: _angka(d['harga_beli_satuan']),
           nominalPotongKasbon: _angka(d['nominal_potong_kasbon']),
           totalBayar: _angka(d['total_bayar']),
-          fotoFisikBarang: d['foto_fisik_barang']?.toString() ?? '',
-          fotoNota: d['foto_nota']?.toString() ?? '',
+          fotoFisikBarang: _urlAtauKosong(d['foto_fisik_barang']?.toString() ?? ''),
+          fotoNota: _urlAtauKosong(d['foto_nota']?.toString() ?? ''),
+          statusFoto: _statusFotoDariCloud(d) ?? 'ok',
           latitude: _angka(d['latitude']),
           longitude: _angka(d['longitude']),
           statusSinkronisasi: d['status_sinkronisasi']?.toString() ?? 'synced',
@@ -819,46 +839,165 @@ class SyncEngine {
     return jumlahBaru;
   }
 
+  /// Foto yang terunggah belakangan tidak ikut dokumen yang pertama ditarik,
+  /// jadi perangkat lain harus menyegarkannya di sini.
+  Future<void> _segarkanFoto(
+    TransaksiHiveModel lokal,
+    Map<String, dynamic> d,
+  ) async {
+    if (lokal.statusSinkronisasi != 'synced' || lokal.statusFoto == 'pending') {
+      return;
+    }
+    final nota = _urlAtauKosong(d['foto_nota']?.toString() ?? '');
+    final barang = _urlAtauKosong(d['foto_fisik_barang']?.toString() ?? '');
+    final status = _statusFotoDariCloud(d);
+
+    var berubah = false;
+    if (nota.isNotEmpty && nota != lokal.fotoNota) {
+      lokal.fotoNota = nota;
+      berubah = true;
+    }
+    if (barang.isNotEmpty && barang != lokal.fotoFisikBarang) {
+      lokal.fotoFisikBarang = barang;
+      berubah = true;
+    }
+    if (status != null && status != lokal.statusFoto) {
+      lokal.statusFoto = status;
+      berubah = true;
+    }
+    if (berubah) await lokal.save();
+  }
+
+  /// `pending` di cloud berarti tugas perangkat asal. Di perangkat ini tidak ada
+  /// file yang bisa diunggah, dan tahap foto tidak boleh menyentuh baris itu.
+  static String? _statusFotoDariCloud(Map<String, dynamic> d) {
+    final status = d['status_foto']?.toString();
+    return status == 'pending' ? 'menunggu_asal' : status;
+  }
+
   // ── Foto ────────────────────────────────────────────────────────
 
-  Future<void> _unggahFotoBaris(
-    TransaksiHiveModel t,
-    List<SyncIssue> masalah,
-  ) async {
-    final nota = await _unggahSatuFoto(t.fotoNota, t, masalah);
-    if (nota != null) {
-      t.fotoNota = nota;
-      await t.save();
-    }
-    final barang = await _unggahSatuFoto(t.fotoFisikBarang, t, masalah);
-    if (barang != null) {
-      t.fotoFisikBarang = barang;
-      await t.save();
+  /// Mengunggah foto baris yang datanya sudah sampai ke cloud.
+  ///
+  /// Baris yang belum terkirim menunggu giliran, karena belum ada dokumen yang
+  /// bisa diisi. Kegagalan foto dicatat, tetap `pending`, dan dicoba lagi pada
+  /// siklus berikutnya tanpa batas jumlah.
+  Future<void> unggahFotoTertunda(List<SyncIssue> masalah) async {
+    final antrean = _hive.transaksiBox.values
+        .where((t) => t.statusFoto == 'pending' && t.statusSinkronisasi == 'synced')
+        .toList();
+
+    for (final t in antrean) {
+      try {
+        await _prosesFotoBaris(t, masalah);
+      } catch (e) {
+        _catat(masalah, _tahapFoto, 'foto_gagal', e, idLokal: t.idLokal);
+      }
     }
   }
 
-  Future<String?> _unggahSatuFoto(
-    String path,
+  Future<void> _prosesFotoBaris(
     TransaksiHiveModel t,
     List<SyncIssue> masalah,
   ) async {
-    if (path.isEmpty || _adalahUrl(path)) return null;
+    final nota = await _unggahSatuFoto(
+      t,
+      () => t.fotoNota,
+      (url) => t.fotoNota = url,
+      masalah,
+    );
+    final barang = await _unggahSatuFoto(
+      t,
+      () => t.fotoFisikBarang,
+      (url) => t.fotoFisikBarang = url,
+      masalah,
+    );
+    if (!t.isInBox) return;
+
+    final hasil = [nota, barang];
+    final masihGagal = hasil.contains(_HasilFoto.gagal);
+    if (masihGagal && !hasil.contains(_HasilFoto.terunggah)) return;
+
+    final akhir = masihGagal
+        ? 'pending'
+        : hasil.contains(_HasilFoto.hilang)
+            ? 'hilang'
+            : hasil.contains(_HasilFoto.kosong)
+                ? 'dilewati'
+                : 'ok';
+
+    final notaKirim = t.fotoNota;
+    final barangKirim = t.fotoFisikBarang;
+    final tulis = await remote.updateOne(
+      'transaksi',
+      MongoId.idLokalBuatanAplikasi(t.idLokal)
+          ? <String, dynamic>{'id_lokal': t.idLokal}
+          : MongoId.filterId(t.idLokal),
+      {
+        r'$set': {
+          'foto_nota': _urlAtauKosong(notaKirim),
+          'foto_fisik_barang': _urlAtauKosong(barangKirim),
+          'status_foto': akhir,
+        },
+      },
+    );
+    if (!tulis.kenaDokumen) {
+      masalah.add(SyncIssue(
+        tahap: _tahapFoto,
+        idLokal: t.idLokal,
+        jenis: tulis.ok ? 'dokumen_hilang' : 'ditolak_server',
+        pesan: 'Kode ${tulis.errorCode}, matched ${tulis.matched}',
+      ));
+      return;
+    }
+
+    // Agen bisa memilih foto baru selama pengiriman: status tetap `pending`.
+    if (!t.isInBox ||
+        t.statusFoto != 'pending' ||
+        t.fotoNota != notaKirim ||
+        t.fotoFisikBarang != barangKirim) {
+      return;
+    }
+    t.statusFoto = akhir;
+    await t.save();
+  }
+
+  /// URL disimpan ke Hive segera setelah unggahan berhasil, sebelum `updateOne`.
+  /// Bila aplikasi mati di antaranya, retry tidak perlu mengunggah ulang.
+  Future<_HasilFoto> _unggahSatuFoto(
+    TransaksiHiveModel t,
+    String Function() baca,
+    void Function(String url) tulis,
+    List<SyncIssue> masalah,
+  ) async {
+    final path = baca();
+    if (path.isEmpty) return _HasilFoto.kosong;
+    if (FotoTertunda.adalahUrl(path)) return _HasilFoto.siap;
+
     try {
-      if (!await File(path).exists()) return null;
-      final url = await _unggahFoto(path);
+      if (!await File(path).exists()) return _HasilFoto.hilang;
+
+      final url = await _unggahFoto(path).timeout(batasUnggahFoto);
       if (url == null) {
         masalah.add(SyncIssue(
-          tahap: _tahapPush,
+          tahap: _tahapFoto,
           idLokal: t.idLokal,
           jenis: 'foto_gagal',
           pesan: 'Unggah foto tidak menghasilkan URL',
         ));
+        return _HasilFoto.gagal;
       }
-      return url;
+
+      // Diganti atau dihapus agen selama unggahan: URL ini milik foto lama.
+      if (!t.isInBox || baca() != path) return _HasilFoto.gagal;
+
+      tulis(url);
+      await t.save();
+      await FotoTertunda.hapusSalinan(path);
+      return _HasilFoto.terunggah;
     } catch (e) {
-      // Foto tidak boleh menahan data uang.
-      _catat(masalah, _tahapPush, 'foto_gagal', e, idLokal: t.idLokal);
-      return null;
+      _catat(masalah, _tahapFoto, 'foto_gagal', e, idLokal: t.idLokal);
+      return _HasilFoto.gagal;
     }
   }
 
@@ -905,10 +1044,9 @@ class SyncEngine {
         name: 'SyncEngine');
   }
 
-  static bool _adalahUrl(String nilai) => nilai.startsWith('http');
-
   /// Path lokal tidak berarti apa-apa di perangkat lain, jadi tidak boleh ke cloud.
-  static String _urlAtauKosong(String nilai) => _adalahUrl(nilai) ? nilai : '';
+  static String _urlAtauKosong(String nilai) =>
+      FotoTertunda.adalahUrl(nilai) ? nilai : '';
 
   static bool _isiSama(Map<String, dynamic> a, Map<String, dynamic> b) =>
       mapEquals(a[r'$set'] as Map?, b[r'$set'] as Map?) &&

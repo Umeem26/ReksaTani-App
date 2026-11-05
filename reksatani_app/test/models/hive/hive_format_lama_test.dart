@@ -141,6 +141,7 @@ void main() {
 
       final t = baru.get('t1')!;
       expect(t.isManualGrading, isFalse);
+      expect(t.statusFoto, 'ok');
       expect(t.statusSinkronisasi, 'pending');
       expect(t.nominalPotongKasbon, 1000);
     });

@@ -8,6 +8,7 @@ import '../models/hive/user_hive_model.dart';
 import '../models/hive/petani_hive_model.dart';
 import '../models/hive/komoditas_hive_model.dart';
 import '../models/hive/transaksi_hive_model.dart';
+import 'foto/foto_tertunda.dart';
 import 'notification_service.dart';
 import '../models/hive/notifikasi_hive_model.dart';
 import 'sync/mongo_id.dart';
@@ -28,6 +29,9 @@ class HiveService {
 
   static const String _kunciVersiId = 'idSchemaVersion';
   static const int _versiIdKanonik = 2;
+
+  static const String _kunciVersiFoto = 'statusFotoVersi';
+  static const int _versiFoto = 1;
 
   String? _testPath;
   final List<String> _dikarantina = [];
@@ -71,6 +75,30 @@ class HiveService {
 
     await _beritahuKarantina();
     await _migrasiIdKanonik();
+    await _isiAwalStatusFoto();
+  }
+
+  /// Sekali jalan: baris lama dengan path lokal punya status default `ok`, sehingga
+  /// fotonya tidak akan pernah terunggah. Aman dijalankan ulang bila mati di tengah.
+  Future<void> _isiAwalStatusFoto() async {
+    if (settingsBox.get(_kunciVersiFoto) == _versiFoto) return;
+    try {
+      for (final t in transaksiBox.values.toList()) {
+        if (t.statusFoto != 'ok' || t.statusSinkronisasi == 'pending_delete') continue;
+        final lokal = [t.fotoNota, t.fotoFisikBarang].where(FotoTertunda.adalahPathLokal);
+        if (lokal.isEmpty) continue;
+
+        var adaFile = false;
+        for (final path in lokal) {
+          if (await File(path).exists()) adaFile = true;
+        }
+        t.statusFoto = adaFile ? 'pending' : 'hilang';
+        await t.save();
+      }
+      await settingsBox.put(_kunciVersiFoto, _versiFoto);
+    } catch (e) {
+      debugPrint('[HiveService] Isi awal status foto tertunda: ${e.runtimeType}');
+    }
   }
 
   /// Sekali jalan: mengubah literal `ObjectId("<hex>")` di Hive ke bentuk kanonik.

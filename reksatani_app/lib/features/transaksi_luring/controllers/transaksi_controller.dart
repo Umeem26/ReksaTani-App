@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../../../models/hive/petani_hive_model.dart';
 import '../../../../../models/hive/komoditas_hive_model.dart';
 import '../../../../../models/hive/transaksi_hive_model.dart';
+import '../../../../../services/foto/foto_tertunda.dart';
 import '../../../../../services/hive_service.dart';
 import '../../../../../services/saldo/kasbon_rules.dart';
 import '../../../../../services/saldo/transaksi_ditolak.dart';
@@ -117,8 +118,12 @@ class TransaksiController {
     // Panggil pencarian GPS di sini
     final koordinat = await _getKoordinatGPS();
 
+    final idLokal = '${user.id}_${now.millisecondsSinceEpoch}';
+    final fotoNota = await FotoTertunda.salin(fotoNotaPath, idLokal: idLokal, jenis: 'nota');
+    final fotoBarang = await FotoTertunda.salin(fotoBarangPath, idLokal: idLokal, jenis: 'barang');
+
     final trx = TransaksiHiveModel(
-      idLokal: '${user.id}_${now.millisecondsSinceEpoch}',
+      idLokal: idLokal,
       pengepulId: user.id,
       petaniId: petaniTerpilih?.id ?? '',
       namaPengepul: user.username,
@@ -129,8 +134,11 @@ class TransaksiController {
       hargaBeliSatuan: double.tryParse(hargaText) ?? 0,
       nominalPotongKasbon: potongan,
       totalBayar: totalBayar,
-      fotoFisikBarang: fotoBarangPath,
-      fotoNota: fotoNotaPath,
+      fotoFisikBarang: fotoBarang,
+      fotoNota: fotoNota,
+      statusFoto: FotoTertunda.adalahPathLokal(fotoNota) || FotoTertunda.adalahPathLokal(fotoBarang)
+          ? 'pending'
+          : 'ok',
       // Masukkan hasil GPS ke model
       latitude: koordinat['lat'] ?? 0.0,
       longitude: koordinat['lng'] ?? 0.0,
@@ -191,6 +199,15 @@ class TransaksiController {
       totalBayar: totalBayar,
     );
 
+    final notaLama = existingTrx.fotoNota;
+    final barangLama = existingTrx.fotoFisikBarang;
+    final notaBaru = fotoNotaPath.isEmpty || fotoNotaPath == notaLama
+        ? notaLama
+        : await FotoTertunda.salin(fotoNotaPath, idLokal: existingTrx.idLokal, jenis: 'nota');
+    final barangBaru = fotoBarangPath.isEmpty || fotoBarangPath == barangLama
+        ? barangLama
+        : await FotoTertunda.salin(fotoBarangPath, idLokal: existingTrx.idLokal, jenis: 'barang');
+
     // Transaksi ditulis dulu. Bila aplikasi mati sebelum saldo tersimpan, sync
     // berikutnya memperbaiki saldo, karena transaksi adalah sumber kebenaran.
     existingTrx.petaniId        = petaniTerpilih?.id ?? '';
@@ -202,9 +219,12 @@ class TransaksiController {
     existingTrx.totalBayar      = totalBayar;
     existingTrx.nominalPotongKasbon = efek.potonganBaru;
 
-    if (fotoNotaPath.isNotEmpty) existingTrx.fotoNota = fotoNotaPath;
-    if (fotoBarangPath.isNotEmpty) existingTrx.fotoFisikBarang = fotoBarangPath;
-    
+    existingTrx.fotoNota = notaBaru;
+    existingTrx.fotoFisikBarang = barangBaru;
+    final fotoBaru = (notaBaru != notaLama && FotoTertunda.adalahPathLokal(notaBaru)) ||
+        (barangBaru != barangLama && FotoTertunda.adalahPathLokal(barangBaru));
+    if (fotoBaru) existingTrx.statusFoto = 'pending';
+
     // GPS tidak di-update di sini untuk mempertahankan lokasi asli saat transaksi dibuat.
     
     if (existingTrx.statusSinkronisasi == 'synced') {
@@ -212,6 +232,9 @@ class TransaksiController {
     }
 
     await existingTrx.save();
+
+    if (notaBaru != notaLama) await FotoTertunda.hapusSalinan(notaLama);
+    if (barangBaru != barangLama) await FotoTertunda.hapusSalinan(barangLama);
 
     final kasbonLama = efek.kasbonPetaniLama;
     if (petaniLama != null && kasbonLama != null) {
