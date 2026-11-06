@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:mongo_dart/mongo_dart.dart' as mongo; // Import mongo_dart
 import 'package:bcrypt/bcrypt.dart';
 import '../../../models/hive/user_hive_model.dart';
 import '../../../services/hive_service.dart';
-import '../../../services/mongodb_service.dart'; // Import MongoDB Service temanmu
 import '../../../services/sync/mongo_id.dart';
+import '../../../services/sync/mongo_remote.dart';
+import '../../../services/sync/sync_remote.dart';
 
 class AuthController {
+  AuthController({SyncRemote? remote}) : _remote = remote ?? MongoRemote();
+
+  final SyncRemote _remote;
+
+  /// Satu pesan untuk username yang tidak ada dan password yang salah, supaya
+  /// layar login tidak bisa dipakai untuk menebak username yang terdaftar.
+  static const String pesanLoginGagal = 'Username atau password salah';
+
   final ValueNotifier<bool> isLoading = ValueNotifier(false);
   final ValueNotifier<String?> errorMessage = ValueNotifier(null);
 
@@ -16,23 +24,20 @@ class AuthController {
 
     try {
       // Aplikasi bisa dimulai saat offline, jadi koneksi mungkin belum ada.
-      await MongoDatabase.ping();
+      await _remote.ping();
 
-      // 1. Panggil Collection 'users' dari MongoDB
-      // Pastikan nama collection-nya benar (asumsi: 'users')
-      var usersCollection = MongoDatabase.getCollection('users');
+      // 1. Cari data berdasarkan username di awan (Cloud)
+      final hasilCari = await _remote.find('users', {'username': username});
 
-      // 2. Cari data berdasarkan username di awan (Cloud)
-      var userDoc = await usersCollection.findOne(mongo.where.eq('username', username));
-
-      // 3. Jika username tidak ditemukan di MongoDB
-      if (userDoc == null) {
-        errorMessage.value = 'Username tidak terdaftar. Silakan periksa kembali username Anda.';
+      // 2. Jika username tidak ditemukan di MongoDB
+      if (hasilCari.isEmpty) {
+        errorMessage.value = pesanLoginGagal;
         isLoading.value = false;
         return false;
       }
+      final userDoc = hasilCari.first;
 
-      // 4. Validasi Password dengan Bcrypt & Auto-migration
+      // 3. Validasi Password dengan Bcrypt & Auto-migration
       final storedHash = userDoc['password_hash'] as String? ?? '';
       bool isCorrect = false;
       bool needsMigration = false;
@@ -44,6 +49,9 @@ class AuthController {
           isCorrect = false;
         }
       } else {
+        // TODO: hapus fallback plaintext ini setelah data Atlas diperiksa dan tidak
+        // ada lagi `password_hash` yang bukan bcrypt. Menghapusnya sekarang bisa
+        // mengunci akun lama yang belum pernah login sejak migrasi otomatis di bawah.
         isCorrect = storedHash == password;
         if (isCorrect) {
           needsMigration = true;
@@ -51,7 +59,7 @@ class AuthController {
       }
 
       if (!isCorrect) {
-        errorMessage.value = 'Password salah. Silakan coba lagi.';
+        errorMessage.value = pesanLoginGagal;
         isLoading.value = false;
         return false;
       }
@@ -59,13 +67,16 @@ class AuthController {
       String finalPasswordHash = storedHash;
       if (needsMigration) {
         finalPasswordHash = BCrypt.hashpw(password, BCrypt.gensalt());
-        await usersCollection.updateOne(
-          mongo.where.eq('_id', userDoc['_id']),
-          mongo.modify.set('password_hash', finalPasswordHash),
+        await _remote.updateOne(
+          'users',
+          {'_id': userDoc['_id']},
+          {
+            r'$set': {'password_hash': finalPasswordHash},
+          },
         );
       }
 
-      // 5. Jika COCOK, Kita ambil datanya dari MongoDB dan ubah jadi format Lokal (Hive)
+      // 4. Jika COCOK, Kita ambil datanya dari MongoDB dan ubah jadi format Lokal (Hive)
       final loggedInUser = UserHiveModel(
         id: MongoId.kanonik(userDoc['_id']),
         username: userDoc['username'],
@@ -75,7 +86,7 @@ class AuthController {
         waktuDibuat: DateTime.now(),
       );
 
-      // 6. Simpan sesi login ke Hive! (Inilah kunci Offline-First)
+      // 5. Simpan sesi login ke Hive! (Inilah kunci Offline-First)
       await HiveService().usersBox.put('currentUser', loggedInUser);
 
       isLoading.value = false;
