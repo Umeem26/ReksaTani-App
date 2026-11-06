@@ -189,3 +189,93 @@ Future<void> isiSaldoDasar(
 }
 
 double? _angka(Object? v) => v is num ? v.toDouble() : null;
+
+/// Satu index yang dibutuhkan sinkronisasi.
+class SpekIndex {
+  final String nama;
+  final Map<String, int> kunci;
+  final bool unik;
+  final Map<String, dynamic>? parsial;
+
+  const SpekIndex({
+    required this.nama,
+    required this.kunci,
+    this.unik = false,
+    this.parsial,
+  });
+}
+
+const List<SpekIndex> indexTransaksi = [
+  SpekIndex(
+    nama: 'uniq_id_lokal',
+    kunci: {'id_lokal': 1},
+    unik: true,
+    parsial: {
+      'id_lokal': {r'$type': 'string'},
+    },
+  ),
+  SpekIndex(nama: 'idx_petani_id', kunci: {'petani_id': 1}),
+  SpekIndex(nama: 'idx_pengepul_id', kunci: {'pengepul_id': 1}),
+];
+
+class IndexDilewati {
+  final SpekIndex spek;
+  final String namaAda;
+
+  const IndexDilewati(this.spek, this.namaAda);
+}
+
+class RencanaIndex {
+  final List<SpekIndex> dibuat;
+  final List<IndexDilewati> dilewati;
+
+  /// Index berkunci sama sudah ada, tetapi tidak memenuhi `unik`.
+  final List<IndexDilewati> konflik;
+
+  const RencanaIndex({
+    required this.dibuat,
+    required this.dilewati,
+    required this.konflik,
+  });
+}
+
+/// Membandingkan [spek] dengan balasan `listIndexes`. Index berkunci sama dilewati,
+/// apa pun namanya: server menolak membuat yang kedua dengan kode 85.
+///
+/// Urutan field ikut menentukan: `{a: 1, b: 1}` bukan index yang sama dengan
+/// `{b: 1, a: 1}`, dan index gabungan `{pengepul_id: 1, status: 1}` tidak dianggap
+/// sama dengan `{pengepul_id: 1}`.
+RencanaIndex rencanaIndex(
+  List<Map<String, dynamic>> ada, {
+  List<SpekIndex> spek = indexTransaksi,
+}) {
+  final dibuat = <SpekIndex>[];
+  final dilewati = <IndexDilewati>[];
+  final konflik = <IndexDilewati>[];
+
+  for (final s in spek) {
+    final sama = ada.where((i) => _kunciSama(i['key'], s.kunci)).toList();
+    if (sama.isEmpty) {
+      dibuat.add(s);
+      continue;
+    }
+    final cocok = sama.where((i) => !s.unik || i['unique'] == true);
+    if (cocok.isEmpty) {
+      konflik.add(IndexDilewati(s, '${sama.first['name']}'));
+    } else {
+      dilewati.add(IndexDilewati(s, '${cocok.first['name']}'));
+    }
+  }
+
+  return RencanaIndex(dibuat: dibuat, dilewati: dilewati, konflik: konflik);
+}
+
+bool _kunciSama(Object? ada, Map<String, int> kunci) {
+  if (ada is! Map || ada.length != kunci.length) return false;
+  final namaAda = ada.keys.toList();
+  final nama = kunci.keys.toList();
+  for (var i = 0; i < nama.length; i++) {
+    if (namaAda[i] != nama[i] || ada[nama[i]] != kunci[nama[i]]) return false;
+  }
+  return true;
+}

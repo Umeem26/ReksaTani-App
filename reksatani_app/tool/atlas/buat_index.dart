@@ -3,8 +3,8 @@ import 'dart:io';
 import 'atlas_koneksi.dart';
 import 'atlas_ops.dart';
 
-/// Membuat index yang dibutuhkan sinkronisasi. Membuat ulang index yang sama
-/// tidak berefek, jadi aman diulang.
+/// Membuat index yang dibutuhkan sinkronisasi. Index yang key-nya sudah ada
+/// dilewati, apa pun namanya, jadi aman diulang.
 ///
 ///   dart run tool/atlas/buat_index.dart [--confirm]
 ///
@@ -15,32 +15,46 @@ Future<void> main(List<String> args) => jalankan(() async {
       await denganAtlas((db) async {
         final col = db.collection('transaksi');
 
-        stdout.writeln('transaksi.uniq_id_lokal (unik, parsial pada string)');
-        stdout.writeln('transaksi.idx_petani_id');
-        stdout.writeln('transaksi.idx_pengepul_id');
-
-        if (!opsi.konfirmasi) {
-          stdout.writeln(
-              'DRY-RUN: tidak ada yang ditulis. Tambahkan --confirm untuk menjalankan.');
-          return;
-        }
-
         try {
-          await col.createIndex(
-            keys: {'id_lokal': 1},
-            unique: true,
-            name: 'uniq_id_lokal',
-            partialFilterExpression: {
-              'id_lokal': {r'$type': 'string'},
-            },
-          );
-          await col.createIndex(keys: {'petani_id': 1}, name: 'idx_petani_id');
-          await col.createIndex(
-              keys: {'pengepul_id': 1}, name: 'idx_pengepul_id');
+          final rencana = rencanaIndex(await col.getIndexes());
+
+          for (final d in rencana.dilewati) {
+            stdout.writeln(
+                'dilewati: transaksi.${d.spek.nama} (sudah ada: ${d.namaAda})');
+          }
+          for (final s in rencana.dibuat) {
+            stdout.writeln('akan dibuat: transaksi.${s.nama}');
+          }
+          if (rencana.konflik.isNotEmpty) {
+            for (final k in rencana.konflik) {
+              stderr.writeln('konflik: transaksi.${k.spek.nama} harus unik, '
+                  'tetapi ${k.namaAda} berkunci sama dan tidak unik.');
+            }
+            exit(1);
+          }
+
+          if (!opsi.konfirmasi) {
+            stdout.writeln(
+                'DRY-RUN: tidak ada yang ditulis. Tambahkan --confirm untuk menjalankan.');
+            return;
+          }
+
+          for (final s in rencana.dibuat) {
+            await col.createIndex(
+              keys: s.kunci,
+              unique: s.unik ? true : null,
+              name: s.nama,
+              partialFilterExpression: s.parsial,
+            );
+            stdout.writeln('dibuat: transaksi.${s.nama}');
+          }
         } on Map catch (balasan) {
           // Driver melempar balasan server mentah bila `ok: 0`.
-          stderr.writeln('Ditolak server, kode ${balasan['code']}. '
-              '11000 berarti ada duplikat id_lokal: lihat kueri_baca.js.');
+          stderr.writeln(
+              'Ditolak server, kode ${balasan['code']} (${balasan['codeName']}).');
+          if (balasan['code'] == 11000) {
+            stderr.writeln('Ada duplikat id_lokal: lihat kueri_baca.js.');
+          }
           exit(1);
         }
 
