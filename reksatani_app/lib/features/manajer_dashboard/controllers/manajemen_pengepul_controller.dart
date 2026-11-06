@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:uuid/uuid.dart';
 import 'package:bcrypt/bcrypt.dart';
 import '../../../../services/hive_service.dart';
@@ -57,7 +58,7 @@ class ManajemenPengepulController {
       }
       return docs;
     } catch (e) {
-      print('Error getSemuaPengepul: ${e.runtimeType}');
+      debugPrint('Error getSemuaPengepul: ${e.runtimeType}');
       final lokal = _hive.usersBox.values.where((u) => u.role == 'pengepul').toList();
       return lokal.map((u) => {
         '_id': u.id,
@@ -114,7 +115,7 @@ class ManajemenPengepulController {
 
       return true;
     } catch (e) {
-      print('Exception tambahPengepul: ${e.runtimeType}');
+      debugPrint('Exception tambahPengepul: ${e.runtimeType}');
       return false;
     }
   }
@@ -190,7 +191,7 @@ class ManajemenPengepulController {
 
       return HasilEditPengepul.berhasil;
     } catch (e) {
-      print('Error editPengepul: ${e.runtimeType}');
+      debugPrint('Error editPengepul: ${e.runtimeType}');
       return HasilEditPengepul.gagal;
     }
   }
@@ -204,7 +205,7 @@ class ManajemenPengepulController {
 
       return true;
     } catch (e) {
-      print('Error hapusPengepul: ${e.runtimeType}');
+      debugPrint('Error hapusPengepul: ${e.runtimeType}');
       return false;
     }
   }

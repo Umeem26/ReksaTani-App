@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:uuid/uuid.dart';
 import '../../../../services/hive_service.dart';
 import '../../../../services/sync/mongo_id.dart';
@@ -64,7 +65,7 @@ class ManajemenKomoditasController {
         return allowedNames.contains(name);
       }).toList();
     } catch (e) {
-      print('Error getSemuaKomoditas: ${e.runtimeType}');
+      debugPrint('Error getSemuaKomoditas: ${e.runtimeType}');
       return [];
     }
   }
@@ -96,7 +97,7 @@ class ManajemenKomoditasController {
           ? HasilSimpanKomoditas.berhasil
           : HasilSimpanKomoditas.gagal;
     } catch (e) {
-      print('Exception tambahKomoditas: ${e.runtimeType}');
+      debugPrint('Exception tambahKomoditas: ${e.runtimeType}');
       return HasilSimpanKomoditas.gagal;
     }
   }
@@ -129,7 +130,7 @@ class ManajemenKomoditasController {
       if (hasil.matched == 0) return HasilSimpanKomoditas.tidakDitemukan;
       return HasilSimpanKomoditas.berhasil;
     } catch (e) {
-      print('Error editKomoditas: ${e.runtimeType}');
+      debugPrint('Error editKomoditas: ${e.runtimeType}');
       return HasilSimpanKomoditas.gagal;
     }
   }
@@ -139,7 +140,7 @@ class ManajemenKomoditasController {
       final hasil = await _remote.deleteOne(_koleksi, MongoId.filterId(id));
       return hasil.ok;
     } catch (e) {
-      print('Error hapusKomoditas: ${e.runtimeType}');
+      debugPrint('Error hapusKomoditas: ${e.runtimeType}');
       return false;
     }
   }
