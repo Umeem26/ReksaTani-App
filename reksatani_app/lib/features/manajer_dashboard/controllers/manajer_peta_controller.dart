@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../services/saldo/kasbon_rules.dart';
 
 class ManajerPetaController extends ChangeNotifier {
   final _svc = MasterDataService();
@@ -21,10 +22,12 @@ class ManajerPetaController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Mengambil daftar komoditas unik dari seluruh transaksi yang valid lokasi GPS-nya
+  // Mengambil daftar komoditas unik dari seluruh transaksi yang valid lokasi GPS-nya.
+  // Pencairan kasbon bukan komoditas, jadi tidak menjadi pilihan filter.
   List<String> get daftarKomoditasUnik {
     final list = _svc.getRiwayatTransaksi()
         .where((t) => t.latitude != 0.0 && t.longitude != 0.0)
+        .where((t) => !KasbonRules.isPencairan(t.namaKomoditas))
         .map((t) => t.namaKomoditas)
         .toSet()
         .toList();
@@ -57,8 +60,11 @@ class ManajerPetaController extends ChangeNotifier {
     return getTransaksiDenganLokasi.fold(0.0, (sum, item) => sum + item.berat);
   }
 
-  // Total valuasi nilai (Rp) dari titik yang sedang aktif di peta
+  // Total valuasi pembelian (Rp) dari titik yang sedang aktif di peta. Pencairan
+  // kasbon adalah uang keluar, bukan nilai panen.
   double get totalValuasiAktif {
-    return getTransaksiDenganLokasi.fold(0.0, (sum, item) => sum + item.totalBayar);
+    return getTransaksiDenganLokasi
+        .where((t) => !KasbonRules.isPencairan(t.namaKomoditas))
+        .fold(0.0, (sum, item) => sum + item.totalBayar);
   }
 }
