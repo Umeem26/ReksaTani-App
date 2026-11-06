@@ -55,7 +55,13 @@ Jangan rilis APK dari titik tengah branch. Urutan ini dijalankan sekali, sebelum
 
 ## Uji asap pada Atlas
 
-Hal berikut belum pernah dijalankan terhadap server sungguhan. Semua tes otomatis memakai fake di memori.
+Semua tes otomatis memakai fake di memori. `uji_asap.dart` menjalankan `MongoRemote` dan `SyncEngine` asli terhadap Atlas, hanya pada dokumen `asap-` miliknya, lalu menghapusnya:
+
+```bash
+ASAP_KONFIRMASI=1 MONGO_URI=... flutter test --no-pub tool/atlas/uji_asap.dart
+```
+
+Tabel di bawah sudah dijalankan pada 2026-11-06, kecuali "mulai offline". Skrip berhenti merah pada langkah pencairan selama validator `transaksi` hanya menerima grade A, B, C.
 
 | Uji | Yang diamati |
 |---|---|
