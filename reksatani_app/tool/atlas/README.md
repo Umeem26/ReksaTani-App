@@ -45,7 +45,7 @@ Jangan rilis APK dari titik tengah branch. Urutan ini dijalankan sekali, sebelum
    dart run tool/atlas/buat_index.dart --confirm
    ```
 
-7. **Hapus data aplikasi di semua HP, lalu pasang APK baru.** Baris lama yang masih tersimpan di HP akan terkirim ulang dan menghidupkan kembali transaksi yang sudah direset.
+7. **Copot aplikasi lama di semua HP, lalu pasang APK baru.** Baris lama yang masih tersimpan di HP akan terkirim ulang dan menghidupkan kembali transaksi yang sudah direset. `applicationId` sudah berganti dari `com.example.reksatani_app` ke `com.reksatani.app`, jadi APK baru tidak menimpa yang lama: bila tidak dicopot, keduanya terpasang berdampingan dan APK lama masih bisa menulis ke Atlas.
 
 ## Aturan setelah rilis
 
