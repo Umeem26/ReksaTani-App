@@ -279,3 +279,75 @@ bool _kunciSama(Object? ada, Map<String, int> kunci) {
   }
   return true;
 }
+
+const String folderSkema = 'tool/atlas/skema';
+const List<String> koleksiSkema = ['komoditas', 'petani', 'transaksi', 'users'];
+
+/// Grade pencairan kasbon. Pencairan bukan pembelian, jadi tidak punya grade.
+const String gradeTanpaKualitas = '-';
+
+/// Validator satu koleksi dari balasan `listCollections`.
+Map<String, dynamic> skemaDariInfo(
+  List<Map<String, dynamic>> infos,
+  String koleksi,
+) {
+  final info = infos.where((i) => i['name'] == koleksi);
+  if (info.isEmpty) throw StateError('Koleksi tidak ada: $koleksi');
+  final opsi = info.first['options'];
+  if (opsi is! Map) throw StateError('Koleksi tanpa opsi: $koleksi');
+  return {
+    'koleksi': koleksi,
+    'validator': opsi['validator'],
+    'validationLevel': opsi['validationLevel'],
+    'validationAction': opsi['validationAction'],
+  };
+}
+
+/// Salinan [validator] `transaksi` dengan [gradeTanpaKualitas] di enum
+/// `grade_terpilih`. Bagian lain tidak berubah, dan yang sudah memuatnya tetap sama.
+Map<String, dynamic> tambahGradeTanpaKualitas(Map<String, dynamic> validator) {
+  final salinan = _salinDalam(validator) as Map<String, dynamic>;
+  final skema = salinan[r'$jsonSchema'];
+  final properti = skema is Map ? skema['properties'] : null;
+  final grade = properti is Map ? properti['grade_terpilih'] : null;
+  final daftar = grade is Map ? grade['enum'] : null;
+  if (daftar is! List) {
+    throw StateError('Validator tidak punya enum grade_terpilih.');
+  }
+  if (!daftar.contains(gradeTanpaKualitas)) daftar.add(gradeTanpaKualitas);
+  return salinan;
+}
+
+/// Lokasi perbedaan dua nilai JSON. Urutan kunci dan jenis angka ikut dihitung.
+List<String> bedaSkema(Object? a, Object? b, [String lokasi = r'$']) {
+  if (a is Map && b is Map) {
+    final kunciA = a.keys.toList();
+    final kunciB = b.keys.toList();
+    if ('$kunciA' != '$kunciB') {
+      return ['$lokasi: kunci $kunciA menjadi $kunciB'];
+    }
+    return [
+      for (final k in kunciA) ...bedaSkema(a[k], b[k], '$lokasi.$k'),
+    ];
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return ['$lokasi: $a menjadi $b'];
+    return [
+      for (var i = 0; i < a.length; i++) ...bedaSkema(a[i], b[i], '$lokasi[$i]'),
+    ];
+  }
+  if (a.runtimeType != b.runtimeType || a != b) {
+    return ['$lokasi: $a menjadi $b'];
+  }
+  return const [];
+}
+
+Object? _salinDalam(Object? v) {
+  if (v is Map) {
+    return <String, dynamic>{
+      for (final e in v.entries) '${e.key}': _salinDalam(e.value),
+    };
+  }
+  if (v is List) return <dynamic>[for (final x in v) _salinDalam(x)];
+  return v;
+}

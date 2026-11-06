@@ -1,0 +1,34 @@
+{
+  "koleksi": "users",
+  "validator": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "username",
+        "password_hash",
+        "role",
+        "sisa_uang_jalan"
+      ],
+      "properties": {
+        "role": {
+          "bsonType": "string",
+          "enum": [
+            "pengepul",
+            "manajer"
+          ]
+        },
+        "sisa_uang_jalan": {
+          "bsonType": [
+            "double",
+            "int",
+            "long",
+            "decimal"
+          ]
+        }
+      }
+    }
+  },
+  "validationLevel": null,
+  "validationAction": null
+}

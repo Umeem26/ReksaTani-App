@@ -78,6 +78,31 @@ Future<void> denganAtlas(Future<void> Function(Db db) kerja) async {
   }
 }
 
+/// Mengganti validator [koleksi]. Level dan aksi validasi tidak ikut berubah.
+/// Penolakan server, termasuk akun tanpa hak `collMod`, dicetak apa adanya.
+Future<void> gantiValidator(
+  Db db,
+  String koleksi,
+  Map<String, dynamic> validator,
+) async {
+  void tolak(Map balasan) {
+    stderr.writeln('Ditolak server, kode ${balasan['code']} '
+        '(${balasan['codeName']}): ${balasan['errmsg']}');
+    exit(1);
+  }
+
+  try {
+    final balasan = await db.runCommand({
+      'collMod': koleksi,
+      'validator': validator,
+    });
+    if (balasan['ok'] != 1.0) tolak(balasan);
+  } on Map catch (balasan) {
+    // Driver bisa melempar balasan server mentah bila `ok: 0`.
+    tolak(balasan);
+  }
+}
+
 /// Menjalankan [utama] dan menerjemahkan kegagalan ke kode keluar, tanpa
 /// mencetak isi exception yang bisa memuat detail server.
 Future<void> jalankan(Future<void> Function() utama) async {

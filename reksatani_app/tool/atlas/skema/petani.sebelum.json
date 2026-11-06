@@ -1,0 +1,37 @@
+{
+  "koleksi": "petani",
+  "validator": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "nama_petani",
+        "desa",
+        "sisa_hutang_kasbon",
+        "pengepul_id"
+      ],
+      "properties": {
+        "nama_petani": {
+          "bsonType": "string"
+        },
+        "desa": {
+          "bsonType": "string"
+        },
+        "sisa_hutang_kasbon": {
+          "bsonType": [
+            "double",
+            "int",
+            "long",
+            "decimal"
+          ],
+          "minimum": 0
+        },
+        "pengepul_id": {
+          "bsonType": "string"
+        }
+      }
+    }
+  },
+  "validationLevel": null,
+  "validationAction": null
+}

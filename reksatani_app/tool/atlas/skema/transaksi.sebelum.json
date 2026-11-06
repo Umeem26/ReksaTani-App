@@ -1,0 +1,113 @@
+{
+  "koleksi": "transaksi",
+  "validator": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "id_lokal",
+        "pengepul_id",
+        "nama_pengepul",
+        "petani_id",
+        "nama_petani",
+        "nama_komoditas",
+        "grade_terpilih",
+        "berat",
+        "harga_beli_satuan",
+        "nominal_potong_kasbon",
+        "total_bayar",
+        "status_sinkronisasi",
+        "created_at"
+      ],
+      "properties": {
+        "id_lokal": {
+          "bsonType": "string"
+        },
+        "pengepul_id": {
+          "bsonType": "string"
+        },
+        "nama_pengepul": {
+          "bsonType": "string"
+        },
+        "petani_id": {
+          "bsonType": "string"
+        },
+        "nama_petani": {
+          "bsonType": "string"
+        },
+        "nama_komoditas": {
+          "bsonType": "string"
+        },
+        "status_sinkronisasi": {
+          "bsonType": "string",
+          "enum": [
+            "pending",
+            "synced",
+            "failed",
+            "conflict"
+          ]
+        },
+        "grade_terpilih": {
+          "bsonType": "string",
+          "enum": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        "berat": {
+          "bsonType": [
+            "double",
+            "int",
+            "long",
+            "decimal"
+          ],
+          "minimum": 0
+        },
+        "harga_beli_satuan": {
+          "bsonType": [
+            "double",
+            "int",
+            "long",
+            "decimal"
+          ],
+          "minimum": 0
+        },
+        "nominal_potong_kasbon": {
+          "bsonType": [
+            "double",
+            "int",
+            "long",
+            "decimal"
+          ],
+          "minimum": 0
+        },
+        "total_bayar": {
+          "bsonType": [
+            "double",
+            "int",
+            "long",
+            "decimal"
+          ],
+          "minimum": 0
+        },
+        "latitude": {
+          "bsonType": [
+            "double",
+            "int",
+            "decimal"
+          ]
+        },
+        "longitude": {
+          "bsonType": [
+            "double",
+            "int",
+            "decimal"
+          ]
+        }
+      }
+    }
+  },
+  "validationLevel": null,
+  "validationAction": null
+}
