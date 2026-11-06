@@ -12,6 +12,8 @@ import '../../pcd_scanner/screens/pcd_camera_screen.dart';
 import '../../pcd_scanner/services/commodity_mapper.dart'; 
 
 class TransaksiScreen extends StatefulWidget {
+  /// Tes menyuntik controller agar tidak melakukan I/O sungguhan.
+  final TransaksiController? controller;
   final TransaksiHiveModel? editTrx;
   final String? fotoNotaPath;
   final String? fotoBarangPath;
@@ -28,6 +30,7 @@ class TransaksiScreen extends StatefulWidget {
 
   const TransaksiScreen({
     super.key,
+    this.controller,
     this.editTrx,
     this.fotoNotaPath,
     this.fotoBarangPath,
@@ -48,7 +51,8 @@ class TransaksiScreen extends StatefulWidget {
 
 class _TransaksiScreenState extends State<TransaksiScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _controller = TransaksiController();
+  late final TransaksiController _controller =
+      widget.controller ?? TransaksiController();
 
   final _namaPenjualCtrl = TextEditingController();
   final _desaCtrl = TextEditingController();
@@ -241,17 +245,21 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     }
 
     if (_isEditMode) {
-      await _jalankanSimpan(() => _controller.updateTransaksi(
-            widget.editTrx!,
-            petaniTerpilih: _petaniTerpilih,
-            namaPenjual: _namaPenjualCtrl.text,
-            komoditasTerpilih: _komoditasTerpilih,
-            gradeTerpilih: _gradeTerpilih,
-            beratText: _beratCtrl.text,
-            hargaText: _hargaCtrl.text,
-            fotoNotaPath: _fotoNotaPath ?? '',
-            fotoBarangPath: _fotoBarangPath ?? '',
-          ));
+      await _jalankanSimpan(() async {
+        await _controller.updateTransaksi(
+          widget.editTrx!,
+          petaniTerpilih: _petaniTerpilih,
+          namaPenjual: _namaPenjualCtrl.text,
+          komoditasTerpilih: _komoditasTerpilih,
+          gradeTerpilih: _gradeTerpilih,
+          beratText: _beratCtrl.text,
+          hargaText: _hargaCtrl.text,
+          fotoNotaPath: _fotoNotaPath ?? '',
+          fotoBarangPath: _fotoBarangPath ?? '',
+        );
+        // Edit tidak mengambil GPS: lokasi asli transaksi dipertahankan.
+        return true;
+      });
       return;
     }
 
@@ -273,12 +281,14 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   }
 
   /// Satu tempat untuk semua penyimpanan, supaya tombol tidak pernah macet di
-  /// keadaan menyimpan bila ada yang gagal.
-  Future<void> _jalankanSimpan(Future<void> Function() simpan) async {
+  /// keadaan menyimpan bila ada yang gagal. [simpan] mengembalikan true bila lokasi
+  /// GPS tercatat.
+  Future<void> _jalankanSimpan(Future<bool> Function() simpan) async {
     setState(() => _saving = true);
     var berhasil = false;
+    var lokasiTercatat = true;
     try {
-      await simpan();
+      lokasiTercatat = await simpan();
       berhasil = true;
     } on TransaksiDitolak catch (e) {
       if (mounted) _showSnack(e.pesan, isError: true);
@@ -287,7 +297,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-    if (berhasil && mounted) _showSuksesSheet();
+    if (berhasil && mounted) _showSuksesSheet(lokasiTercatat: lokasiTercatat);
   }
 
   /// True bila agen memilih menyimpan tanpa foto. Menutup dialog berarti tidak.
@@ -315,7 +325,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     return lanjut ?? false;
   }
 
-  void _showSuksesSheet() {
+  void _showSuksesSheet({required bool lokasiTercatat}) {
     final double tampilNominal = widget.isMurniKasbon 
         ? (double.tryParse(_nominalKasbonCtrl.text) ?? 0) 
         : _totalBayar;
@@ -328,6 +338,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         totalBayar: tampilNominal,
         namaPetani: _petaniTerpilih?.namaPetani ?? _namaPenjualCtrl.text,
         isKasbonTitle: widget.isMurniKasbon,
+        lokasiTercatat: lokasiTercatat,
         onSelesai: () {
           Navigator.pop(context); 
           Navigator.pop(context, true); 
@@ -969,9 +980,10 @@ class _SuksesSheet extends StatelessWidget {
   final double totalBayar;
   final String namaPetani;
   final bool isKasbonTitle;
+  final bool lokasiTercatat;
   final VoidCallback onSelesai;
-  
-  const _SuksesSheet({required this.totalBayar, required this.namaPetani, this.isKasbonTitle = false, required this.onSelesai});
+
+  const _SuksesSheet({required this.totalBayar, required this.namaPetani, this.isKasbonTitle = false, this.lokasiTercatat = true, required this.onSelesai});
 
   String _fmt(int angka) {
     final s = angka.toString();
@@ -1000,6 +1012,21 @@ class _SuksesSheet extends StatelessWidget {
           Text(isKasbonTitle ? 'Kasbon Berhasil Dicairkan!' : 'Transaksi Berhasil Disimpan!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
           const SizedBox(height: 8),
           const Text('Data tersimpan di perangkat lokal dan\nmasuk antrean sinkronisasi server.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
+          // Di dalam lembar ini, bukan SnackBar: SnackBar akan tertutup lembarnya.
+          if (!lokasiTercatat) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+              child: const Row(
+                children: [
+                  Icon(Icons.location_off_rounded, color: Color(0xFFB45309), size: 20),
+                  SizedBox(width: 10),
+                  Expanded(child: Text(TransaksiController.pesanLokasiGagal, style: TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w700, height: 1.3))),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 28),
           Container(
             padding: const EdgeInsets.all(20),

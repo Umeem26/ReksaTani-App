@@ -10,8 +10,24 @@ import '../../../../../services/saldo/transaksi_ditolak.dart';
 import '../../../../../services/sync/mongo_id.dart';
 import 'package:reksatani_app/services/master_data_service.dart';
 
+/// Mengambil koordinat saat ini, atau null bila lokasi tidak bisa didapat.
+typedef AmbilLokasi = Future<({double lat, double lng})?> Function();
+
 class TransaksiController {
+  TransaksiController({AmbilLokasi? ambilLokasi})
+      : _ambilLokasi = ambilLokasi ?? _getKoordinatGPS;
+
+  final AmbilLokasi _ambilLokasi;
   final _hive = HiveService();
+
+  /// Pemberitahuan di layar bila penyimpanan mengembalikan "lokasi tidak tercatat".
+  static const String pesanLokasiGagal =
+      'Lokasi GPS tidak tercatat. Data tetap tersimpan, tetapi tidak muncul di peta manajer.';
+
+  /// Penanda "lokasi tidak ada" di data, karena validator `transaksi` di Atlas hanya
+  /// menerima angka untuk `latitude` dan `longitude`, bukan null. Peta manajer
+  /// melewati titik bernilai ini.
+  static const double _tanpaLokasi = 0.0;
 
   double get sisaUangJalan => _hive.usersBox.get('currentUser')?.sisaUangJalan ?? 0.0;
 
@@ -100,36 +116,36 @@ class TransaksiController {
   }
 
   // ─── FUNGSI BARU: MENGAMBIL KOORDINAT DENGAN TIMEOUT 7 DETIK ───
-  Future<Map<String, double>> _getKoordinatGPS() async {
+  static Future<({double lat, double lng})?> _getKoordinatGPS() async {
     bool serviceEnabled;
     LocationPermission permission;
 
     try {
       // 1. Cek apakah GPS HP menyala
       serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return {'lat': 0.0, 'lng': 0.0};
+      if (!serviceEnabled) return null;
 
       // 2. Cek apakah izin aplikasi diberikan
       permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return {'lat': 0.0, 'lng': 0.0};
+        if (permission == LocationPermission.denied) return null;
       }
-      
+
       if (permission == LocationPermission.deniedForever) {
-        return {'lat': 0.0, 'lng': 0.0};
+        return null;
       }
 
       // 3. Ambil posisi dengan batas waktu maksimal 7 detik
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 7), 
+        timeLimit: const Duration(seconds: 7),
       );
 
-      return {'lat': position.latitude, 'lng': position.longitude};
+      return (lat: position.latitude, lng: position.longitude);
     } catch (e) {
-      // Jika TimeoutException (karena di kebun/susah sinyal), kembalikan 0.0
-      return {'lat': 0.0, 'lng': 0.0};
+      // Termasuk TimeoutException (karena di kebun/susah sinyal)
+      return null;
     }
   }
 
@@ -137,7 +153,10 @@ class TransaksiController {
   ///
   /// Melempar [TransaksiDitolak] bila aturan dilanggar, sebelum ada yang ditulis.
   /// [izinkanTanpaFoto] adalah jawaban agen atas peringatan foto di layar.
-  Future<void> simpanTransaksi({
+  ///
+  /// Mengembalikan true bila lokasi GPS tercatat. Gagalnya GPS tidak menggagalkan
+  /// penyimpanan.
+  Future<bool> simpanTransaksi({
     required PetaniHiveModel? petaniTerpilih,
     required String namaPenjual,
     required KomoditasHiveModel? komoditasTerpilih,
@@ -164,7 +183,7 @@ class TransaksiController {
     );
 
     // Panggil pencarian GPS di sini
-    final koordinat = await _getKoordinatGPS();
+    final koordinat = await _ambilLokasi();
 
     final idLokal = '${user.id}_${now.millisecondsSinceEpoch}';
     final fotoNota = await FotoTertunda.salin(fotoNotaPath, idLokal: idLokal, jenis: 'nota');
@@ -192,8 +211,8 @@ class TransaksiController {
               ? 'dilewati'
               : 'ok',
       // Masukkan hasil GPS ke model
-      latitude: koordinat['lat'] ?? 0.0,
-      longitude: koordinat['lng'] ?? 0.0,
+      latitude: koordinat?.lat ?? _tanpaLokasi,
+      longitude: koordinat?.lng ?? _tanpaLokasi,
       statusSinkronisasi: 'pending',
       createdAt: now,
     );
@@ -216,6 +235,7 @@ class TransaksiController {
     // Sedikit delay agar animasi loading di layar terlihat natural
     await Future.delayed(const Duration(milliseconds: 400));
     MasterDataService().syncAll();
+    return koordinat != null;
   }
 
   Future<void> updateTransaksi(
@@ -342,7 +362,8 @@ class TransaksiController {
   PetaniHiveModel? _petaniDari(TransaksiHiveModel trx) =>
       trx.petaniId.isEmpty ? null : _hive.petaniBox.get(MongoId.kanonik(trx.petaniId));
 
-  Future<void> simpanKasbonMurni({
+  /// Mengembalikan true bila lokasi GPS tercatat, seperti [simpanTransaksi].
+  Future<bool> simpanKasbonMurni({
     required PetaniHiveModel petaniTerpilih,
     required String nominalKasbonText,
   }) async {
@@ -355,7 +376,7 @@ class TransaksiController {
     final now  = DateTime.now();
 
     // Ambil koordinat GPS murni luring untuk mencatat lokasi pencairan uang
-    final koordinat = await _getKoordinatGPS();
+    final koordinat = await _ambilLokasi();
 
     // 1. Catat kasbon ke riwayat transaksi sebagai bukti pengeluaran kas luring
     final trx = TransaksiHiveModel(
@@ -372,8 +393,8 @@ class TransaksiController {
       totalBayar: nominalKasbon,
       fotoFisikBarang: '',
       fotoNota: '',
-      latitude: koordinat['lat'] ?? 0.0,
-      longitude: koordinat['lng'] ?? 0.0,
+      latitude: koordinat?.lat ?? _tanpaLokasi,
+      longitude: koordinat?.lng ?? _tanpaLokasi,
       statusSinkronisasi: 'pending',
       createdAt: now,
     );
@@ -390,5 +411,6 @@ class TransaksiController {
 
     await Future.delayed(const Duration(milliseconds: 400));
     MasterDataService().syncAll();
+    return koordinat != null;
   }
 }
