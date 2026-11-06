@@ -3,6 +3,7 @@ import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../models/hive/user_hive_model.dart';
 import '../../../../services/hive_service.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../services/saldo/kasbon_rules.dart';
 
 /// Controller untuk ManajerAnalitikScreen.
 /// Menyediakan semua kalkulasi analitik yang dibutuhkan dasbor manajer.
@@ -19,12 +20,19 @@ class ManajerAnalitikController extends ChangeNotifier {
   List<TransaksiHiveModel> get semuaTransaksi =>
       _svc.getRiwayatTransaksi();
 
+  /// Pencairan kasbon bukan pembelian: tanpa berat, grade, dan komoditas.
+  /// Status sinkron tetap memakai [semuaTransaksi], karena pencairan ikut terkirim.
+  Iterable<TransaksiHiveModel> get _pembelian =>
+      semuaTransaksi.where((t) => !KasbonRules.isPencairan(t.namaKomoditas));
+
+  int get jumlahPembelian => _pembelian.length;
+
   // ── Ringkasan stok ────────────────────────────────────────────
   double get totalStokKg =>
       semuaTransaksi.fold(0.0, (sum, t) => sum + t.berat);
 
   double get totalNilai =>
-      semuaTransaksi.fold(0.0, (sum, t) => sum + t.totalBayar);
+      _pembelian.fold(0.0, (sum, t) => sum + t.totalBayar);
 
   // ── Status sinkronisasi ───────────────────────────────────────
   int get jumlahPending =>
@@ -51,7 +59,7 @@ class ManajerAnalitikController extends ChangeNotifier {
       };
     }
 
-    for (final t in semuaTransaksi) {
+    for (final t in _pembelian) {
       final key = t.namaKomoditas;
       if (!map.containsKey(key)) {
         map[key] = {'nama': key, 'totalKg': 0.0, 'totalNilai': 0.0};
@@ -83,7 +91,7 @@ class ManajerAnalitikController extends ChangeNotifier {
     }
 
     // Tambahkan berat dari transaksi yang ada
-    for (final t in semuaTransaksi) {
+    for (final t in _pembelian) {
       final g = t.gradeTerpilih;
       if (g.isNotEmpty) {
         map[g] = (map[g] ?? 0.0) + t.berat;
@@ -110,7 +118,7 @@ class ManajerAnalitikController extends ChangeNotifier {
       map[k.namaKomoditas] = 0;
     }
 
-    for (final t in semuaTransaksi) {
+    for (final t in _pembelian) {
       map[t.namaKomoditas] = (map[t.namaKomoditas] ?? 0) + 1;
     }
     final list = map.entries
