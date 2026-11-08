@@ -55,6 +55,93 @@ void main() {
     });
   });
 
+  group('bedaSelainGradeTanpaKualitas', () {
+    Map<String, dynamic> skema(Map<String, dynamic> validator) => {
+          'koleksi': 'transaksi',
+          'validator': validator,
+          'validationLevel': null,
+          'validationAction': null,
+        };
+
+    test('grade "-" di akhir enum: tidak ada beda lain', () {
+      final sesudah = skema(tambahGradeTanpaKualitas(validator()));
+
+      expect(bedaSelainGradeTanpaKualitas(skema(validator()), sesudah), isEmpty);
+    });
+
+    test('grade "-" di posisi lain juga diterima', () {
+      final v = validator();
+      v[r'$jsonSchema']['properties']['grade_terpilih']['enum'] = ['-', 'A', 'B', 'C'];
+
+      expect(bedaSelainGradeTanpaKualitas(skema(validator()), skema(v)), isEmpty);
+    });
+
+    test('enum tanpa "-" dilaporkan', () {
+      expect(
+        bedaSelainGradeTanpaKualitas(skema(validator()), skema(validator())),
+        [contains('tidak memuat "-"')],
+      );
+    });
+
+    test('perubahan lain di luar enum dilaporkan', () {
+      final v = tambahGradeTanpaKualitas(validator());
+      v[r'$jsonSchema']['properties']['berat'] = {'minimum': 1};
+      final s = skema(v)..['validationAction'] = 'warn';
+
+      expect(bedaSelainGradeTanpaKualitas(skema(validator()), s), [
+        contains('berat.minimum'),
+        contains('validationAction'),
+      ]);
+    });
+
+    test('grade lain ikut ditambahkan: dilaporkan', () {
+      final v = tambahGradeTanpaKualitas(validator());
+      (v[r'$jsonSchema']['properties']['grade_terpilih']['enum'] as List).add('D');
+
+      expect(
+        bedaSelainGradeTanpaKualitas(skema(validator()), skema(v)),
+        [contains('grade_terpilih.enum')],
+      );
+    });
+
+    test('null dan bawaan strict/error setara, ke dua arah', () {
+      final sesudah = skema(tambahGradeTanpaKualitas(validator()))
+        ..['validationLevel'] = 'strict'
+        ..['validationAction'] = 'error';
+
+      expect(bedaSelainGradeTanpaKualitas(skema(validator()), sesudah), isEmpty);
+      final sebelum = skema(validator())
+        ..['validationLevel'] = 'strict'
+        ..['validationAction'] = 'error';
+      expect(
+        bedaSelainGradeTanpaKualitas(
+            sebelum, skema(tambahGradeTanpaKualitas(validator()))),
+        isEmpty,
+      );
+    });
+
+    test('level atau aksi selain bawaan tetap dilaporkan', () {
+      final sesudah = skema(tambahGradeTanpaKualitas(validator()))
+        ..['validationLevel'] = 'moderate'
+        ..['validationAction'] = 'warn';
+
+      expect(bedaSelainGradeTanpaKualitas(skema(validator()), sesudah), [
+        contains('validationLevel'),
+        contains('validationAction'),
+      ]);
+    });
+
+    test('tidak mengubah skema yang dibandingkan', () {
+      final sesudah = skema(tambahGradeTanpaKualitas(validator()));
+      bedaSelainGradeTanpaKualitas(skema(validator()), sesudah);
+
+      expect(
+        sesudah['validator'][r'$jsonSchema']['properties']['grade_terpilih']['enum'],
+        ['A', 'B', 'C', '-'],
+      );
+    });
+  });
+
   group('bedaSkema', () {
     test('angka tetap sama jenisnya sesudah melewati JSON', () {
       final asli = {'a': 0, 'b': 0.5, 'c': 1.0};

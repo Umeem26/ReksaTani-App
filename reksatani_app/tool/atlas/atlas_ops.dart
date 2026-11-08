@@ -318,6 +318,46 @@ Map<String, dynamic> tambahGradeTanpaKualitas(Map<String, dynamic> validator) {
   return salinan;
 }
 
+/// Nilai bawaan MongoDB bila opsi validasi tidak tercantum. Atlas UI menuliskannya
+/// secara eksplisit saat menyimpan validator (diterima Umem 2026-11-08).
+const Map<String, String> bawaanValidasi = {
+  'validationLevel': 'strict',
+  'validationAction': 'error',
+};
+
+/// Salinan [skema] (hasil [skemaDariInfo]) dengan opsi validasi yang kosong diisi
+/// [bawaanValidasi], supaya `null` dan bawaannya terbaca sama.
+Map<String, dynamic> isiBawaanValidasi(Map<String, dynamic> skema) {
+  final salinan = _salinDalam(skema) as Map<String, dynamic>;
+  bawaanValidasi.forEach((kunci, bawaan) {
+    if (salinan.containsKey(kunci)) salinan[kunci] ??= bawaan;
+  });
+  return salinan;
+}
+
+/// Perbedaan [sesudah] dari [sebelum] (keduanya hasil [skemaDariInfo]) selain satu
+/// [gradeTanpaKualitas] di enum `grade_terpilih`, di posisi mana pun. Kosong berarti
+/// hanya grade itu yang ditambahkan. Enum tanpa grade itu juga dilaporkan.
+/// `validationLevel` dan `validationAction` yang kosong setara dengan
+/// [bawaanValidasi].
+List<String> bedaSelainGradeTanpaKualitas(
+  Map<String, dynamic> sebelum,
+  Map<String, dynamic> sesudah,
+) {
+  const lokasi = r'$.validator.$jsonSchema.properties.grade_terpilih.enum';
+  sebelum = isiBawaanValidasi(sebelum);
+  final salinan = isiBawaanValidasi(sesudah);
+  final validator = salinan['validator'];
+  final skema = validator is Map ? validator[r'$jsonSchema'] : null;
+  final properti = skema is Map ? skema['properties'] : null;
+  final grade = properti is Map ? properti['grade_terpilih'] : null;
+  final daftar = grade is Map ? grade['enum'] : null;
+  if (daftar is! List || !daftar.remove(gradeTanpaKualitas)) {
+    return ['$lokasi: tidak memuat "$gradeTanpaKualitas"'];
+  }
+  return bedaSkema(sebelum, salinan);
+}
+
 /// Lokasi perbedaan dua nilai JSON. Urutan kunci dan jenis angka ikut dihitung.
 List<String> bedaSkema(Object? a, Object? b, [String lokasi = r'$']) {
   if (a is Map && b is Map) {
