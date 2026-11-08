@@ -22,7 +22,7 @@ class ManajemenKomoditasController {
   /// Pesan untuk layar bila penyimpanan tidak berhasil.
   static String pesanGagal(HasilSimpanKomoditas hasil) => switch (hasil) {
         HasilSimpanKomoditas.tidakValid =>
-          'Grade harus A, B, atau C dan harga tidak boleh negatif.',
+          'Grade harus A, B, atau C dan harga maksimal harus lebih dari 0.',
         HasilSimpanKomoditas.tidakDitemukan =>
           'Data komoditas tidak ditemukan. Muat ulang daftar lalu coba lagi.',
         _ => 'Gagal menyimpan komoditas. Periksa koneksi lalu coba lagi.',
@@ -47,7 +47,8 @@ class ManajemenKomoditasController {
     if (isi.isEmpty) return 'Harga tidak boleh kosong';
     final harga = double.tryParse(isi);
     if (harga == null || !harga.isFinite) return 'Format harga tidak valid';
-    if (harga < 0) return 'Harga tidak boleh negatif';
+    // Harga maksimal 0 membuat semua pembelian grade ini tertolak di transaksi.
+    if (harga <= 0) return 'Harga maksimal harus lebih dari 0';
     return null;
   }
 
@@ -59,7 +60,7 @@ class ManajemenKomoditasController {
       return gradeSah.contains(g['grade']) &&
           harga is num &&
           harga.isFinite &&
-          harga >= 0;
+          harga > 0;
     });
   }
 
