@@ -46,9 +46,30 @@ app.*.map.json
 
 # Environment variables
 .env
+.env.*
+!.env.example
 lib/core/env/env.g.dart
 
 # Kunci rilis Android, di mana pun letaknya
 key.properties
 *.keystore
 *.jks
+
+# Path SDK lokal, di mana pun letaknya
+local.properties
+
+# Build keluaran di subfolder (mis. android/app/build)
+build/
+
+# ML: hanya kode dan dokumen yang masuk git (ml/.gitignore juga menjaga ini)
+ml/dataset/
+ml/reports/
+ml/data_public/*
+!ml/data_public/README.md
+!ml/data_public/.gitignore
+ml/**/*.jpg
+ml/**/*.jpeg
+ml/**/*.png
+ml/**/*.zip
+ml/**/__pycache__/
+ml/.venv/
