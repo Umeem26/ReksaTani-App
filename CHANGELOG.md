@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Repository layout**: The Flutter app moved from `reksatani_app/` to the repository root, with file history kept through `git mv`. CI no longer sets a working directory.
+- **Documentation**: New English `README.md`. The previous technical notes (architecture, limitations, test status, setup) moved to `docs/TECHNICAL.md`, with outdated statements marked as updated.
+- **Grading**: Grade A/B/C is decided by a human checklist rubric (`v0.1-draf`); the TFLite model only suggests the commodity.
+- **Sync and balances**: Transactions are upserted on `id_lokal`, and balances are recomputed from the base balance plus transactions.
+
+### Fixed
+- **Disbursements**: Kasbon disbursements (grade `-`) now pass the Atlas validator and reach the cloud.
+- **GPS**: A failed location is stored as null and left out of the Atlas document, instead of being saved as 0,0.
+
+### Added
+- `ml/train_sawit.py` (draft retraining script for the oil palm grader) and `ml/NOTICE.md` with attribution for the public datasets.
+
 ## [1.1.0] - 2026-06-09
 
 ### Added
