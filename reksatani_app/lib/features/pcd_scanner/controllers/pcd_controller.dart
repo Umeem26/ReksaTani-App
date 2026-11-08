@@ -6,7 +6,6 @@ import '../services/document_warping_service.dart';
 import '../services/image_segmentation_service.dart';
 import '../services/ocr_regex_service.dart'; // 👈 Impor service baru Modul 8
 import '../services/grading_ml_service.dart'; // 👈 Impor GradingMlService Modul 9
-import '../services/confidence_validator.dart'; // 👈 Impor ConfidenceValidator Modul 10
 
 /// Saran komoditas dari router. Hanya saran: pengguna selalu mengonfirmasi
 /// atau menggantinya, dan grade tidak pernah datang dari sini.
@@ -22,13 +21,9 @@ class PcdController {
   final ImageSegmentationService _segmentationService = ImageSegmentationService();
   final OcrRegexService _ocrRegexService = OcrRegexService(); // 👈 Inisialisasi Modul 8
   final GradingMlService _gradingMlService; // 👈 Inisialisasi Modul 9
-  final ConfidenceValidator confidenceValidator; // 👈 Inisialisasi Modul 10
 
-  PcdController({
-    GradingMlService? gradingMlService,
-    ConfidenceValidator? confidenceValidator,
-  })  : _gradingMlService = gradingMlService ?? GradingMlService(),
-        confidenceValidator = confidenceValidator ?? ConfidenceValidator();
+  PcdController({GradingMlService? gradingMlService})
+      : _gradingMlService = gradingMlService ?? GradingMlService();
 
   /// Di bawah keyakinan router ini tidak ada saran; pengguna memilih manual.
   static const double ambangSaran = 0.5;
@@ -83,17 +78,6 @@ class PcdController {
   // ─── 🛠️ MODUL 8: Ekstraksi Teks Nota Berbasis OCR & Regex ───
   Future<Map<String, String>> prosesOcrNota(String imagePath) async {
     return await _ocrRegexService.ekstrakDataNota(imagePath);
-  }
-
-  // ─── MODUL 9/10: Grading Lengkap (router + grader) ───
-  /// Mengembalikan [ScanResult] dengan status eksplisit. Kegagalan apa pun
-  /// menghasilkan [ScanStatus.error] dengan grade null (tidak pernah Grade A).
-  Future<ScanResult> prosesGradingLengkap(String imagePath) async {
-    try {
-      return await _gradingMlService.scanImage(File(imagePath));
-    } catch (e) {
-      return ScanResult.error('$e');
-    }
   }
 
   // ─── MODUL 9: Saran Komoditas (router saja) ───

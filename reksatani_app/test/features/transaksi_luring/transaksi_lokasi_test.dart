@@ -140,8 +140,7 @@ void main() {
         MaterialApp(
           home: TransaksiScreen(
             controller: _ControllerTanpaTulis(lokasiTercatat),
-            gradeTebakanPcd: 'A',
-            initialKomoditasPcd: 'gabah',
+            saranKomoditasAi: 'gabah',
             initialNamaPenjualOcr: 'Pak Budi',
             initialDesaOcr: 'Cibiru',
             initialBeratOcr: '10',
@@ -150,6 +149,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      // Grade tidak datang dari AI: checklist diisi manusia (hasilnya Grade A).
+      for (final opsi in ['3% atau kurang', 'Seragam, hampir tanpa butir rusak']) {
+        await tester.ensureVisible(find.text(opsi));
+        await tester.tap(find.text(opsi));
+        await tester.pumpAndSettle();
+      }
 
       final tombol = find.text('Simpan Transaksi');
       await tester.ensureVisible(tombol);

@@ -360,8 +360,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: TransaksiScreen(
-            gradeTebakanPcd: 'A',
-            initialKomoditasPcd: 'gabah',
+            saranKomoditasAi: 'gabah',
             initialNamaPenjualOcr: 'Pak Budi',
             initialDesaOcr: 'Cibiru',
             initialBeratOcr: '10',
@@ -370,6 +369,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      // Grade tidak datang dari AI: checklist diisi manusia (hasilnya Grade A).
+      for (final opsi in ['3% atau kurang', 'Seragam, hampir tanpa butir rusak']) {
+        await tester.ensureVisible(find.text(opsi));
+        await tester.tap(find.text(opsi));
+        await tester.pumpAndSettle();
+      }
     }
 
     Future<void> tekanSimpan(WidgetTester tester) async {

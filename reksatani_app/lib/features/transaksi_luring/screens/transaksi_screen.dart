@@ -9,7 +9,9 @@ import '../../../services/saldo/kasbon_rules.dart';
 import '../../../services/saldo/transaksi_ditolak.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../../pcd_scanner/screens/pcd_camera_screen.dart';
-import '../../pcd_scanner/services/commodity_mapper.dart'; 
+import '../../pcd_scanner/services/commodity_mapper.dart';
+import '../../pcd_scanner/services/grading_rubric.dart';
+import '../../pcd_scanner/widgets/checklist_rubrik.dart';
 
 class TransaksiScreen extends StatefulWidget {
   /// Tes menyuntik controller agar tidak melakukan I/O sungguhan.
@@ -17,15 +19,14 @@ class TransaksiScreen extends StatefulWidget {
   final TransaksiHiveModel? editTrx;
   final String? fotoNotaPath;
   final String? fotoBarangPath;
-  /// Grade saran AI. Hanya diisi bila hasil pemindaian DITERIMA; null = user wajib memilih.
-  final String? gradeTebakanPcd;
-  final double? confidencePcd;
   final String? initialBeratOcr; 
   final String? initialHargaOcr; 
   final String? initialNamaPenjualOcr; 
   final String? initialDesaOcr; 
   final String? initialKomoditasOcr; 
-  final String? initialKomoditasPcd; // 👈 New parameter
+  /// Label router yang disarankan AI ('gabah', 'kelapa_sawit', 'kopi'); null = tanpa saran.
+  final String? saranKomoditasAi;
+  final double? keyakinanSaranAi;
   final bool isMurniKasbon; 
 
   const TransaksiScreen({
@@ -34,14 +35,13 @@ class TransaksiScreen extends StatefulWidget {
     this.editTrx,
     this.fotoNotaPath,
     this.fotoBarangPath,
-    this.gradeTebakanPcd,
-    this.confidencePcd,
     this.initialBeratOcr, 
     this.initialHargaOcr, 
     this.initialNamaPenjualOcr,
     this.initialDesaOcr,
     this.initialKomoditasOcr,
-    this.initialKomoditasPcd, // 👈 New parameter
+    this.saranKomoditasAi,
+    this.keyakinanSaranAi,
     this.isMurniKasbon = false, 
   });
 
@@ -69,6 +69,13 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   /// Komoditas master data yang cocok dengan label AI (bukan fallback OCR).
   KomoditasHiveModel? _komoditasDariAi;
 
+  /// Jawaban checklist rubrik: kode pertanyaan -> kode opsi.
+  Map<String, String> _jawabanRubrik = {};
+
+  /// False selama checklist transaksi yang diedit belum disentuh, supaya
+  /// jawaban dan grade lamanya tidak ditimpa.
+  bool _jawabanDisentuh = false;
+
   /// Hanya angka dengan satu pemisah desimal (titik atau koma).
   static final _desimalFormatter = TextInputFormatter.withFunction(
     (oldValue, newValue) => RegExp(r'^\d*[.,]?\d*$').hasMatch(newValue.text) ? newValue : oldValue,
@@ -81,8 +88,41 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   double get _totalBayar => _controller.getTotalBayar(_beratCtrl.text, _hargaCtrl.text);
   bool get _hargaMelebihi => _controller.isHargaMelebihi(_komoditasTerpilih, _gradeTerpilih, _hargaCtrl.text);
   bool get _isEditMode => widget.editTrx != null;
-  bool get _pcdDiterima =>
-      (widget.gradeTebakanPcd?.isNotEmpty ?? false) && (widget.initialKomoditasPcd?.isNotEmpty ?? false);
+  bool get _adaSaranAi => widget.saranKomoditasAi?.isNotEmpty ?? false;
+  RubrikKomoditas? get _rubrik => rubrikUntukKomoditas(_komoditasTerpilih?.namaKomoditas);
+
+  /// Grade dari checklist; null selama checklist belum lengkap.
+  String? get _gradeChecklist {
+    final r = _rubrik;
+    return r == null ? null : gradeDariJawaban(r, _jawabanRubrik);
+  }
+
+  /// Jawaban untuk disimpan, hanya bila checklist lengkap dan disentuh.
+  List<String>? get _jawabanUntukDisimpan {
+    final r = _rubrik;
+    if (!_jawabanDisentuh || r == null || _gradeChecklist == null) return null;
+    return kodekanJawaban(r, _jawabanRubrik);
+  }
+
+  void _pilihJawaban(String pertanyaan, String opsi) {
+    setState(() {
+      _jawabanRubrik = {..._jawabanRubrik, pertanyaan: opsi};
+      _jawabanDisentuh = true;
+      _gradeTerpilih = _gradeChecklist;
+      final maks = _hargaMaksGrade.toInt();
+      if (_gradeTerpilih != null && maks > 0 && _hargaCtrl.text.isEmpty) _hargaCtrl.text = '$maks';
+    });
+  }
+
+  void _gantiKomoditas(KomoditasHiveModel? k) {
+    setState(() {
+      _komoditasTerpilih = k;
+      _jawabanRubrik = {};
+      _jawabanDisentuh = true;
+      _gradeTerpilih = null;
+      _hargaCtrl.clear();
+    });
+  }
 
   @override
   void initState() {
@@ -100,6 +140,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         _komoditasTerpilih = _controller.daftarKomoditas.firstWhere((k) => k.namaKomoditas == trx.namaKomoditas);
       } catch (_) {}
       _gradeTerpilih = trx.gradeTerpilih;
+      // Jawaban dari versi rubrik lain tidak dimuat: kodenya bisa sudah berbeda.
+      if (trx.rubrikVersi == rubrikVersi) _jawabanRubrik = bacaJawaban(trx.rubrikJawaban);
     }
 
     if (widget.initialBeratOcr != null && widget.initialBeratOcr!.isNotEmpty) {
@@ -161,15 +203,14 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
         _desaCtrl.text = widget.initialDesaOcr!;
       }
     }
-    // Prefill komoditas & grade HANYA bila hasil AI diterima (initialKomoditasPcd + gradeTebakanPcd terisi).
+    // Prefill komoditas HANYA bila ada saran AI. Grade tidak pernah datang dari AI.
     // Label ML (gabah/kelapa_sawit/kopi) dipetakan ke master data dengan contains-match;
-    // bila tidak ada yang cocok, pakai komoditas OCR (tanpa grade AI, karena komoditasnya berbeda).
-    if (!_isEditMode && !widget.isMurniKasbon && _pcdDiterima) {
+    // bila tidak ada yang cocok, pakai komoditas OCR.
+    if (!_isEditMode && !widget.isMurniKasbon && _adaSaranAi) {
       _komoditasDariAi = CommodityMapper.match<KomoditasHiveModel>(
-          _controller.daftarKomoditas, (k) => k.namaKomoditas, widget.initialKomoditasPcd);
+          _controller.daftarKomoditas, (k) => k.namaKomoditas, widget.saranKomoditasAi);
       if (_komoditasDariAi != null) {
         _komoditasTerpilih = _komoditasDariAi;
-        _gradeTerpilih = widget.gradeTebakanPcd;
       } else {
         _komoditasTerpilih = CommodityMapper.match<KomoditasHiveModel>(
             _controller.daftarKomoditas, (k) => k.namaKomoditas, widget.initialKomoditasOcr);
@@ -256,6 +297,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
           hargaText: _hargaCtrl.text,
           fotoNotaPath: _fotoNotaPath ?? '',
           fotoBarangPath: _fotoBarangPath ?? '',
+          grading: CatatanGrading(rubrikJawaban: _jawabanUntukDisimpan),
         );
         // Edit tidak mengambil GPS: lokasi asli transaksi dipertahankan.
         return true;
@@ -277,6 +319,10 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
           fotoNotaPath: _fotoNotaPath ?? '',
           fotoBarangPath: _fotoBarangPath ?? '',
           izinkanTanpaFoto: fotoKurang,
+          grading: CatatanGrading(
+            saranKomoditasAi: _adaSaranAi ? widget.saranKomoditasAi : null,
+            rubrikJawaban: _jawabanUntukDisimpan,
+          ),
         ));
   }
 
@@ -409,8 +455,6 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.all(20),
             children: [
-              if (!_isEditMode && !widget.isMurniKasbon) _BannerPcd(gradeTebakan: _pcdDiterima ? widget.gradeTebakanPcd : null, confidence: widget.confidencePcd),
-              if (!_isEditMode && !widget.isMurniKasbon) const SizedBox(height: 20),
               
               // ── BENTO SECTION: PETANI ──
               _FormSection(
@@ -420,12 +464,13 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                   _FieldLabel(widget.isMurniKasbon ? 'Pilih Mitra Petani (Wajib)' : 'Pilih Petani (Opsional)'),
                   DropdownButtonFormField<PetaniHiveModel>(
                     value: _petaniTerpilih,
+                    isExpanded: true,
                     decoration: _dropDeco(),
                     hint: const Text('Pilih dari daftar mitra'),
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textHint),
                     validator: (v) => widget.isMurniKasbon && v == null ? 'Silakan pilih mitra petani' : null,
                     items: _daftarPetani
-                        .map((p) => DropdownMenuItem(value: p, child: Text(p.namaPetani, style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary))))
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p.namaPetani, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary))))
                         .toList(),
                     onChanged: (p) => setState(() {
                       _petaniTerpilih = p;
@@ -481,24 +526,70 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                   title: 'Rincian Komoditas',
                   icon: Icons.eco_rounded,
                   children: [
+                    if (!_isEditMode) ...[
+                      KartuSaranKomoditas(
+                        labelSaran: _adaSaranAi ? widget.saranKomoditasAi : null,
+                        keyakinan: widget.keyakinanSaranAi,
+                        onGanti: _komoditasTerpilih == null ? null : () => _gantiKomoditas(null),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     _FieldLabel('Jenis Komoditas'),
                     DropdownButtonFormField<KomoditasHiveModel>(
                       value: _komoditasTerpilih,
+                      isExpanded: true,
                       decoration: _dropDeco(),
                       hint: const Text('Pilih komoditas panen'),
                       icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textHint),
                       items: _daftarKomoditas
-                          .map((k) => DropdownMenuItem(value: k, child: Text(k.namaKomoditas, style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary))))
+                          .map((k) => DropdownMenuItem(value: k, child: Text(k.namaKomoditas, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary))))
                           .toList(),
                       validator: (_) => _komoditasTerpilih == null ? 'Silakan pilih komoditas' : null,
-                      onChanged: (k) => setState(() {
-                        _komoditasTerpilih = k;
-                        // Grade AI hanya berlaku untuk komoditas yang dideteksi AI.
-                        _gradeTerpilih = (k != null && identical(k, _komoditasDariAi)) ? widget.gradeTebakanPcd : null;
-                        _hargaCtrl.clear();
-                      }),
+                      onChanged: _gantiKomoditas,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+                    _FieldLabel('Kualitas (Checklist)'),
+                    FormField<String>(
+                      validator: (_) {
+                        if (_komoditasTerpilih == null) return null;
+                        if (_rubrik == null) return 'Belum ada rubrik untuk komoditas ini';
+                        if (_gradeTerpilih == null) return 'Lengkapi checklist kualitas untuk menentukan grade';
+                        if (!_daftarGrade.any((g) => g['grade'] == _gradeTerpilih)) {
+                          return 'Grade $_gradeTerpilih tidak ada di master data komoditas ini';
+                        }
+                        return null;
+                      },
+                      builder: (field) {
+                        final rubrik = _rubrik;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (_komoditasTerpilih == null)
+                              const Text('Pilih komoditas dulu untuk menampilkan checklist.',
+                                  style: TextStyle(fontSize: 12, color: AppTheme.textSecond))
+                            else if (rubrik == null)
+                              const Text('Belum ada rubrik untuk komoditas ini.',
+                                  style: TextStyle(fontSize: 12, color: AppTheme.textSecond))
+                            else
+                              ChecklistRubrik(
+                                rubrik: rubrik,
+                                jawaban: _jawabanRubrik,
+                                onJawab: _pilihJawaban,
+                                grade: _gradeChecklist,
+                                hargaMaks: _gradeChecklist == null ? null : _hargaMaksGrade,
+                                gradeTersimpan: _isEditMode && !_jawabanDisentuh ? _gradeTerpilih : null,
+                              ),
+                            if (field.hasError)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8, left: 4),
+                                child: Text(field.errorText!,
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.merah)),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -553,36 +644,6 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                           ],
                         ),
                       ),
-                    _FieldLabel('Kualitas (Grade)'),
-                    DropdownButtonFormField<String>(
-                      value: (_gradeTerpilih != null && _daftarGrade.any((g) => g['grade'] == _gradeTerpilih))
-                          ? _gradeTerpilih
-                          : null,
-                      decoration: _dropDeco(),
-                      hint: const Text('Pilih kualitas'),
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textHint),
-                      items: _daftarGrade
-                          .map((g) => DropdownMenuItem<String>(
-                                value: g['grade'] as String,
-                                child: Row(
-                                  children: [
-                                    Text('Grade ${g['grade']}', style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
-                                    const SizedBox(width: 8),
-                                    Text('(Maks Rp ${_fmt(((g['harga_maks'] as num?)?.toInt() ?? 0))})', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecond)),
-                                  ],
-                                ),
-                              ))
-                          .toList(),
-                      validator: (_) => (_gradeTerpilih == null || !_daftarGrade.any((g) => g['grade'] == _gradeTerpilih))
-                          ? 'Silakan pilih grade kualitas'
-                          : null,
-                      onChanged: (g) => setState(() {
-                        _gradeTerpilih = g;
-                        final hMaks = (_daftarGrade.firstWhere((x) => x['grade'] == g, orElse: () => {})['harga_maks'] as num?)?.toInt() ?? 0;
-                        if (hMaks > 0 && _hargaCtrl.text.isEmpty) _hargaCtrl.text = '$hMaks';
-                        setState(() {});
-                      }),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -639,14 +700,14 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Column(
+                              Expanded(child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
                                       Icon(widget.isMurniKasbon ? Icons.payments_rounded : Icons.calculate_rounded, color: widget.isMurniKasbon ? const Color(0xFFB45309) : AppTheme.hijauTua, size: 18),
                                       const SizedBox(width: 6),
-                                      Text(widget.isMurniKasbon ? 'Pencairan Kasbon' : 'Estimasi Total Bayar', style: TextStyle(color: widget.isMurniKasbon ? const Color(0xFF92400E) : AppTheme.hijauTua, fontWeight: FontWeight.w800, fontSize: 13)),
+                                      Flexible(child: Text(widget.isMurniKasbon ? 'Pencairan Kasbon' : 'Estimasi Total Bayar', style: TextStyle(color: widget.isMurniKasbon ? const Color(0xFF92400E) : AppTheme.hijauTua, fontWeight: FontWeight.w800, fontSize: 13))),
                                     ],
                                   ),
                                   if (!widget.isMurniKasbon && (_petaniTerpilih?.sisaHutangKasbon ?? 0) > 0)
@@ -655,7 +716,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                                       child: Text('Sisa kasbon akan memotong total ini', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.textSecond.withOpacity(0.8))),
                                     ),
                                 ],
-                              ),
+                              )),
+                              const SizedBox(width: 8),
                               Text('Rp ${_fmt(hitungTotal.toInt())}', style: TextStyle(color: widget.isMurniKasbon ? const Color(0xFFB45309) : AppTheme.hijauTua, fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: -0.5)),
                             ],
                           ),
@@ -682,7 +744,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
                                   children: [
                                     Icon(widget.isMurniKasbon ? Icons.send_rounded : Icons.save_rounded, size: 20),
                                     const SizedBox(width: 10),
-                                    Text(widget.isMurniKasbon ? 'Cairkan Pinjaman' : 'Simpan Transaksi', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5)),
+                                    Flexible(child: Text(widget.isMurniKasbon ? 'Cairkan Pinjaman' : 'Simpan Transaksi', overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5))),
                                   ],
                                 ),
                         ),
@@ -725,54 +787,6 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
 
 // ─── KOMPONEN UI TAMBAHAN BENTO ───
 
-class _BannerPcd extends StatelessWidget {
-  /// Grade saran AI; null berarti pemindaian tidak diterima / gagal.
-  final String? gradeTebakan;
-  final double? confidence;
-  const _BannerPcd({this.gradeTebakan, this.confidence});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppTheme.headerGradient, 
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: AppTheme.hijauMuda.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.document_scanner_rounded, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  gradeTebakan != null
-                      ? 'Saran AI: Grade $gradeTebakan (${((confidence ?? 0) * 100).round()}%).'
-                      : 'Pemindaian tidak berhasil.',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: -0.3),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  gradeTebakan != null
-                      ? 'Periksa sebelum menyimpan.'
-                      : 'Pilih komoditas dan grade secara manual.',
-                  style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _FormSection extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -796,7 +810,7 @@ class _FormSection extends StatelessWidget {
             children: [
               Icon(icon, size: 20, color: iconColor ?? AppTheme.hijauMuda),
               const SizedBox(width: 8),
-              Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: iconColor ?? AppTheme.textPrimary, letterSpacing: -0.3)),
+              Expanded(child: Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: iconColor ?? AppTheme.textPrimary, letterSpacing: -0.3))),
             ],
           ),
           const SizedBox(height: 16),
@@ -1000,7 +1014,7 @@ class _SuksesSheet extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 48),
-      child: Column(
+      child: SingleChildScrollView(child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
@@ -1037,14 +1051,16 @@ class _SuksesSheet extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Mitra / Petani', style: TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
-                    Text(namaPetani, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+                    const SizedBox(width: 8),
+                    Flexible(child: Text(namaPetani, textAlign: TextAlign.end, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.textPrimary))),
                   ],
                 ),
                 const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: AppTheme.border)),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(isKasbonTitle ? 'Nominal Kasbon' : 'Total Bayar', style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
+                    Flexible(child: Text(isKasbonTitle ? 'Nominal Kasbon' : 'Total Bayar', style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600))),
+                    const SizedBox(width: 8),
                     Text('Rp ${_fmt(totalBayar.toInt())}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isKasbonTitle ? const Color(0xFFB45309) : AppTheme.hijauTua, letterSpacing: -0.5)),
                   ],
                 ),
@@ -1061,7 +1077,7 @@ class _SuksesSheet extends StatelessWidget {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }

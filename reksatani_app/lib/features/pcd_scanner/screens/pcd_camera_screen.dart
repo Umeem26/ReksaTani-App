@@ -7,11 +7,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import '../services/image_brightness_service.dart';
-import '../services/confidence_validator.dart'; // 👈 Modul 10
 import '../services/grading_ml_service.dart' show ScanResult, ScanStatus;
 import '../../transaksi_luring/screens/transaksi_screen.dart';
 import '../../../shared/widgets/app_theme.dart';
 import '../controllers/pcd_controller.dart';
+import '../widgets/dialog_proses_foto.dart';
 import 'corner_adjuster_screen.dart';
 
 class PcdCameraScreen extends StatefulWidget {
@@ -62,7 +62,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   // ─── TEMPORAL FILTERS FOR NOTE SCANNER ───
   int _stableFrameCount = 0;
   List<Offset>? _lastStableCorners;
-  bool _isGalleryPick = false;
 
   @override
   void initState() {
@@ -509,10 +508,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       final XFile photo = await _cameraController!.takePicture();
       final File adjustedPhoto = await _brightnessService.adjustBrightness(File(photo.path));
 
-      setState(() {
-        _isGalleryPick = false;
-      });
-
       if (_step == 0) {
         if (!mounted) return;
         final adjustedCorners = await Navigator.push<List<Offset>>(
@@ -557,10 +552,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         final fileName = '${prefix}_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
         final File savedImage = await File(image.path).copy('${appDir.path}/$fileName');
 
-        setState(() {
-          _isGalleryPick = true;
-        });
-
         if (_step == 0) {
           if (!mounted) return;
           final adjustedCorners = await Navigator.push<List<Offset>>(
@@ -602,31 +593,13 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppTheme.hijauMuda.withOpacity(0.3))),
-            child: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: AppTheme.hijauMuda, strokeWidth: 3),
-                SizedBox(height: 20),
-                Text('SEDANG MEMPROSES FOTO...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.5, decoration: TextDecoration.none)),
-                SizedBox(height: 6),
-                Text('Mohon tunggu, sistem sedang membaca data otomatis', style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w400, fontSize: 11, decoration: TextDecoration.none)),
-              ],
-            ),
-          ),
-        ),
-      ),
+      builder: (_) => const DialogProsesFoto(),
     );
 
     String finalNotaPath = '';
     String finalBarangPath = _fotoBarangPath ?? '';
     Map<String, String> dataHasilOcr = const {};
-    ScanResult scan = ScanResult.error('Foto komoditas belum diambil');
+    SaranKomoditas? saran;
 
     try {
       // Alur tanpa nota diperbolehkan: lewati warping & OCR bila nota belum ada.
@@ -642,62 +615,33 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       final String? barangPath = _fotoBarangPath;
       if (barangPath != null && barangPath.isNotEmpty) {
         finalBarangPath = await _pcdController.prosesSegmentasiBarang(barangPath);
-        // ─── MODUL 10: hasil grading dengan status eksplisit ───
-        scan = await _pcdController.prosesGradingLengkap(finalBarangPath);
+        // Router saja: AI menyarankan komoditas, grade diisi manusia lewat rubrik.
+        saran = PcdController.saranDari(await _pcdController.prosesSaranKomoditas(finalBarangPath));
       }
     } catch (e) {
       debugPrint("Error memproses foto: $e");
-      scan = ScanResult.error('$e');
+      saran = null;
     }
 
     if (!mounted) return;
     Navigator.pop(context); // Tutup dialog loading
 
-    // Confidence yang divalidasi adalah keyakinan grader. Tanpa kotak live (kamera, bukan galeri)
-    // hasil tidak boleh diterima otomatis.
-    double confidence = scan.gradeConfidence;
-    if (!_isGalleryPick && _detectedCorners == null) {
-      confidence = 0.0;
-    }
-
-    final bool modelOk = scan.status == ScanStatus.ok && scan.grade != null && scan.commodity != null;
-
-    // ─── MODUL 10: Validasi Confidence Sweeper ───
-    final confidenceResult = _pcdController.confidenceValidator.validate(
-      confidence: modelOk ? confidence : 0.0,
-      grade: scan.grade ?? '-',
-      commodity: scan.commodity ?? '',
+    _navigateKeTransaksi(
+      finalNotaPath: finalNotaPath,
+      finalBarangPath: finalBarangPath,
+      dataHasilOcr: dataHasilOcr,
+      saran: saran,
     );
-
-    if (modelOk && confidenceResult.state == ConfidenceState.accepted) {
-      _pcdController.confidenceValidator.reset();
-      _navigateKeTransaksi(
-        finalNotaPath: finalNotaPath,
-        finalBarangPath: finalBarangPath,
-        dataHasilOcr: dataHasilOcr,
-        acceptedScan: scan,
-      );
-    } else {
-      final ScanResult shown = modelOk ? scan.withStatus(ScanStatus.lowConfidence) : scan;
-      _showConfidenceSweeperSheet(
-        confidenceResult: confidenceResult,
-        scan: shown,
-        finalNotaPath: finalNotaPath,
-        finalBarangPath: finalBarangPath,
-        dataHasilOcr: dataHasilOcr,
-      );
-    }
   }
 
-  /// Navigasi ke TransaksiScreen. Grade & komoditas hanya di-prefill bila
-  /// [acceptedScan] tidak null (hasil diterima); selain itu user wajib memilih manual.
+  /// Navigasi ke TransaksiScreen. [saran] null berarti tidak ada saran AI
+  /// (bukan komoditas, keyakinan rendah, atau gagal): pengguna memilih manual.
   void _navigateKeTransaksi({
     required String finalNotaPath,
     required String finalBarangPath,
     required Map<String, String> dataHasilOcr,
-    ScanResult? acceptedScan,
+    SaranKomoditas? saran,
   }) {
-    final ScanResult? accepted = (acceptedScan != null && acceptedScan.isAccepted) ? acceptedScan : null;
     if (!mounted) return;
     _stopLiveStream();
     _cameraController?.dispose();
@@ -707,258 +651,13 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
         builder: (_) => TransaksiScreen(
           fotoNotaPath: finalNotaPath,
           fotoBarangPath: finalBarangPath,
-          gradeTebakanPcd: accepted?.grade,
-          confidencePcd: accepted?.gradeConfidence,
           initialBeratOcr: dataHasilOcr['berat'],
           initialHargaOcr: dataHasilOcr['harga'],
           initialNamaPenjualOcr: dataHasilOcr['nama'],
           initialDesaOcr: dataHasilOcr['desa'],
           initialKomoditasOcr: dataHasilOcr['komoditas'],
-          initialKomoditasPcd: accepted?.commodity,
-        ),
-      ),
-    );
-  }
-
-  // ─── MODUL 10: Bottom Sheet Confidence Sweeper ───
-  void _showConfidenceSweeperSheet({
-    required ConfidenceResult confidenceResult,
-    required ScanResult scan,
-    required String finalNotaPath,
-    required String finalBarangPath,
-    required Map<String, String> dataHasilOcr,
-  }) {
-    final isManualOverride = confidenceResult.state == ConfidenceState.manualOverride;
-    final percent = confidenceResult.confidencePercent;
-    // Hanya tampilkan "NN% yakin Grade X" bila model benar-benar menghasilkan grade.
-    final String headline;
-    switch (scan.status) {
-      case ScanStatus.notCommodity:
-        headline = 'Komoditas tidak dikenali';
-        break;
-      case ScanStatus.error:
-        headline = 'Pemindaian gagal';
-        break;
-      default:
-        headline = confidenceResult.label;
-    }
-
-    // Warna dinamis berdasarkan confidence level
-    Color barColor;
-    Color barBgColor;
-    IconData statusIcon;
-    String statusLabel;
-    if (percent >= 75) {
-      barColor = AppTheme.hijauMuda;
-      barBgColor = AppTheme.hijauMuda.withOpacity(0.15);
-      statusIcon = Icons.check_circle_rounded;
-      statusLabel = 'Keyakinan Tinggi';
-    } else if (percent >= 50) {
-      barColor = AppTheme.kuning;
-      barBgColor = AppTheme.kuning.withOpacity(0.15);
-      statusIcon = Icons.warning_amber_rounded;
-      statusLabel = 'Keyakinan Sedang';
-    } else {
-      barColor = AppTheme.merah;
-      barBgColor = AppTheme.merah.withOpacity(0.15);
-      statusIcon = Icons.error_outline_rounded;
-      statusLabel = 'Keyakinan Rendah';
-    }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 36),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              width: 40, height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-
-            // ─── Header: Icon + Status ───
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: barBgColor,
-              ),
-              child: Icon(statusIcon, color: barColor, size: 34),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              statusLabel,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: barColor,
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              headline,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ─── Confidence Bar Visual ───
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.bgPage,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Skor Keyakinan ML',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecond),
-                      ),
-                      Text(
-                        '$percent%',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: barColor),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  // Progress Bar
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      height: 12,
-                      child: LinearProgressIndicator(
-                        value: confidenceResult.confidence.clamp(0.0, 1.0),
-                        backgroundColor: Colors.grey.shade200,
-                        valueColor: AlwaysStoppedAnimation<Color>(barColor),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Threshold: ${(confidenceResult.thresholdUsed * 100).round()}%',
-                        style: const TextStyle(fontSize: 11, color: AppTheme.textHint),
-                      ),
-                      Text(
-                        'Percobaan: ${confidenceResult.retryCount}/${confidenceResult.maxRetry}',
-                        style: const TextStyle(fontSize: 11, color: AppTheme.textHint),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ─── Warning Banner jika Manual Override ───
-            if (isManualOverride)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.kuning.withOpacity(0.4)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded, color: AppTheme.kuning, size: 18),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Batas percobaan foto ulang telah habis.\nSilakan lanjutkan dengan input manual.',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.4),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // ─── Action Buttons ───
-            // Tombol Retry (hanya tampil jika state = needsRetry)
-            if (!isManualOverride)
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx); // Tutup bottom sheet
-                    // Reset langkah ke foto komoditas & buka kamera ulang
-                    setState(() {
-                      _step = 1;
-                      _fotoBarangPath = null;
-                      _showLiveCamera = true;
-                    });
-                    _startLiveStream();
-                  },
-                  icon: const Icon(Icons.camera_alt_rounded, size: 20),
-                  label: Text(
-                    'Foto Ulang (Percobaan ${confidenceResult.retryCount}/${confidenceResult.maxRetry})',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.hijauMuda,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ),
-            if (!isManualOverride) const SizedBox(height: 10),
-
-            // Tombol Gunakan Hasil Manual (selalu tampil)
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx); // Tutup bottom sheet
-                  _pcdController.confidenceValidator.reset();
-                  // Hasil tidak diterima: jangan prefill grade/komoditas.
-                  _navigateKeTransaksi(
-                    finalNotaPath: finalNotaPath,
-                    finalBarangPath: finalBarangPath,
-                    dataHasilOcr: dataHasilOcr,
-                  );
-                },
-                icon: const Icon(Icons.edit_rounded, size: 20),
-                label: Text(
-                  'Lanjut Input Manual',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.textPrimary,
-                  side: const BorderSide(color: AppTheme.border, width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ),
-          ],
+          saranKomoditasAi: saran?.label,
+          keyakinanSaranAi: saran?.keyakinan,
         ),
       ),
     );
@@ -1022,7 +721,6 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
                     builder: (_) => const TransaksiScreen(
                       fotoNotaPath: '',
                       fotoBarangPath: '',
-                      gradeTebakanPcd: '-',
                       isMurniKasbon: true, // 👈 Mengirim indikator kasbon murni
                     ),
                   ),
