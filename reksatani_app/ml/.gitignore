@@ -1,0 +1,8 @@
+# Foto lapangan bisa besar dan bersifat pribadi: jangan masuk git.
+dataset/
+reports/
+*.jpg
+*.jpeg
+*.png
+__pycache__/
+.venv/
