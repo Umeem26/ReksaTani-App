@@ -61,7 +61,7 @@ Semua tes otomatis memakai fake di memori. `uji_asap.dart` menjalankan `MongoRem
 ASAP_KONFIRMASI=1 MONGO_URI=... flutter test --no-pub tool/atlas/uji_asap.dart
 ```
 
-Tabel di bawah sudah dijalankan, kecuali "mulai offline": langkah 0 sampai 14 pada 2026-11-06, seluruhnya (0 sampai 19) pada 2026-11-08. Langkah pencairan butuh grade `-` di validator `transaksi` (`skema/transaksi.sesudah.json`); tanpa itu ditolak dengan kode 121.
+Tabel di bawah sudah dijalankan, kecuali "mulai offline": langkah 0 sampai 14 pada 2026-11-06, seluruhnya (0 sampai 19) pada 2026-11-08, lalu 0 sampai 20 di `fix/small-gaps` pada 2026-11-08. Langkah pencairan butuh grade `-` di validator `transaksi` (`skema/transaksi.sesudah.json`); tanpa itu ditolak dengan kode 121.
 
 | Uji | Yang diamati |
 |---|---|
@@ -78,3 +78,4 @@ Tabel di bawah sudah dijalankan, kecuali "mulai offline": langkah 0 sampai 14 pa
 | Nominal kasbon negatif | Ditolak `simpanKasbonMurni` (`nominal_tidak_sah`) sebelum ada baris atau tulisan |
 | Transaksi tanpa GPS | Field lokasi tidak dikirim, diterima validator |
 | Tambah dan edit komoditas | Grade atau harga tidak sah ditolak sebelum server; yang sah tertulis, `_id` UUID |
+| Transaksi dengan checklist rubrik | `saran_komoditas_ai`, `komoditas_diubah_pengguna`, `rubrik_versi`, `rubrik_jawaban` tersimpan dan sampai ke HP manajer (langkah 20) |

@@ -11,6 +11,7 @@ import 'package:mongo_dart/mongo_dart.dart' show Db, ObjectId, where;
 import 'package:mongo_dart/src/database/commands/query_and_write_operation_commands/return_classes/write_result.dart';
 import 'package:reksatani_app/features/manajer_dashboard/controllers/manajemen_komoditas_controller.dart';
 import 'package:reksatani_app/features/manajer_dashboard/controllers/manajemen_pengepul_controller.dart';
+import 'package:reksatani_app/features/pcd_scanner/services/grading_rubric.dart' show rubrikVersi;
 import 'package:reksatani_app/features/transaksi_luring/controllers/transaksi_controller.dart';
 import 'package:reksatani_app/models/hive/komoditas_hive_model.dart';
 import 'package:reksatani_app/models/hive/user_hive_model.dart';
@@ -489,6 +490,7 @@ class _UjiAsap {
       await _langkahHapusPencairan();
       await _langkahKasbonNegatif();
       await _langkahKomoditas();
+      await _langkahRubrik();
     } catch (e) {
       kegagalan = e;
       _tulis('\nGAGAL: ${e is Map ? _ringkas(e) : e}');
@@ -930,8 +932,12 @@ class _UjiAsap {
     ];
     _cek('dokumen diperiksa', docs.length, 3);
     for (final d in docs) {
-      _cek('${d['id_lokal']}: ada field lokasi',
+      final id = d['id_lokal'] as String;
+      _cek('$id: ada field lokasi',
           d.containsKey('latitude') || d.containsKey('longitude'), false);
+      final lokal = _agen.hive.transaksiBox.get(id);
+      _cek('$id: status HP', lokal?.statusSinkronisasi, 'synced');
+      _cek('$id: lokasi HP', '${lokal?.latitude},${lokal?.longitude}', 'null,null');
     }
   }
 
@@ -1098,9 +1104,85 @@ class _UjiAsap {
     );
     _cetakJejak();
 
-    _cek('hapus komoditas', await ctrl.hapusKomoditas(id), true);
+    _cek('hapus komoditas', await ctrl.hapusKomoditas(id),
+        HasilSimpanKomoditas.berhasil);
+    _cek('hapus komoditas yang sudah tidak ada', await ctrl.hapusKomoditas(id),
+        HasilSimpanKomoditas.tidakDitemukan);
     _cetakJejak();
     _cek('komoditas di cloud sesudah hapus', (await diCloud()).length, 0);
+  }
+
+  /// Komoditas lokal bernama "Gabah" supaya rubrik gabah berlaku. Tidak ditulis
+  /// ke koleksi `komoditas`; transaksi hanya menyimpan namanya.
+  late final _gabah = KomoditasHiveModel(
+    id: 'asap-gabah-$run',
+    namaKomoditas: 'Gabah',
+    unitSatuan: 'kg',
+    gradeKualitas: const [
+      {'grade': 'A', 'harga_maks': 100000000.0},
+    ],
+    diperbaruiOleh: '',
+    waktuPembaruan: DateTime.now(),
+  );
+
+  Future<void> _langkahRubrik() async {
+    _judul('20. Field rubrik tersimpan di cloud dan terbaca kembali, tanpa lokasi');
+    const jawaban = ['kotoran_hampa=sd3', 'butir=seragam'];
+    // Langkah 19 meninggalkan HP manajer aktif; transaksi ini milik agen.
+    await _agen.aktifkan();
+    final hive = _agen.hive;
+    final lama = hive.transaksiBox.keys.toSet();
+    final adaLokasi = await _ctrl.simpanTransaksi(
+      petaniTerpilih: null,
+      namaPenjual: 'asap-penjual',
+      komoditasTerpilih: _gabah,
+      gradeTerpilih: 'A',
+      beratText: '1',
+      hargaText: '10000',
+      fotoNotaPath: '',
+      fotoBarangPath: '',
+      izinkanTanpaFoto: true,
+      // Saran AI berbeda dari pilihan pengguna, jadi komoditas_diubah_pengguna true.
+      grading: const CatatanGrading(saranKomoditasAi: 'kopi', rubrikJawaban: jawaban),
+    );
+    await _tungguSync();
+    _periksaLaporan('simpan dengan rubrik');
+    _cetakJejak();
+    _cek('rubrik: lokasi tercatat', adaLokasi, false);
+
+    final id = hive.transaksiBox.keys
+        .cast<String>()
+        .firstWhere((k) => !lama.contains(k));
+    _cek('rubrik: status HP', hive.transaksiBox.get(id)!.statusSinkronisasi, 'synced');
+
+    final dok = await _transaksiCloud(id);
+    _cek('cloud: pengepul_id agen', '${dok['pengepul_id']}', _agen.id);
+    _cek('cloud: grade', dok['grade_terpilih'], 'A');
+    _cek('cloud: saran_komoditas_ai', dok['saran_komoditas_ai'], 'kopi');
+    _cek('cloud: komoditas_diubah_pengguna', dok['komoditas_diubah_pengguna'], true);
+    _cek('cloud: rubrik_versi', dok['rubrik_versi'], rubrikVersi);
+    _cek('cloud: rubrik_jawaban', '${dok['rubrik_jawaban']}', '$jawaban');
+    _cek('cloud: ada field lokasi',
+        dok.containsKey('latitude') || dok.containsKey('longitude'), false);
+
+    _judul('20b. Field rubrik terbaca kembali oleh akun manajer');
+    await _manajer.aktifkan();
+    _cek('belum ada di HP manajer sebelum pull',
+        _manajer.hive.transaksiBox.get(id) == null, true);
+    await _sinkron('manajer rubrik');
+    _cek('manajer rubrik: riwayat baru dari pull',
+        MasterDataService().laporanTerakhir!.riwayatBaru >= 1, true);
+    _cetakJejak();
+    final m = _manajer.hive.transaksiBox.get(id);
+    _cek('sampai ke HP manajer', m != null, true);
+    _cek('manajer: saran_komoditas_ai', m!.saranKomoditasAi, 'kopi');
+    _cek('manajer: komoditas_diubah_pengguna', m.komoditasDiubahPengguna, true);
+    _cek('manajer: rubrik_versi', m.rubrikVersi, rubrikVersi);
+    _cek('manajer: rubrik_jawaban', '${m.rubrikJawaban}', '$jawaban');
+    _cek('manajer: lokasi', '${m.latitude},${m.longitude}', 'null,null');
+    await _agen.aktifkan();
+    await _sinkron('agen sesudah manajer rubrik');
+    _cek('jumlah tulisan', _remote.jejak.length, 0);
   }
 
   // ── Pembersihan ──
