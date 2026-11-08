@@ -20,7 +20,7 @@ Foto: HP → Cloudinary (unggahan tanpa tanda tangan)
 
 - **Hive** menyimpan transaksi, petani, komoditas, dan sesi login. Pencatatan transaksi tidak butuh internet. Login pertama butuh internet.
 - **Sinkronisasi** berjalan selama aplikasi terbuka: sesudah menyimpan, saat sinyal kembali, dan saat layar ditarik untuk menyegarkan. Tidak ada layanan latar belakang yang berjalan saat aplikasi ditutup.
-- **Saldo** kasbon dan uang jalan di cloud dihitung ulang dari saldo dasar ditambah transaksi. Aturan koreksi manualnya ada di [tool/atlas/README.md](reksatani_app/tool/atlas/README.md).
+- **Saldo** kasbon dan uang jalan di cloud dihitung ulang dari saldo dasar ditambah transaksi. Aturan koreksi manualnya ada di [tool/atlas/README.md](tool/atlas/README.md).
 - **Kode** dibagi per fitur di `lib/features/` (layar dan controller), dengan layanan bersama di `lib/services/`.
 
 ## Fitur
@@ -85,14 +85,13 @@ Dijalankan sekali pada 2026-11-06 dengan `tool/atlas/uji_asap.dart`, memakai `Mo
 
 ## Setup
 
-1. Masuk ke folder aplikasi: `cd reksatani_app`
-2. Salin `.env.example` menjadi `.env`, lalu isi nilai setiap variabel.
-3. Generate file environment: `dart run build_runner build --delete-conflicting-outputs`
-4. Jalankan aplikasi: `flutter run`
+1. Salin `.env.example` menjadi `.env`, lalu isi nilai setiap variabel.
+2. Generate file environment: `dart run build_runner build --delete-conflicting-outputs`
+3. Jalankan aplikasi: `flutter run`
 
 Untuk build rilis, buat `android/key.properties` berisi `storeFile`, `storePassword`, `keyAlias`, dan `keyPassword`. Tanpa berkas itu, build rilis memakai kunci debug dan tidak layak dibagikan.
 
-Sebelum rilis, ikuti [runbook Atlas](reksatani_app/tool/atlas/README.md).
+Sebelum rilis, ikuti [runbook Atlas](tool/atlas/README.md).
 
 ---
 
