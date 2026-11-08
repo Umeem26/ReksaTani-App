@@ -321,8 +321,8 @@ class _UjiAsap {
     'errmsg',
   ];
 
-  /// HP uji tanpa GPS: semua transaksi tersimpan dengan lokasi 0,0, yang harus
-  /// diterima validator `transaksi`.
+  /// HP uji tanpa GPS: semua transaksi tersimpan tanpa field lokasi, yang harus
+  /// diterima validator `transaksi` (field itu tidak wajib).
   final _ctrl = TransaksiController(ambilLokasi: () async => null);
   final _ledger = TransaksiLedgerService();
 
@@ -484,7 +484,7 @@ class _UjiAsap {
       await _langkahProjection();
       await _langkahTanpaPetani();
       await _langkahPencairan();
-      await _langkahGpsNol();
+      await _langkahGpsGagal();
       await _langkahHapusPencairan();
       await _langkahKasbonNegatif();
       await _langkahKomoditas();
@@ -921,16 +921,16 @@ class _UjiAsap {
     _cek('jumlah tulisan', _remote.jejak.length, 0);
   }
 
-  Future<void> _langkahGpsNol() async {
-    _judul('16. GPS 0,0 diterima validator transaksi');
+  Future<void> _langkahGpsGagal() async {
+    _judul('16. GPS gagal: koordinat tidak dikirim, diterima validator transaksi');
     final docs = [
       ...await _transaksiAsap(),
       await _transaksiCloud(_idPencairan),
     ];
     _cek('dokumen diperiksa', docs.length, 3);
     for (final d in docs) {
-      _cek('${d['id_lokal']}: lokasi', '${d['latitude']},${d['longitude']}',
-          '0.0,0.0');
+      _cek('${d['id_lokal']}: ada field lokasi',
+          d.containsKey('latitude') || d.containsKey('longitude'), false);
     }
   }
 

@@ -46,11 +46,12 @@ class TransaksiHiveModel extends HiveObject {
   @HiveField(13)
   String fotoNota; 
 
+  /// Null bila GPS gagal. Data lama memakai 0,0 sebagai penanda yang sama.
   @HiveField(14)
-  double latitude;
+  double? latitude;
 
   @HiveField(15)
-  double longitude;
+  double? longitude;
 
   @HiveField(16)
   String statusSinkronisasi; 
@@ -120,4 +121,11 @@ class TransaksiHiveModel extends HiveObject {
     this.rubrikVersi,
     this.rubrikJawaban,
   });
+
+  /// True bila koordinat bisa dipakai peta: tidak null dan bukan penanda 0,0
+  /// milik data lama.
+  bool get punyaLokasi {
+    final lat = latitude, lng = longitude;
+    return lat != null && lng != null && lat != 0.0 && lng != 0.0;
+  }
 }

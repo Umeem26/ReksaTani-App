@@ -67,7 +67,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
 
     // Titik pusat awal: Lokasi transaksi pertama yang cocok, atau default ke tengah Jawa
     final center = daftarLokasi.isNotEmpty
-        ? LatLng(daftarLokasi.first.latitude, daftarLokasi.first.longitude)
+        ? LatLng(daftarLokasi.first.latitude!, daftarLokasi.first.longitude!)
         : const LatLng(-7.150975, 110.140259);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -112,7 +112,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                   circles: daftarLokasi.map((trx) {
                     final isSelected = _selectedTrx?.idLokal == trx.idLokal;
                     return CircleMarker(
-                      point: LatLng(trx.latitude, trx.longitude),
+                      point: LatLng(trx.latitude!, trx.longitude!),
                       radius: 120 + (trx.berat * 0.4),
                       useRadiusInMeter: true,
                       color: (isSelected ? AppTheme.merah : AppTheme.hijauMuda).withOpacity(0.15),
@@ -127,7 +127,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                   markers: daftarLokasi.map((trx) {
                     final isSelected = _selectedTrx?.idLokal == trx.idLokal;
                     return Marker(
-                      point: LatLng(trx.latitude, trx.longitude),
+                      point: LatLng(trx.latitude!, trx.longitude!),
                       width: isSelected ? 56 : 44,
                       height: isSelected ? 56 : 44,
                       child: GestureDetector(
@@ -293,7 +293,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                   onPressed: () {
                     if (daftarLokasi.isNotEmpty) {
                       _mapCtrl.move(
-                        LatLng(daftarLokasi.first.latitude, daftarLokasi.first.longitude),
+                        LatLng(daftarLokasi.first.latitude!, daftarLokasi.first.longitude!),
                         11.0,
                       );
                     } else {

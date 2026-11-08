@@ -349,8 +349,12 @@ class SyncEngine {
       r'$setOnInsert': <String, dynamic>{
         'pengepul_id': MongoId.kanonik(t.pengepulId),
         'nama_pengepul': t.namaPengepul,
-        'latitude': t.latitude,
-        'longitude': t.longitude,
+        // Validator Atlas menolak null untuk koordinat, tetapi field ini tidak
+        // wajib, jadi koordinat yang tidak ada tidak dikirim sama sekali.
+        if (t.latitude != null && t.longitude != null) ...{
+          'latitude': t.latitude,
+          'longitude': t.longitude,
+        },
         'created_at': t.createdAt.toIso8601String(),
       },
     };
@@ -886,8 +890,8 @@ class SyncEngine {
           rubrikJawaban: d['rubrik_jawaban'] is List
               ? [for (final j in d['rubrik_jawaban'] as List) j.toString()]
               : null,
-          latitude: _angka(d['latitude']),
-          longitude: _angka(d['longitude']),
+          latitude: _angkaAtauNull(d['latitude']),
+          longitude: _angkaAtauNull(d['longitude']),
           statusSinkronisasi: d['status_sinkronisasi']?.toString() ?? 'synced',
           createdAt: tanggal(d['created_at']) ?? _jam(),
           waktuDisinkron: tanggal(d['waktu_disinkron']),
@@ -1079,6 +1083,8 @@ class SyncEngine {
       tanggal(d['waktu_dibuat']) ?? tanggal(d['created_at']);
 
   static double _angka(Object? v) => v is num ? v.toDouble() : 0.0;
+
+  static double? _angkaAtauNull(Object? v) => v is num ? v.toDouble() : null;
 
   static bool _peranManajer(String peran) =>
       peran == 'manager' || peran == 'manajer' || peran == 'admin';

@@ -76,5 +76,5 @@ Tabel di bawah sudah dijalankan, kecuali "mulai offline": langkah 0 sampai 14 pa
 | Pencairan kasbon | Dokumen grade `-` sampai ke cloud dan ke HP manajer, saldo cloud sama dengan HP |
 | Hapus pencairan yang sudah terpotong | Ditolak aplikasi (`pencairan_terpakai`), tanpa tulisan; setelah pemotongnya dihapus, diterima |
 | Nominal kasbon negatif | Ditolak `simpanKasbonMurni` (`nominal_tidak_sah`) sebelum ada baris atau tulisan |
-| Transaksi tanpa GPS | Lokasi 0,0 diterima validator |
+| Transaksi tanpa GPS | Field lokasi tidak dikirim, diterima validator |
 | Tambah dan edit komoditas | Grade atau harga tidak sah ditolak sebelum server; yang sah tertulis, `_id` UUID |

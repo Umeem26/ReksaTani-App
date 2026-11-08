@@ -15,8 +15,8 @@ void main() {
     required String grade,
     required double berat,
     required double total,
-    double lat = -6.9,
-    double lng = 107.6,
+    double? lat = -6.9,
+    double? lng = 107.6,
   }) =>
       TransaksiHiveModel(
         idLokal: id,
@@ -53,6 +53,15 @@ void main() {
         total: 9000,
         lat: 0,
         lng: 0,
+      ),
+      baris(
+        'gps-null',
+        komoditas: 'Kopi Robusta',
+        grade: 'A',
+        berat: 7,
+        total: 70000,
+        lat: null,
+        lng: null,
       ),
       baris(
         'k1',
@@ -99,5 +108,26 @@ void main() {
         .map((t) => t.idLokal);
 
     expect(id, unorderedEquals(['b1', 'b2', 'k1']));
+  });
+
+  test('koordinat null dan 0,0 lama tidak masuk peta maupun filter', () {
+    final ctrl = ManajerPetaController();
+
+    expect(
+      ctrl.getTransaksiDenganLokasi.map((t) => t.idLokal),
+      isNot(anyOf(contains('gps-null'), contains('tanpa-gps'))),
+    );
+    expect(ctrl.daftarKomoditasUnik, isNot(contains('Kopi Robusta')));
+  });
+
+  test('punyaLokasi: null, 0,0, dan satu sisi nol dianggap tanpa lokasi', () {
+    TransaksiHiveModel k(double? lat, double? lng) => baris('x',
+        komoditas: 'Gabah', grade: 'A', berat: 1, total: 1, lat: lat, lng: lng);
+
+    expect(k(null, null).punyaLokasi, isFalse);
+    expect(k(-6.9, null).punyaLokasi, isFalse);
+    expect(k(0, 0).punyaLokasi, isFalse);
+    expect(k(0, 107.6).punyaLokasi, isFalse);
+    expect(k(-6.9, 107.6).punyaLokasi, isTrue);
   });
 }

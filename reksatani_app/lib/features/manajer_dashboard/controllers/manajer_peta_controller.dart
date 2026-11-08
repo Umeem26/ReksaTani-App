@@ -26,7 +26,7 @@ class ManajerPetaController extends ChangeNotifier {
   // Pencairan kasbon bukan komoditas, jadi tidak menjadi pilihan filter.
   List<String> get daftarKomoditasUnik {
     final list = _svc.getRiwayatTransaksi()
-        .where((t) => t.latitude != 0.0 && t.longitude != 0.0)
+        .where((t) => t.punyaLokasi)
         .where((t) => !KasbonRules.isPencairan(t.namaKomoditas))
         .map((t) => t.namaKomoditas)
         .toSet()
@@ -39,7 +39,8 @@ class ManajerPetaController extends ChangeNotifier {
   List<TransaksiHiveModel> get getTransaksiDenganLokasi {
     return _svc.getRiwayatTransaksi().where((trx) {
       // 1. Validasi keberadaan koordinat GPS sah
-      if (trx.latitude == 0.0 || trx.longitude == 0.0) return false;
+      // Null (GPS gagal) atau 0,0 (penanda data lama) tidak punya titik.
+      if (!trx.punyaLokasi) return false;
 
       // 2. Filter Komoditas
       if (_filterKomoditas != 'Semua' && trx.namaKomoditas != _filterKomoditas) {

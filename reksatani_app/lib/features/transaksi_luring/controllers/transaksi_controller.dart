@@ -38,11 +38,6 @@ class TransaksiController {
   static const String pesanLokasiGagal =
       'Lokasi GPS tidak tercatat. Data tetap tersimpan, tetapi tidak muncul di peta manajer.';
 
-  /// Penanda "lokasi tidak ada" di data, karena validator `transaksi` di Atlas hanya
-  /// menerima angka untuk `latitude` dan `longitude`, bukan null. Peta manajer
-  /// melewati titik bernilai ini.
-  static const double _tanpaLokasi = 0.0;
-
   double get sisaUangJalan => _hive.usersBox.get('currentUser')?.sisaUangJalan ?? 0.0;
 
   List<PetaniHiveModel> get daftarPetani {
@@ -251,8 +246,9 @@ class TransaksiController {
               ? 'dilewati'
               : 'ok',
       // Masukkan hasil GPS ke model
-      latitude: koordinat?.lat ?? _tanpaLokasi,
-      longitude: koordinat?.lng ?? _tanpaLokasi,
+      // Null bila GPS gagal; sync tidak mengirim field ini ke Atlas.
+      latitude: koordinat?.lat,
+      longitude: koordinat?.lng,
       statusSinkronisasi: 'pending',
       createdAt: now,
       saranKomoditasAi: grading.saranKomoditasAi,
@@ -457,8 +453,9 @@ class TransaksiController {
       totalBayar: nominalKasbon,
       fotoFisikBarang: '',
       fotoNota: '',
-      latitude: koordinat?.lat ?? _tanpaLokasi,
-      longitude: koordinat?.lng ?? _tanpaLokasi,
+      // Null bila GPS gagal; sync tidak mengirim field ini ke Atlas.
+      latitude: koordinat?.lat,
+      longitude: koordinat?.lng,
       statusSinkronisasi: 'pending',
       createdAt: now,
     );

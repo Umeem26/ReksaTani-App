@@ -1,9 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reksatani_app/features/manajer_dashboard/controllers/manajer_peta_controller.dart';
 import 'package:reksatani_app/features/transaksi_luring/controllers/transaksi_controller.dart';
 import 'package:reksatani_app/features/transaksi_luring/screens/transaksi_screen.dart';
 import 'package:reksatani_app/models/hive/komoditas_hive_model.dart';
+import 'package:reksatani_app/models/hive/transaksi_hive_model.dart';
 
 import '../../support/fake_remote.dart';
 import '../../support/saldo_harness.dart';
@@ -80,17 +84,77 @@ void main() {
       final t = hp.hive.transaksiBox.values.single;
       expect(t.totalBayar, 50000);
       expect(hp.user.sisaUangJalan, 950000);
-      expect(t.latitude, 0.0);
-      expect(t.longitude, 0.0);
+      expect(t.latitude, isNull);
+      expect(t.longitude, isNull);
+      expect(t.punyaLokasi, isFalse);
     });
 
-    test('GPS gagal: cloud menerima angka, karena validator menolak null', () async {
+    test('GPS gagal: cloud tidak menerima field koordinat, karena validator menolak null', () async {
       await simpan(gpsGagal());
       await tungguSync();
 
       final dok = remote.dokumen('transaksi').single;
-      expect(dok['latitude'], isA<double>());
-      expect(dok['longitude'], isA<double>());
+      expect(dok.containsKey('latitude'), isFalse);
+      expect(dok.containsKey('longitude'), isFalse);
+      _cocokSkemaKoordinat(dok);
+    });
+
+    test('GPS berhasil: cloud menerima angka yang lolos skema', () async {
+      await simpan(gpsBerhasil());
+      await tungguSync();
+
+      final dok = remote.dokumen('transaksi').single;
+      expect(dok['latitude'], -6.9);
+      expect(dok['longitude'], 107.6);
+      _cocokSkemaKoordinat(dok);
+    });
+
+    test('pencairan tanpa GPS: koordinat null dan tidak dikirim', () async {
+      await gpsGagal().simpanKasbonMurni(
+        petaniTerpilih: hp.petani(_idPetani),
+        nominalKasbonText: '1000',
+      );
+      await tungguSync();
+
+      final t = hp.hive.transaksiBox.values.single;
+      expect(t.latitude, isNull);
+      final dok = remote.dokumen('transaksi').single;
+      expect(dok['grade_terpilih'], '-');
+      expect(dok.containsKey('latitude'), isFalse);
+      _cocokSkemaKoordinat(dok);
+    });
+
+    test('pull: dokumen tanpa koordinat jadi null, 0,0 lama diabaikan peta', () async {
+      Map<String, dynamic> dok(String id, [Map<String, dynamic> lokasi = const {}]) => {
+            'id_lokal': id,
+            'pengepul_id': _idAgen,
+            'petani_id': _idPetani,
+            'nama_komoditas': 'Gabah',
+            'grade_terpilih': 'A',
+            'berat': 1.0,
+            'harga_beli_satuan': 1000.0,
+            'nominal_potong_kasbon': 0.0,
+            'total_bayar': 1000.0,
+            'status_sinkronisasi': 'synced',
+            'created_at': '2026-01-01T08:00:00.000',
+            ...lokasi,
+          };
+      remote.tanam('transaksi', dok('cloud-tanpa'));
+      remote.tanam('transaksi', dok('cloud-nol', {'latitude': 0.0, 'longitude': 0.0}));
+      remote.tanam('transaksi', dok('cloud-ada', {'latitude': -6.9, 'longitude': 107.6}));
+
+      await hp.sinkron();
+
+      TransaksiHiveModel baris(String id) =>
+          hp.hive.transaksiBox.values.singleWhere((t) => t.idLokal == id);
+      expect(baris('cloud-tanpa').latitude, isNull);
+      expect(baris('cloud-tanpa').longitude, isNull);
+      expect(baris('cloud-nol').latitude, 0.0);
+      expect(baris('cloud-ada').latitude, -6.9);
+      expect(
+        ManajerPetaController().getTransaksiDenganLokasi.map((t) => t.idLokal),
+        ['cloud-ada'],
+      );
     });
 
     test('GPS gagal: titiknya tidak muncul di peta manajer', () async {
@@ -204,4 +268,23 @@ class _ControllerTanpaTulis extends TransaksiController {
     CatatanGrading grading = const CatatanGrading(),
   }) async =>
       lokasiTercatat;
+}
+
+/// Memeriksa `latitude`/`longitude` terhadap validator Atlas yang tersimpan di
+/// `tool/atlas/skema/transaksi.sesudah.json`: tidak wajib, dan bila ada harus
+/// angka (null ditolak). FakeRemote sendiri tidak menjalankan validator.
+void _cocokSkemaKoordinat(Map<String, dynamic> dok) {
+  final skema = jsonDecode(
+    File('tool/atlas/skema/transaksi.sesudah.json').readAsStringSync(),
+  )['validator'][r'$jsonSchema'] as Map<String, dynamic>;
+  final wajib = (skema['required'] as List).cast<String>();
+  final sifat = skema['properties'] as Map<String, dynamic>;
+
+  for (final kunci in ['latitude', 'longitude']) {
+    expect(wajib, isNot(contains(kunci)), reason: '$kunci jadi wajib di skema');
+    final tipe = (sifat[kunci]['bsonType'] as List).cast<String>();
+    expect(tipe, isNot(contains('null')), reason: 'skema kini menerima null');
+    if (!dok.containsKey(kunci)) continue;
+    expect(dok[kunci], isA<num>(), reason: '$kunci = ${dok[kunci]} ditolak skema');
+  }
 }
