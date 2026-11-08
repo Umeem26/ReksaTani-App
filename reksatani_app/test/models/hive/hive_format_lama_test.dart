@@ -144,6 +144,36 @@ void main() {
       expect(t.statusFoto, 'ok');
       expect(t.statusSinkronisasi, 'pending');
       expect(t.nominalPotongKasbon, 1000);
+      // Field grading manual (22-25) belum ada di data lama.
+      expect(t.saranKomoditasAi, isNull);
+      expect(t.komoditasDiubahPengguna, isFalse);
+      expect(t.rubrikVersi, isNull);
+      expect(t.rubrikJawaban, isNull);
+      expect(t.gradeTerpilih, 'A');
+    });
+
+    test('field grading manual tersimpan dan terbaca utuh', () async {
+      Hive.registerAdapter<TransaksiHiveModel>(
+        TransaksiHiveModelAdapter(),
+        override: true,
+      );
+      final box = await Hive.openBox<TransaksiHiveModel>('transaksiBox');
+      await box.put(
+        't1',
+        _trx('t1')
+          ..saranKomoditasAi = 'kopi'
+          ..komoditasDiubahPengguna = true
+          ..rubrikVersi = 'v0.1-draf'
+          ..rubrikJawaban = ['kotoran_hampa=sd3', 'butir=seragam'],
+      );
+      await box.close();
+
+      final t = (await Hive.openBox<TransaksiHiveModel>('transaksiBox')).get('t1')!;
+
+      expect(t.saranKomoditasAi, 'kopi');
+      expect(t.komoditasDiubahPengguna, isTrue);
+      expect(t.rubrikVersi, 'v0.1-draf');
+      expect(t.rubrikJawaban, ['kotoran_hampa=sd3', 'butir=seragam']);
     });
 
     test('nilai true yang tersimpan tidak tertimpa default', () async {

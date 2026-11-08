@@ -75,6 +75,23 @@ class TransaksiHiveModel extends HiveObject {
   @HiveField(21, defaultValue: 'ok')
   String statusFoto;
 
+  /// Label router yang disarankan AI ('gabah', 'kelapa_sawit', 'kopi'), atau
+  /// null bila tidak ada saran. Tetap tersimpan walau pengguna memilih lain.
+  @HiveField(22, defaultValue: null)
+  String? saranKomoditasAi;
+
+  /// True bila komoditas akhir berbeda dari [saranKomoditasAi].
+  @HiveField(23, defaultValue: false)
+  bool komoditasDiubahPengguna;
+
+  /// Versi rubrik yang menghasilkan [gradeTerpilih]; null untuk data lama.
+  @HiveField(24, defaultValue: null)
+  String? rubrikVersi;
+
+  /// Jawaban checklist sebagai `pertanyaan=opsi`; null untuk data lama.
+  @HiveField(25, defaultValue: null)
+  List<String>? rubrikJawaban;
+
   TransaksiHiveModel({
     required this.idLokal,
     this.id,
@@ -98,5 +115,9 @@ class TransaksiHiveModel extends HiveObject {
     this.skorKeyakinan,
     this.isManualGrading = false,
     this.statusFoto = 'ok',
+    this.saranKomoditasAi,
+    this.komoditasDiubahPengguna = false,
+    this.rubrikVersi,
+    this.rubrikJawaban,
   });
 }

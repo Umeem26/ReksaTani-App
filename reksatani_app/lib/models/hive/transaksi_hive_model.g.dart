@@ -39,13 +39,17 @@ class TransaksiHiveModelAdapter extends TypeAdapter<TransaksiHiveModel> {
       skorKeyakinan: fields[19] as double?,
       isManualGrading: fields[20] == null ? false : fields[20] as bool,
       statusFoto: fields[21] == null ? 'ok' : fields[21] as String,
+      saranKomoditasAi: fields[22] as String?,
+      komoditasDiubahPengguna: fields[23] == null ? false : fields[23] as bool,
+      rubrikVersi: fields[24] as String?,
+      rubrikJawaban: (fields[25] as List?)?.cast<String>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, TransaksiHiveModel obj) {
     writer
-      ..writeByte(22)
+      ..writeByte(26)
       ..writeByte(0)
       ..write(obj.idLokal)
       ..writeByte(1)
@@ -89,7 +93,15 @@ class TransaksiHiveModelAdapter extends TypeAdapter<TransaksiHiveModel> {
       ..writeByte(20)
       ..write(obj.isManualGrading)
       ..writeByte(21)
-      ..write(obj.statusFoto);
+      ..write(obj.statusFoto)
+      ..writeByte(22)
+      ..write(obj.saranKomoditasAi)
+      ..writeByte(23)
+      ..write(obj.komoditasDiubahPengguna)
+      ..writeByte(24)
+      ..write(obj.rubrikVersi)
+      ..writeByte(25)
+      ..write(obj.rubrikJawaban);
   }
 
   @override
