@@ -11,7 +11,7 @@ const _kodeValidator = 121;
 
 const _gradeSah = [
   {'grade': 'A', 'harga_maks': 7500.0},
-  {'grade': 'B', 'harga_maks': 6800.0},
+  {'grade': 'B', 'harga_maks': 0.0},
 ];
 
 void main() {
@@ -58,22 +58,12 @@ void main() {
       }
     });
 
-    test('harga harus angka dan lebih dari nol', () {
-      for (final sah in ['0.01', '1', '7500', ' 7500 ', '12.5']) {
+    test('harga harus angka dan tidak negatif, nol boleh', () {
+      for (final sah in ['0', '0.0', '7500', ' 7500 ', '12.5']) {
         expect(ManajemenKomoditasController.validasiHarga(sah), isNull, reason: sah);
       }
-      for (final salah in ['', ' ', '0', '0.0', '-0', '-1', '-0.5', 'abc', '12,5', 'NaN', 'Infinity', null]) {
+      for (final salah in ['', ' ', '-1', '-0.5', 'abc', '12,5', 'NaN', 'Infinity', null]) {
         expect(ManajemenKomoditasController.validasiHarga(salah), isNotNull, reason: '$salah');
-      }
-    });
-
-    test('harga nol atau negatif: pesan jelas', () {
-      for (final teks in ['0', '-5']) {
-        expect(
-          ManajemenKomoditasController.validasiHarga(teks),
-          'Harga maksimal harus lebih dari 0',
-          reason: teks,
-        );
       }
     });
   });
@@ -89,12 +79,6 @@ void main() {
       ],
       'harga negatif': [
         {'grade': 'A', 'harga_maks': -1},
-      ],
-      'harga nol': [
-        {'grade': 'A', 'harga_maks': 0},
-      ],
-      'harga nol desimal': [
-        {'grade': 'A', 'harga_maks': 0.0},
       ],
       'harga bukan angka': [
         {'grade': 'A', 'harga_maks': '100'},
@@ -272,16 +256,7 @@ void main() {
       await isiDanSimpan(tester, grade: 'D', harga: '-5');
 
       expect(find.text('Hanya A, B, C'), findsOneWidget);
-      expect(find.text('Harga maksimal harus lebih dari 0'), findsOneWidget);
-      expect(remote.panggilanTulis('komoditas'), isEmpty);
-    });
-
-    testWidgets('harga nol tertahan di form dengan pesan jelas', (tester) async {
-      await bukaForm(tester);
-
-      await isiDanSimpan(tester, grade: 'A', harga: '0');
-
-      expect(find.text('Harga maksimal harus lebih dari 0'), findsOneWidget);
+      expect(find.text('Harga tidak boleh negatif'), findsOneWidget);
       expect(remote.panggilanTulis('komoditas'), isEmpty);
     });
 
