@@ -47,7 +47,7 @@ Foto: HP → Cloudinary (unggahan tanpa tanda tangan)
 **Data dan model**
 
 - **Model grade belum tervalidasi.** Saran grade belum teruji pada data lapangan, jadi grade sebaiknya diputuskan manusia.
-- **Lokasi yang gagal tersimpan sebagai 0,0**, karena validator Atlas menolak null. Peta manajer melewati titik ini.
+- **Lokasi yang gagal tersimpan sebagai null** di HP dan field `latitude`/`longitude` tidak dikirim ke Atlas, karena validator menolak null tetapi field itu tidak wajib. Peta manajer melewati transaksi tanpa koordinat, juga data lama yang masih bernilai 0,0.
 - **`harga_maks` 0 berarti tanpa batas harga** pada pemeriksaan transaksi.
 
 ## Status pengujian
