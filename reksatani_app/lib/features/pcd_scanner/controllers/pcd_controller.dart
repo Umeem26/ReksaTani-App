@@ -8,6 +8,15 @@ import '../services/ocr_regex_service.dart'; // 👈 Impor service baru Modul 8
 import '../services/grading_ml_service.dart'; // 👈 Impor GradingMlService Modul 9
 import '../services/confidence_validator.dart'; // 👈 Impor ConfidenceValidator Modul 10
 
+/// Saran komoditas dari router. Hanya saran: pengguna selalu mengonfirmasi
+/// atau menggantinya, dan grade tidak pernah datang dari sini.
+class SaranKomoditas {
+  /// Label router: 'gabah' | 'kelapa_sawit' | 'kopi'.
+  final String label;
+  final double keyakinan;
+  const SaranKomoditas(this.label, this.keyakinan);
+}
+
 class PcdController {
   final DocumentWarpingService _warpingService = DocumentWarpingService();
   final ImageSegmentationService _segmentationService = ImageSegmentationService();
@@ -20,6 +29,18 @@ class PcdController {
     ConfidenceValidator? confidenceValidator,
   })  : _gradingMlService = gradingMlService ?? GradingMlService(),
         confidenceValidator = confidenceValidator ?? ConfidenceValidator();
+
+  /// Di bawah keyakinan router ini tidak ada saran; pengguna memilih manual.
+  static const double ambangSaran = 0.5;
+
+  /// Saran dari hasil router, atau null bila bukan komoditas, gagal, atau
+  /// keyakinannya di bawah [ambangSaran].
+  static SaranKomoditas? saranDari(ScanResult scan) {
+    final label = scan.commodity;
+    if (scan.status != ScanStatus.ok || label == null) return null;
+    if (scan.routerConfidence < ambangSaran) return null;
+    return SaranKomoditas(label, scan.routerConfidence);
+  }
 
   /// Memuat model TFLite dari aset perangkat secara aman.
   Future<void> loadModel() async {
@@ -70,6 +91,17 @@ class PcdController {
   Future<ScanResult> prosesGradingLengkap(String imagePath) async {
     try {
       return await _gradingMlService.scanImage(File(imagePath));
+    } catch (e) {
+      return ScanResult.error('$e');
+    }
+  }
+
+  // ─── MODUL 9: Saran Komoditas (router saja) ───
+  /// Model grader tidak dipanggil: grade A/B/C ditentukan manusia lewat rubrik.
+  /// Kegagalan apa pun menghasilkan [ScanStatus.error], yang berarti tanpa saran.
+  Future<ScanResult> prosesSaranKomoditas(String imagePath) async {
+    try {
+      return await _gradingMlService.sarankanKomoditas(File(imagePath));
     } catch (e) {
       return ScanResult.error('$e');
     }

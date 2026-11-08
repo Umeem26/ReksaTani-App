@@ -68,9 +68,16 @@ class GradingMlService {
 
   /// Menjalankan pemindaian foto diam (still) dua tahap: router lalu grader.
   ///
+  /// Tidak dipakai alur aplikasi lagi: grade ditentukan manusia lewat rubrik.
   /// Melempar [FileSystemException] jika berkas tidak ada. Kesalahan inferensi
   /// dikembalikan sebagai [ScanStatus.error] tanpa grade (tidak pernah default ke A).
-  Future<ScanResult> scanImage(File imageFile) async {
+  Future<ScanResult> scanImage(File imageFile) => _scanStill(imageFile, runGrader: true);
+
+  /// Saran komoditas dari foto diam: hanya router, model grader tidak dimuat.
+  /// Hasilnya tidak pernah membawa grade.
+  Future<ScanResult> sarankanKomoditas(File imageFile) => _scanStill(imageFile, runGrader: false);
+
+  Future<ScanResult> _scanStill(File imageFile, {required bool runGrader}) async {
     if (!await imageFile.exists()) {
       throw FileSystemException("Berkas gambar tidak ditemukan", imageFile.path);
     }
@@ -81,9 +88,10 @@ class GradingMlService {
       // Model sudah memiliki layer Rescaling(1/255) di dalam graph, jadi JANGAN dibagi 255 lagi.
       final prep = await _preprocessImage(bytes);
       if (_isTestMode) {
-        return _simulateInference(prep.tensor);
+        final sim = _simulateInference(prep.tensor);
+        return runGrader ? sim : _tanpaGrade(sim);
       }
-      return await classify(prep, runGrader: true, source: 'still');
+      return await classify(prep, runGrader: runGrader, source: 'still');
     } catch (e) {
       debugPrint("🚨 [GradingMlService] Terjadi kesalahan saat inferensi grade: $e");
       return ScanResult.error('Kesalahan inferensi lokal ML: $e');
@@ -416,6 +424,15 @@ class GradingMlService {
     final double foregroundRatio = foregroundPixels / 50176;
     return PreprocessResult(buffer, foregroundRatio);
   }
+
+  static ScanResult _tanpaGrade(ScanResult r) => ScanResult(
+        status: r.status,
+        commodity: r.commodity,
+        routerConfidence: r.routerConfidence,
+        routerScores: r.routerScores,
+        message: r.message,
+        inferenceMode: r.inferenceMode,
+      );
 
   /// Simulasi untuk test mode (heuristik warna, bukan model sungguhan).
   ScanResult _simulateInference(Float32List input) {
