@@ -47,3 +47,8 @@ app.*.map.json
 # Environment variables
 .env
 lib/core/env/env.g.dart
+
+# Kunci rilis Android, di mana pun letaknya
+key.properties
+*.keystore
+*.jks

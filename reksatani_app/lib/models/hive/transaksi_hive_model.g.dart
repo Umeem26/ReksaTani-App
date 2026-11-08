@@ -37,14 +37,15 @@ class TransaksiHiveModelAdapter extends TypeAdapter<TransaksiHiveModel> {
       createdAt: fields[17] as DateTime,
       waktuDisinkron: fields[18] as DateTime?,
       skorKeyakinan: fields[19] as double?,
-      isManualGrading: (fields[20] as bool?) ?? false,
+      isManualGrading: fields[20] == null ? false : fields[20] as bool,
+      statusFoto: fields[21] == null ? 'ok' : fields[21] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, TransaksiHiveModel obj) {
     writer
-      ..writeByte(21)
+      ..writeByte(22)
       ..writeByte(0)
       ..write(obj.idLokal)
       ..writeByte(1)
@@ -86,7 +87,9 @@ class TransaksiHiveModelAdapter extends TypeAdapter<TransaksiHiveModel> {
       ..writeByte(19)
       ..write(obj.skorKeyakinan)
       ..writeByte(20)
-      ..write(obj.isManualGrading);
+      ..write(obj.isManualGrading)
+      ..writeByte(21)
+      ..write(obj.statusFoto);
   }
 
   @override

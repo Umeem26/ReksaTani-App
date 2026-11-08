@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../services/sync/mongo_id.dart';
 import '../controllers/manajemen_pengepul_controller.dart';
 
 class ManajemenPengepulScreen extends StatefulWidget {
@@ -110,15 +111,23 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
           Navigator.pop(context); 
           setState(() => _isLoading = true);
           bool sukses = false;
+          var hasilEdit = HasilEditPengepul.gagal;
           if (dataLama == null) {
             sukses = await _controller.tambahPengepul(username: username, password: password, sisaUangJalan: sisaUangJalan);
           } else {
-            sukses = await _controller.editPengepul(id: dataLama['_id'], username: username, password: password, sisaUangJalan: sisaUangJalan);
+            hasilEdit = await _controller.editPengepul(
+              id: dataLama['_id'],
+              username: username,
+              password: password,
+              sisaUangJalan: sisaUangJalan,
+              sisaLama: (dataLama['sisa_uang_jalan'] ?? 0).toDouble(),
+            );
+            sukses = hasilEdit == HasilEditPengepul.berhasil;
           }
           if (!sukses && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Row(children: [Icon(Icons.error_outline_rounded, color: Colors.white, size: 20), SizedBox(width: 10), Expanded(child: Text('Gagal menyimpan data. Username tersebut sudah digunakan. Silakan gunakan username lain.', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))]),
+                content: Row(children: [const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20), const SizedBox(width: 10), Expanded(child: Text(ManajemenPengepulController.pesanGagalEdit(hasilEdit), style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))]),
                 backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               ),
             );
@@ -304,8 +313,9 @@ class _ManajemenPengepulScreenState extends State<ManajemenPengepulScreen> {
                           final id = item['_id'];
                           final username = item['username'] ?? '';
                           final sisaUangJalan = (item['sisa_uang_jalan'] ?? 0).toDouble();
-                          final lastSync = _getWaktuSyncTerakhir(id.toString());
-                          final history = _getTransaksiAgen(id.toString());
+                          final idAgen = MongoId.kanonik(id);
+                          final lastSync = _getWaktuSyncTerakhir(idAgen);
+                          final history = _getTransaksiAgen(idAgen);
                           final online = _isOnline(lastSync);
 
                           return Container(

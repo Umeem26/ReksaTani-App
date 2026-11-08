@@ -5,14 +5,18 @@ import '../controllers/manajemen_komoditas_controller.dart';
 import '../../../../services/master_data_service.dart';
 
 class ManajemenKomoditasScreen extends StatefulWidget {
-  const ManajemenKomoditasScreen({super.key});
+  const ManajemenKomoditasScreen({super.key, this.controller});
+
+  /// Tes menyuntik controller dengan remote palsu.
+  final ManajemenKomoditasController? controller;
 
   @override
   State<ManajemenKomoditasScreen> createState() => _ManajemenKomoditasScreenState();
 }
 
 class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
-  final _controller = ManajemenKomoditasController();
+  late final ManajemenKomoditasController _controller =
+      widget.controller ?? ManajemenKomoditasController();
   List<Map<String, dynamic>> _komoditasList = [];
   bool _isLoading = true;
 
@@ -65,10 +69,16 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
           Navigator.pop(context); 
           setState(() => _isLoading = true);
           
-          if (dataLama == null) {
-            await _controller.tambahKomoditas(namaKomoditas: nama, unitSatuan: satuan, gradeKualitas: grades);
-          } else {
-            await _controller.editKomoditas(id: dataLama['_id'], namaKomoditas: nama, unitSatuan: satuan, gradeKualitas: grades);
+          final hasil = dataLama == null
+              ? await _controller.tambahKomoditas(namaKomoditas: nama, unitSatuan: satuan, gradeKualitas: grades)
+              : await _controller.editKomoditas(id: dataLama['_id'], namaKomoditas: nama, unitSatuan: satuan, gradeKualitas: grades);
+          if (hasil != HasilSimpanKomoditas.berhasil && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(children: [const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20), const SizedBox(width: 10), Expanded(child: Text(ManajemenKomoditasController.pesanGagal(hasil), style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))]),
+                backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              ),
+            );
           }
           await _fetchData();
         },
@@ -304,7 +314,8 @@ class _KomoditasFormSheetState extends State<_KomoditasFormSheet> {
     if (_formKey.currentState!.validate()) {
       List<Map<String, dynamic>> hasilGrades = [];
       for (var item in _gradesData) {
-        hasilGrades.add({'grade': item['gradeCtrl'].text.trim().toUpperCase(), 'harga_maks': double.tryParse(item['hargaCtrl'].text.trim()) ?? 0.0});
+        // Validator form sudah menjamin isian bisa diurai.
+        hasilGrades.add({'grade': item['gradeCtrl'].text.trim().toUpperCase(), 'harga_maks': double.parse(item['hargaCtrl'].text.trim())});
       }
       widget.onSimpan(_namaCtrl.text.trim(), _satuanCtrl.text.trim(), hasilGrades);
     }
@@ -373,9 +384,9 @@ class _KomoditasFormSheetState extends State<_KomoditasFormSheet> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(flex: 2, child: TextFormField(controller: _gradesData[index]['gradeCtrl'], validator: (v) => v!.isEmpty ? 'Grade tidak boleh kosong' : null, style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.hijauTua), decoration: _inputDeco('Grade', isSmall: true))),
+                            Expanded(flex: 2, child: TextFormField(controller: _gradesData[index]['gradeCtrl'], validator: ManajemenKomoditasController.validasiGrade, style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.hijauTua), decoration: _inputDeco('Grade', isSmall: true))),
                             const SizedBox(width: 8),
-                            Expanded(flex: 4, child: TextFormField(controller: _gradesData[index]['hargaCtrl'], keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? 'Harga tidak boleh kosong' : null, style: const TextStyle(fontWeight: FontWeight.w800), decoration: _inputDeco('Harga (Rp)', isSmall: true).copyWith(prefixText: 'Rp '))),
+                            Expanded(flex: 4, child: TextFormField(controller: _gradesData[index]['hargaCtrl'], keyboardType: TextInputType.number, validator: ManajemenKomoditasController.validasiHarga, style: const TextStyle(fontWeight: FontWeight.w800), decoration: _inputDeco('Harga (Rp)', isSmall: true).copyWith(prefixText: 'Rp '))),
                             if (_gradesData.length > 1) ...[
                               const SizedBox(width: 8),
                               Padding(padding: const EdgeInsets.only(top: 4), child: IconButton(icon: const Icon(Icons.remove_circle_rounded, color: AppTheme.merah, size: 24), onPressed: () => _hapusGrade(index), padding: EdgeInsets.zero, constraints: const BoxConstraints())),

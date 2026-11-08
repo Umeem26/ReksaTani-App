@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,8 +8,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Kredensial rilis ada di android/key.properties, yang tidak masuk git. Isinya:
+// storePassword, keyPassword, keyAlias, dan storeFile (relatif terhadap android/app).
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+val adaKunciRilis = keystorePropertiesFile.exists()
+if (adaKunciRilis) {
+    FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
+}
+
 android {
-    namespace = "com.example.reksatani_app"
+    namespace = "com.reksatani.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,18 +32,30 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.reksatani_app"
+        applicationId = "com.reksatani.app"
         minSdkVersion(24)
         targetSdkVersion(flutter.targetSdkVersion)
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (adaKunciRilis) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Jatuh ke kunci debug HANYA bila android/key.properties tidak ada, supaya
+            // `flutter run --release` tetap jalan. APK bertanda tangan debug bukan
+            // untuk dibagikan: kuncinya tidak rahasia dan berbeda di tiap mesin.
+            signingConfig = signingConfigs.getByName(if (adaKunciRilis) "release" else "debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

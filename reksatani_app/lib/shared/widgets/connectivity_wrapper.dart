@@ -23,6 +23,7 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> with SingleTi
   bool _isOnline = true;
   bool _showPill = false;
   bool? _wasOnline;
+  bool _gagalSinkron = false;
 
   late final AnimationController _animCtrl;
   late final Animation<Offset> _offsetAnim;
@@ -46,13 +47,28 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> with SingleTi
 
     _checkInitialConnectivity();
     _subscription = Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
+    MasterDataService().addListener(_segarkanStatusSinkron);
+    _segarkanStatusSinkron();
   }
 
   @override
   void dispose() {
+    MasterDataService().removeListener(_segarkanStatusSinkron);
     _subscription.cancel();
     _animCtrl.dispose();
     super.dispose();
+  }
+
+  /// Dipanggil tiap sync selesai. Saat offline, pill offline yang tampil.
+  void _segarkanStatusSinkron() {
+    if (!mounted) return;
+    final gagal = _isOnline && MasterDataService().perluPeringatanSinkron;
+    setState(() => _gagalSinkron = gagal);
+    if (gagal) {
+      _animCtrl.forward();
+    } else if (!_showPill) {
+      _animCtrl.reverse();
+    }
   }
 
   Future<void> _checkInitialConnectivity() async {
@@ -79,6 +95,10 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> with SingleTi
       // Automatically hide the green success pill after 3 seconds
       Future.delayed(const Duration(seconds: 3), () {
         if (mounted && _isOnline) {
+          if (_gagalSinkron) {
+            setState(() => _showPill = false);
+            return;
+          }
           _animCtrl.reverse().then((_) {
             if (mounted) {
               setState(() {
@@ -101,10 +121,11 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> with SingleTi
         _isOnline = true;
         _showPill = false;
       });
-      _animCtrl.reverse();
+      if (!_gagalSinkron) _animCtrl.reverse();
     }
 
     _wasOnline = online;
+    _segarkanStatusSinkron();
   }
 
   @override
@@ -112,7 +133,7 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> with SingleTi
     return Stack(
       children: [
         widget.child,
-        if (widget.showBanner && _showPill)
+        if (widget.showBanner && (_showPill || _gagalSinkron))
           SafeArea(
             child: Align(
               alignment: Alignment.topCenter,
@@ -133,11 +154,18 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> with SingleTi
   }
 
   Widget _buildPill() {
-    final bgColor = _isOnline ? AppTheme.hijauTua : const Color(0xFFD97706); // Hijau vs Amber
-    final icon = _isOnline ? Icons.cloud_done_rounded : Icons.cloud_off_rounded;
-    final message = _isOnline 
-        ? 'Kembali Online · Menyinkronkan...' 
-        : 'Mode Luring (Offline) · Menggunakan Data Lokal';
+    final amber = !_isOnline || _gagalSinkron;
+    final bgColor = amber ? const Color(0xFFD97706) : AppTheme.hijauTua; // Amber vs Hijau
+    final icon = !_isOnline
+        ? Icons.cloud_off_rounded
+        : _gagalSinkron
+            ? Icons.sync_problem_rounded
+            : Icons.cloud_done_rounded;
+    final message = !_isOnline
+        ? 'Mode Luring (Offline) · Menggunakan Data Lokal'
+        : _gagalSinkron
+            ? MasterDataService().pesanGagalSinkron
+            : 'Kembali Online · Menyinkronkan...';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

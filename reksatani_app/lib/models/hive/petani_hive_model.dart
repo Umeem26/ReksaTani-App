@@ -22,6 +22,10 @@ class PetaniHiveModel extends HiveObject {
   @HiveField(5)
   DateTime waktuDibuat;
 
+  /// `synced`, `pending`, `pending_update`, atau `pending_delete`.
+  @HiveField(6, defaultValue: 'synced')
+  String statusSinkronisasi;
+
   PetaniHiveModel({
     required this.id,
     required this.namaPetani,
@@ -29,5 +33,6 @@ class PetaniHiveModel extends HiveObject {
     required this.pengepulId,
     required this.sisaHutangKasbon,
     required this.waktuDibuat,
+    this.statusSinkronisasi = 'synced',
   });
 }

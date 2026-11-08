@@ -10,10 +10,11 @@ import '../controllers/beranda_controller.dart';
 import 'main_shell.dart';
 import 'manajemen_petani_screen.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
-import '../../../../../services/mongodb_service.dart';
-import 'package:mongo_dart/mongo_dart.dart' show modify, where;
 import '../../../../services/notification_service.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../services/petani_service.dart';
+import '../../../../services/saldo/kasbon_rules.dart';
+import '../../../../services/saldo/transaksi_ditolak.dart';
 import '../../../../../shared/widgets/transaksi_detail_sheet.dart';
 import 'notifikasi_screen.dart';
 import 'package:provider/provider.dart';
@@ -176,12 +177,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                 builder: (_) => PetaniFormSheet(
                                   petaniLama: p,
                                   onSimpan: (nama, desa) async {
-                                    p.namaPetani = nama; p.desa = desa;
-                                    await p.save();
-                                    try {
-                                      final col = MongoDatabase.getCollection('petani');
-                                      await col.updateOne(where.eq('_id', p.id), modify.set('nama_petani', nama).set('desa', desa));
-                                    } catch (_) {}
+                                    await PetaniService().ubah(p, nama: nama, desa: desa);
                                     if (mounted) { Navigator.pop(context); setState(() {}); }
                                   },
                                 ),
@@ -199,13 +195,20 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                     TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: AppTheme.textSecond))),
                                     ElevatedButton(
                                       onPressed: () async {
-                                        final idHapus = p.id;
-                                        await p.delete();
+                                        String? penolakan;
                                         try {
-                                          final col = MongoDatabase.getCollection('petani');
-                                          await col.deleteOne(where.eq('_id', idHapus));
-                                        } catch (_) {}
-                                        if (mounted) { Navigator.pop(context); setState(() {}); }
+                                          await PetaniService().hapus(p);
+                                        } on TransaksiDitolak catch (e) {
+                                          penolakan = e.pesan;
+                                        }
+                                        if (!mounted) return;
+                                        Navigator.pop(context);
+                                        setState(() {});
+                                        if (penolakan != null) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(penolakan, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)), backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating),
+                                          );
+                                        }
                                       },
                                       style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0),
                                       child: const Text('Hapus'),
@@ -244,7 +247,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     else
                       ...riwayat.map((t) => _TransaksiRow(
                             trx: t,
-                            onEdit: t.statusSinkronisasi != 'pending_delete'
+                            onEdit: t.statusSinkronisasi != 'pending_delete' && !KasbonRules.isPencairan(t.namaKomoditas)
                                 ? () async {
                                     final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: t)));
                                     if (changed == true && mounted) setState(() {});
@@ -270,8 +273,15 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                       ),
                                     );
                                     if (ok == true && mounted) {
-                                      await _controller.hapusTransaksi(t);
-                                      setState(() {});
+                                      try {
+                                        await _controller.hapusTransaksi(t);
+                                      } on TransaksiDitolak catch (e) {
+                                        if (!context.mounted) return;
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text(e.pesan, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)), backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating),
+                                        );
+                                      }
+                                      if (mounted) setState(() {});
                                     }
                                   }
                                 : null,
@@ -734,7 +744,7 @@ class _TransaksiRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = trx.statusSinkronisasi;
-    final isKasbonMurni = trx.namaKomoditas.toLowerCase().contains('pencairan kasbon');
+    final isKasbonMurni = KasbonRules.isPencairan(trx.namaKomoditas);
     
     Color badgeBg = AppTheme.hijauSoft;
     Color badgeDot = AppTheme.hijauMuda;

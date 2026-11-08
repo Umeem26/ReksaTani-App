@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 import '../core/env/env.dart';
 
@@ -9,7 +10,7 @@ class CloudinaryService {
 
   Future<String?> uploadImage(String filePath) async {
     if (_cloudName.isEmpty || _uploadPreset.isEmpty) {
-      print('Error: Cloudinary config is missing in Env');
+      debugPrint('Error: Cloudinary config is missing in Env');
       return null;
     }
 
@@ -28,11 +29,11 @@ class CloudinaryService {
         final jsonResponse = jsonDecode(responseString);
         return jsonResponse['secure_url'] as String;
       } else {
-        print('Cloudinary Upload Failed: $responseString');
+        debugPrint('Cloudinary Upload Failed: $responseString');
         return null;
       }
     } catch (e) {
-      print('Error uploading to Cloudinary: $e');
+      debugPrint('Error uploading to Cloudinary: $e');
       return null;
     }
   }

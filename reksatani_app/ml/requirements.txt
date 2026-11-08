@@ -1,0 +1,5 @@
+numpy
+pillow
+# pilih SATU runtime TFLite:
+ai-edge-litert   # Linux/macOS (disarankan)
+# tensorflow     # alternatif, terutama di Windows jika ai-edge-litert tidak terpasang

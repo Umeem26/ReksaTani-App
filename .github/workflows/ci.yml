@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-dan-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: reksatani_app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.5
+          cache: true
+
+      - run: flutter pub get
+
+      # env.g.dart tidak masuk git. CI tidak butuh secret dan tidak punya kredensial,
+      # jadi nilainya kosong. Bukan build_runner: dengan filter ia berhenti karena
+      # bentrok dengan file .g.dart Hive yang ada di git, dan --delete-conflicting-outputs
+      # menghapus file itu. Bila field di env.dart bertambah, tambahkan juga di sini.
+      - name: Buat env.g.dart tanpa secret
+        run: |
+          cat > lib/core/env/env.g.dart <<'EOF'
+          part of 'env.dart';
+
+          final class _Env {
+            static const String mongoUri = '';
+            static const String cloudinaryCloudName = '';
+            static const String cloudinaryUploadPreset = '';
+          }
+          EOF
+
+      # Hanya error yang menggagalkan CI. Peringatan dan info lama masih banyak.
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - run: flutter test

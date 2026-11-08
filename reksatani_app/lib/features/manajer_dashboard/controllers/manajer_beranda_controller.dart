@@ -4,6 +4,7 @@ import '../../../models/hive/transaksi_hive_model.dart';
 import '../../../models/hive/user_hive_model.dart';
 import '../../../services/hive_service.dart';
 import '../../../services/master_data_service.dart';
+import '../../../services/saldo/kasbon_rules.dart';
 
 /// Controller untuk BerandaManajerScreen.
 /// Memisahkan logika bisnis dari UI (SRP).
@@ -21,15 +22,20 @@ class ManajerBerandaController extends ChangeNotifier {
   List<TransaksiHiveModel> get semuaTransaksi =>
       _svc.getRiwayatTransaksi();
 
+  /// Pencairan kasbon bukan pembelian. Riwayat agen dan status sinkron tetap
+  /// memakai [semuaTransaksi].
+  Iterable<TransaksiHiveModel> get _pembelian =>
+      semuaTransaksi.where((t) => !KasbonRules.isPencairan(t.namaKomoditas));
+
   double get totalStokKg =>
       semuaTransaksi.fold(0, (sum, t) => sum + t.berat);
 
   double get totalNilai =>
-      semuaTransaksi.fold(0, (sum, t) => sum + t.totalBayar);
+      _pembelian.fold(0, (sum, t) => sum + t.totalBayar);
 
   Map<String, double> get stokPerKomoditas {
     final Map<String, double> hasil = {};
-    for (var t in semuaTransaksi) {
+    for (var t in _pembelian) {
       hasil[t.namaKomoditas] = (hasil[t.namaKomoditas] ?? 0) + t.berat;
     }
     return hasil;

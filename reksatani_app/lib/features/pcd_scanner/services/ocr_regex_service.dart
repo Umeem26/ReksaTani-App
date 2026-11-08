@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class OcrRegexService {
@@ -10,7 +11,7 @@ class OcrRegexService {
       final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
       return parseText(recognizedText.text);
     } catch (e) {
-      print("Error saat menjalankan OCR Modul 8: $e");
+      debugPrint("Error saat menjalankan OCR Modul 8: $e");
       return {
         'berat': '',
         'harga': '',

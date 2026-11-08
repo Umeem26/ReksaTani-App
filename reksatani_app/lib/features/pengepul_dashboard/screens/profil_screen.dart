@@ -234,13 +234,15 @@ class _ProfilScreenState extends State<ProfilScreen> {
                             child: const Icon(Icons.cloud_sync_rounded, color: AppTheme.textSecond, size: 22),
                           ),
                           const SizedBox(width: 16),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Status MongoDB Server', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
-                                SizedBox(height: 2),
-                                Text('Ketuk untuk mengecek koneksi', style: TextStyle(fontSize: 12, color: AppTheme.textHint, fontWeight: FontWeight.w600)),
+                                const Text('Status MongoDB Server', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+                                const SizedBox(height: 2),
+                                const Text('Ketuk untuk mengecek koneksi', style: TextStyle(fontSize: 12, color: AppTheme.textHint, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 2),
+                                Text(_ctrl.ringkasanSinkron, style: const TextStyle(fontSize: 12, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),

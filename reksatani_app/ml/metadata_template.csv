@@ -1,0 +1,4 @@
+file,id_sampel,sumber,perangkat,cahaya,latar,pelabel,tanggal_foto,catatan
+gabah/A/gA01__1.jpg,gA01,Petani X desa Y,Redmi Note 12,terang,nampan putih,Umem,2026-11-10,contoh baris
+kopi/B/kB03__2.jpg,kB03,Pengepul Z,Samsung A15,redup,karung,Umem,2026-11-10,
+bukan_komoditas/neg01__1.jpg,neg01,Dapur,Redmi Note 12,terang,meja,Umem,2026-11-10,gelas kopi (hard negative)

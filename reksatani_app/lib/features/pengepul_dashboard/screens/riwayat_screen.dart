@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../shared/widgets/connectivity_wrapper.dart';
 import '../../../../services/master_data_service.dart';
+import '../../../../services/saldo/kasbon_rules.dart';
+import '../../../../services/saldo/transaksi_ditolak.dart';
 import '../../../../models/hive/transaksi_hive_model.dart';
 import '../../../../shared/widgets/app_theme.dart';
 import '../../transaksi_luring/screens/transaksi_screen.dart';
@@ -159,7 +161,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                         itemCount: listTampil.length,
                         itemBuilder: (_, i) => _TransaksiCardPremium(
                           trx: listTampil[i],
-                          onEdit: listTampil[i].statusSinkronisasi != 'pending_delete'
+                          onEdit: listTampil[i].statusSinkronisasi != 'pending_delete' && !KasbonRules.isPencairan(listTampil[i].namaKomoditas)
                               ? () async {
                                   final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => TransaksiScreen(editTrx: listTampil[i])));
                                   if (changed == true && mounted) setState(() {});
@@ -185,7 +187,14 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                                     ),
                                   );
                                   if (ok == true && mounted) {
-                                    await _ctrl.hapusTransaksi(listTampil[i]);
+                                    try {
+                                      await _ctrl.hapusTransaksi(listTampil[i]);
+                                    } on TransaksiDitolak catch (e) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text(e.pesan, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)), backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating),
+                                      );
+                                    }
                                   }
                                 }
                               : null,
@@ -296,7 +305,7 @@ class _TransaksiCardPremium extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = trx.statusSinkronisasi;
-    final isKasbonMurni = trx.namaKomoditas.toLowerCase().contains('pencairan kasbon');
+    final isKasbonMurni = KasbonRules.isPencairan(trx.namaKomoditas);
 
     // Pengaturan Detail Badge Status Sinkronisasi
     String badgeLabel = 'Tersinkron';

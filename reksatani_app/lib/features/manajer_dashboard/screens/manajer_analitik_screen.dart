@@ -104,7 +104,7 @@ class _ManajerAnalitikScreenState extends State<ManajerAnalitikScreen> {
                     if (_ctrl.distribusiTransaksi.isEmpty)
                       const _EmptyCard(msg: 'Belum ada data transaksi.')
                     else
-                      _DistribusiCard(data: _ctrl.distribusiTransaksi, total: totalTransaksi),
+                      _DistribusiCard(data: _ctrl.distribusiTransaksi, total: _ctrl.jumlahPembelian),
                   ]),
                 ),
               ),
