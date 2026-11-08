@@ -56,6 +56,12 @@ class ManajerPetaController extends ChangeNotifier {
     }).toList();
   }
 
+  // Jumlah titik pembelian di peta. Titik pencairan kasbon tetap digambar, tetapi
+  // bukan lokasi panen, jadi tidak dihitung sebagai "Lokasi Aktif".
+  int get jumlahLokasiAktif => getTransaksiDenganLokasi
+      .where((t) => !KasbonRules.isPencairan(t.namaKomoditas))
+      .length;
+
   // Total volume panen (kg) dari titik yang sedang aktif di peta
   double get totalVolumeAktif {
     return getTransaksiDenganLokasi.fold(0.0, (sum, item) => sum + item.berat);

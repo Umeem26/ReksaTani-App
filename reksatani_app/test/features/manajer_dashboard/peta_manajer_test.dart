@@ -130,4 +130,19 @@ void main() {
     expect(k(0, 107.6).punyaLokasi, isFalse);
     expect(k(-6.9, 107.6).punyaLokasi, isTrue);
   });
+
+  test('Lokasi Aktif tidak menghitung pencairan', () {
+    final ctrl = ManajerPetaController();
+
+    // b1, b2, k1 digambar; k1 pencairan (grade '-') tidak dihitung.
+    expect(ctrl.getTransaksiDenganLokasi, hasLength(3));
+    expect(ctrl.jumlahLokasiAktif, 2);
+  });
+
+  test('Lokasi Aktif mengikuti filter grade dan tetap tanpa pencairan', () {
+    final ctrl = ManajerPetaController()..setFilterGrade('-');
+
+    expect(ctrl.getTransaksiDenganLokasi.single.idLokal, 'k1');
+    expect(ctrl.jumlahLokasiAktif, 0);
+  });
 }

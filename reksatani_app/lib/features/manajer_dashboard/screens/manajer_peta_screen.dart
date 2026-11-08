@@ -200,7 +200,7 @@ class _ManajerPetaScreenState extends State<ManajerPetaScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                _buildHeaderStat('Lokasi Aktif', '${daftarLokasi.length} Titik', Icons.place_rounded, AppTheme.hijauTua),
+                                _buildHeaderStat('Lokasi Aktif', '${_ctrl.jumlahLokasiAktif} Titik', Icons.place_rounded, AppTheme.hijauTua),
                                 Container(width: 1, height: 30, color: AppTheme.border),
                                 _buildHeaderStat('Volume Zona', '${_ctrl.totalVolumeAktif.toInt()} kg', Icons.scale_rounded, AppTheme.hijauMuda),
                                 Container(width: 1, height: 30, color: AppTheme.border),
