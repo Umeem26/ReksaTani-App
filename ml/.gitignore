@@ -6,3 +6,4 @@ reports/
 *.png
 __pycache__/
 .venv/
+runs/
