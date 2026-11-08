@@ -4,6 +4,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrintSynchronously;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mongo_dart/mongo_dart.dart' show Db, ObjectId, where;
@@ -41,10 +42,10 @@ void main() {
     if (HttpOverrides.current != null) {
       fail('flutter_test_config terpakai: jalankan dari tool/atlas, bukan test/.');
     }
-    print('flutter_test_config: tidak terpakai (HttpOverrides kosong)');
+    debugPrintSynchronously('flutter_test_config: tidak terpakai (HttpOverrides kosong)');
 
     if (Platform.environment['ASAP_KONFIRMASI'] != '1') {
-      print('DRY-RUN: tidak tersambung. Atur ASAP_KONFIRMASI=1 untuk menjalankan.');
+      debugPrintSynchronously('DRY-RUN: tidak tersambung. Atur ASAP_KONFIRMASI=1 untuk menjalankan.');
       return;
     }
     final uri = Platform.environment['MONGO_URI'] ?? '';
@@ -337,7 +338,7 @@ class _UjiAsap {
     waktuPembaruan: DateTime.now(),
   );
 
-  void _tulis(String s) => print(_penyaring.bersih(s));
+  void _tulis(String s) => debugPrintSynchronously(_penyaring.bersih(s));
   void _judul(String s) => _tulis('\n== $s');
 
   void _cek(String label, Object? nyata, Object? harapan) {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:faker/faker.dart';
@@ -28,7 +29,7 @@ void main() {
     const int totalData = 1000;
 
     test('ST-001: Massive Data Insertion - $totalData Transactions', () async {
-      print('Memulai Injeksi $totalData data transaksi...');
+      debugPrint('Memulai Injeksi $totalData data transaksi...');
       final stopwatch = Stopwatch()..start();
 
       for (int i = 0; i < totalData; i++) {
@@ -59,7 +60,7 @@ void main() {
 
       stopwatch.stop();
       final duration = stopwatch.elapsedMilliseconds;
-      print('Injeksi Selesai dalam ${duration}ms');
+      debugPrint('Injeksi Selesai dalam ${duration}ms');
       
       expect(hiveService.transaksiBox.length, totalData);
       expect(duration, lessThan(5000), reason: 'Insertion should be faster than 5 seconds');
@@ -87,8 +88,8 @@ void main() {
           .fold(0.0, (sum, item) => sum + item.berat);
 
       stopwatch.stop();
-      print('Total Berat dari 500 data: $totalBerat kg');
-      print('Query & Agregasi Selesai dalam ${stopwatch.elapsedMilliseconds}ms');
+      debugPrint('Total Berat dari 500 data: $totalBerat kg');
+      debugPrint('Query & Agregasi Selesai dalam ${stopwatch.elapsedMilliseconds}ms');
 
       expect(totalBerat, 5000.0);
       expect(stopwatch.elapsedMilliseconds, lessThan(100), reason: 'Aggregation should be instant (< 100ms)');

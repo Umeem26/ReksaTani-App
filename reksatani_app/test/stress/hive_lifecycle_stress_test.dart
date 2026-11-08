@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:reksatani_app/models/hive/transaksi_hive_model.dart';
@@ -28,7 +29,7 @@ void main() {
   group('Hive Lifecycle Stress Testing', () {
     
     test('ST-006: Bulk Update & Delete - 1.000 Transactions', () async {
-      print('Memulai ST-006: Simulasi Sinkronisasi Massal (Update 1.000 data)...');
+      debugPrint('Memulai ST-006: Simulasi Sinkronisasi Massal (Update 1.000 data)...');
       
       for (int i = 0; i < totalData; i++) {
         final trx = TransaksiHiveModel(
@@ -55,11 +56,11 @@ void main() {
       final updateDuration = updateStopwatch.elapsedMilliseconds;
       final pendingCount = hiveService.getPendingTransaksi().length;
       expect(pendingCount, 0);
-      print('Update Massal Selesai:');
-      print('   - Durasi: ${updateDuration}ms');
-      print('   - Kecepatan: ${(updateDuration / totalData).toStringAsFixed(4)}ms/item');
+      debugPrint('Update Massal Selesai:');
+      debugPrint('   - Durasi: ${updateDuration}ms');
+      debugPrint('   - Kecepatan: ${(updateDuration / totalData).toStringAsFixed(4)}ms/item');
 
-      print('Memulai Cleanup Massal (Delete 1.000 data)...');
+      debugPrint('Memulai Cleanup Massal (Delete 1.000 data)...');
       final deleteStopwatch = Stopwatch()..start();
       
       await hiveService.transaksiBox.clear();
@@ -68,8 +69,8 @@ void main() {
       final deleteDuration = deleteStopwatch.elapsedMilliseconds;
 
       expect(hiveService.transaksiBox.length, 0);
-      print('Delete Massal Selesai:');
-      print('   - Durasi: ${deleteDuration}ms');
+      debugPrint('Delete Massal Selesai:');
+      debugPrint('   - Durasi: ${deleteDuration}ms');
 
       expect(updateDuration, lessThan(5000), reason: 'Bulk update should be efficient.');
       expect(deleteDuration, lessThan(1000), reason: 'Bulk delete (clear) should be near instant.');
