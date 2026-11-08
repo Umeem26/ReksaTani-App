@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mongo_dart/mongo_dart.dart' show Db, ObjectId, where;
 import 'package:mongo_dart/src/database/commands/query_and_write_operation_commands/return_classes/write_result.dart';
+import 'package:reksatani_app/features/manajer_dashboard/controllers/manajemen_komoditas_controller.dart';
 import 'package:reksatani_app/features/manajer_dashboard/controllers/manajemen_pengepul_controller.dart';
 import 'package:reksatani_app/features/transaksi_luring/controllers/transaksi_controller.dart';
 import 'package:reksatani_app/models/hive/komoditas_hive_model.dart';
@@ -15,6 +16,7 @@ import 'package:reksatani_app/models/hive/user_hive_model.dart';
 import 'package:reksatani_app/services/hive_service.dart';
 import 'package:reksatani_app/services/master_data_service.dart';
 import 'package:reksatani_app/services/mongodb_service.dart';
+import 'package:reksatani_app/services/saldo/transaksi_ditolak.dart';
 import 'package:reksatani_app/services/saldo/transaksi_ledger_service.dart';
 import 'package:reksatani_app/services/sync/mongo_id.dart';
 import 'package:reksatani_app/services/sync/mongo_remote.dart';
@@ -103,12 +105,17 @@ class _DokumenMilik {
 
   final String run;
   final Set<String> _oid = {};
+  final Set<String> _teks = {};
 
   void catat(ObjectId id) => _oid.add(id.oid);
+
+  /// `_id` string buatan aplikasi (UUID komoditas) yang dibuat oleh skrip ini.
+  void catatTeks(String id) => _teks.add(id);
 
   bool _nilaiMilik(Object? v) {
     if (v is ObjectId) return _oid.contains(v.oid);
     if (v is! String) return false;
+    if (_teks.contains(v)) return true;
     // `kasbon_<id agen>_<milidetik>` adalah id_lokal buatan aplikasi untuk pencairan.
     final prefiksSah = v.startsWith('asap-') || v.startsWith('kasbon_asap-');
     if (prefiksSah && v.contains(run)) return true;
@@ -162,6 +169,28 @@ class _Pagar implements SyncRemote {
   }) =>
       _asli.find(koleksi, filter, fields: fields);
 
+  /// `tambahKomoditas` membuat `_id` UUID sendiri. Upsert itu diakui sebagai milik
+  /// skrip hanya bila filternya satu `_id` string dan namanya memuat penanda run.
+  void _akuiKomoditasBaru(
+    String koleksi,
+    Map<String, dynamic> filter,
+    Map<String, dynamic> update,
+    bool upsert,
+  ) {
+    final id = filter['_id'];
+    final isi = update[r'$setOnInsert'];
+    final nama = isi is Map ? isi['nama_komoditas'] : null;
+    if (koleksi == 'komoditas' &&
+        upsert &&
+        filter.length == 1 &&
+        id is String &&
+        nama is String &&
+        nama.startsWith('asap-') &&
+        nama.contains(_milik.run)) {
+      _milik.catatTeks(id);
+    }
+  }
+
   @override
   Future<RemoteWrite> updateOne(
     String koleksi,
@@ -169,6 +198,7 @@ class _Pagar implements SyncRemote {
     Map<String, dynamic> update, {
     bool upsert = false,
   }) async {
+    _akuiKomoditasBaru(koleksi, filter, update, upsert);
     _periksa(filter);
     final hasil = await _asli.updateOne(koleksi, filter, update, upsert: upsert);
     jejak.add('updateOne $koleksi upsert=$upsert -> $hasil');
@@ -276,6 +306,9 @@ class _UjiAsap {
   String get idPetani => 'asap-petani-$run';
 
   static const _koleksiSaldo = ['transaksi', 'petani', 'users'];
+
+  /// Koleksi yang bisa berisi dokumen `asap-`: saldo, ditambah komoditas.
+  static const _koleksiAsap = [..._koleksiSaldo, 'komoditas'];
   static const _kunciBalasan = [
     'ok',
     'n',
@@ -288,7 +321,9 @@ class _UjiAsap {
     'errmsg',
   ];
 
-  final _ctrl = TransaksiController();
+  /// HP uji tanpa GPS: semua transaksi tersimpan dengan lokasi 0,0, yang harus
+  /// diterima validator `transaksi`.
+  final _ctrl = TransaksiController(ambilLokasi: () async => null);
   final _ledger = TransaksiLedgerService();
 
   late final _komoditas = KomoditasHiveModel(
@@ -449,6 +484,10 @@ class _UjiAsap {
       await _langkahProjection();
       await _langkahTanpaPetani();
       await _langkahPencairan();
+      await _langkahGpsNol();
+      await _langkahHapusPencairan();
+      await _langkahKasbonNegatif();
+      await _langkahKomoditas();
     } catch (e) {
       kegagalan = e;
       _tulis('\nGAGAL: ${e is Map ? _ringkas(e) : e}');
@@ -492,7 +531,7 @@ class _UjiAsap {
 
     _awal = await _hitungSemua();
     _tulis('Hitungan awal: $_awal');
-    for (final k in _koleksiSaldo) {
+    for (final k in _koleksiAsap) {
       final sisa = await _remote.find(
         k,
         {
@@ -505,6 +544,9 @@ class _UjiAsap {
             },
             {
               'asap_run': {r'$exists': true},
+            },
+            {
+              'nama_komoditas': {r'$regex': '^asap-'},
             },
           ],
         },
@@ -830,49 +872,234 @@ class _UjiAsap {
         kasbonString: 0, kasbonOid: 100000, kas: 1060000);
   }
 
-  /// Langkah terakhir, karena validator `transaksi` hanya menerima grade A, B, C,
-  /// sedangkan aplikasi menulis `-` untuk pencairan. Skrip memang harus gagal di
-  /// sini sampai salah satunya berubah.
+  Future<Map<String, dynamic>> _transaksiCloud(String idLokal) async {
+    final docs = await _remote.find('transaksi', {'id_lokal': idLokal});
+    if (docs.length != 1) {
+      throw _GagalUji('transaksi/$idLokal: ${docs.length} dokumen');
+    }
+    return docs.first;
+  }
+
+  late String _idPencairan;
+
+  /// Butuh `-` di enum `grade_terpilih` validator `transaksi`
+  /// (`skema/transaksi.sesudah.json`). Sebelum itu ditolak dengan kode 121.
   Future<void> _langkahPencairan() async {
     _judul('15. Pencairan kasbon 30.000 lewat controller + sync');
     final hive = _agen.hive;
     final lama = hive.transaksiBox.keys.toSet();
-    await _ctrl.simpanKasbonMurni(
+    final adaLokasi = await _ctrl.simpanKasbonMurni(
       petaniTerpilih: hive.petaniBox.get(idPetani)!,
       nominalKasbonText: '30000',
     );
     await _tungguSync();
+    _periksaLaporan('pencairan');
     _cetakJejak();
+    _cek('pencairan: lokasi tercatat', adaLokasi, false);
 
-    final id = hive.transaksiBox.keys
+    _idPencairan = hive.transaksiBox.keys
         .cast<String>()
         .firstWhere((k) => !lama.contains(k));
-    final baris = hive.transaksiBox.get(id)!;
-    final laporan = MasterDataService().laporanTerakhir!;
-    _tulis('  masalah: ${laporan.masalah}');
-    _tulis('  HP: status ${baris.statusSinkronisasi}, '
-        'grade "${baris.gradeTerpilih}", '
-        'kasbon ${hive.petaniBox.get(idPetani)!.sisaHutangKasbon}, '
-        'kas ${hive.usersBox.get('currentUser')!.sisaUangJalan}');
-    final cloud = await _remote.find('transaksi', {'id_lokal': id});
-    _tulis('  cloud: dokumen ${cloud.length}, '
-        'kasbon ${(await _dok('petani', idPetani))['sisa_hutang_kasbon']}, '
-        'kas ${(await _dok('users', idAgen))['sisa_uang_jalan']}');
-
-    if (cloud.isEmpty) {
-      await _updateMentah(
-        'pencairan apa adanya',
-        'transaksi',
-        {'id_lokal': id},
-        SyncEngine.bangunUpdateTransaksi(baris, DateTime.now()),
-        upsert: true,
-      );
-    }
-
-    _cek('pencairan sampai ke cloud', cloud.length, 1);
-    _cek('pencairan: masalah', '${laporan.masalah}', '[]');
+    _cek('pencairan: status HP',
+        hive.transaksiBox.get(_idPencairan)!.statusSinkronisasi, 'synced');
+    final dok = await _transaksiCloud(_idPencairan);
+    _cek('pencairan cloud: grade', dok['grade_terpilih'], '-');
+    _cek('pencairan cloud: total_bayar', dok['total_bayar'], 30000);
     await _cekSaldo('sesudah pencairan',
         kasbonString: 30000, kasbonOid: 100000, kas: 1030000);
+
+    _judul('15b. Pencairan terlihat oleh akun manajer');
+    await _manajer.aktifkan();
+    await _sinkron('manajer pencairan');
+    _cetakJejak();
+    final diManajer = _manajer.hive.transaksiBox.get(_idPencairan);
+    _cek('pencairan sampai ke HP manajer', diManajer != null, true);
+    _cek('pencairan di manajer: grade', diManajer!.gradeTerpilih, '-');
+    _cek('pencairan di manajer: total', diManajer.totalBayar, 30000);
+    await _agen.aktifkan();
+    await _sinkron('agen sesudah manajer');
+    _cek('jumlah tulisan', _remote.jejak.length, 0);
+  }
+
+  Future<void> _langkahGpsNol() async {
+    _judul('16. GPS 0,0 diterima validator transaksi');
+    final docs = [
+      ...await _transaksiAsap(),
+      await _transaksiCloud(_idPencairan),
+    ];
+    _cek('dokumen diperiksa', docs.length, 3);
+    for (final d in docs) {
+      _cek('${d['id_lokal']}: lokasi', '${d['latitude']},${d['longitude']}',
+          '0.0,0.0');
+    }
+  }
+
+  Future<void> _langkahHapusPencairan() async {
+    _judul('17. Hapus pencairan yang sudah terpakai: ditolak aplikasi');
+    final beli = await _beli(idPetani, '10000');
+    _cetakJejak();
+    _cek('potongan pembelian',
+        _agen.hive.transaksiBox.get(beli)!.nominalPotongKasbon, 10000);
+    await _cekSaldo('sesudah pembelian pemotong',
+        kasbonString: 20000, kasbonOid: 100000, kas: 1030000);
+
+    final pencairan = _agen.hive.transaksiBox.get(_idPencairan)!;
+    try {
+      await _ledger.hapus(pencairan);
+      throw _GagalUji('hapus pencairan terpakai tidak ditolak');
+    } on TransaksiDitolak catch (e) {
+      _cek('hapus pencairan: kode penolakan', e.kode, 'pencairan_terpakai');
+      _tulis('  pesan: ${e.pesan}');
+    }
+    _cek('pencairan: status HP tetap', pencairan.statusSinkronisasi, 'synced');
+    _cek('menunggu', MasterDataService().jumlahMenunggu, 0);
+    await _sinkron('sesudah penolakan hapus');
+    _cek('jumlah tulisan', _remote.jejak.length, 0);
+    await _transaksiCloud(_idPencairan);
+    await _cekSaldo('sesudah penolakan hapus',
+        kasbonString: 20000, kasbonOid: 100000, kas: 1030000);
+
+    _judul('17b. Hapus pembelian pemotong, lalu pencairan: diterima');
+    await _ledger.hapus(_agen.hive.transaksiBox.get(beli)!);
+    await _sinkron('hapus pembelian pemotong');
+    _cetakJejak();
+    await _cekSaldo('sesudah hapus pemotong',
+        kasbonString: 30000, kasbonOid: 100000, kas: 1030000);
+    await _ledger.hapus(_agen.hive.transaksiBox.get(_idPencairan)!);
+    await _sinkron('hapus pencairan');
+    _cetakJejak();
+    _cek('pencairan di cloud',
+        (await _remote.find('transaksi', {'id_lokal': _idPencairan})).length, 0);
+    _cek('dokumen transaksi', (await _transaksiAsap()).length, 2);
+    await _cekSaldo('sesudah hapus pencairan',
+        kasbonString: 0, kasbonOid: 100000, kas: 1060000);
+  }
+
+  Future<void> _langkahKasbonNegatif() async {
+    _judul('18. Nominal kasbon negatif: ditolak sebelum server');
+    final hive = _agen.hive;
+    final lama = hive.transaksiBox.keys.toSet();
+    try {
+      await _ctrl.simpanKasbonMurni(
+        petaniTerpilih: hive.petaniBox.get(idPetani)!,
+        nominalKasbonText: '-5000',
+      );
+      throw _GagalUji('nominal kasbon negatif tidak ditolak');
+    } on TransaksiDitolak catch (e) {
+      _cek('kasbon negatif: kode penolakan', e.kode, 'nominal_tidak_sah');
+      _tulis('  pesan: ${e.pesan}');
+    }
+    await _tungguSync();
+    _cek('baris baru di HP',
+        hive.transaksiBox.keys.toSet().difference(lama).length, 0);
+    _cek('menunggu', MasterDataService().jumlahMenunggu, 0);
+    _cek('jumlah tulisan', _remote.jejak.length, 0);
+    _cek(
+      'pencairan di cloud',
+      (await _remote.find('transaksi', {
+        'id_lokal': {r'$regex': '^kasbon_$idAgen'},
+      }))
+          .length,
+      0,
+    );
+    await _cekSaldo('sesudah kasbon negatif',
+        kasbonString: 0, kasbonOid: 100000, kas: 1060000);
+  }
+
+  Future<void> _langkahKomoditas() async {
+    _judul('19. Tambah dan edit komoditas lewat validasi controller');
+    await _manajer.aktifkan();
+    final ctrl = ManajemenKomoditasController(remote: _remote);
+    final nama = 'asap-komoditas-cloud-$run';
+    Future<List<Map<String, dynamic>>> diCloud() =>
+        _remote.find('komoditas', {'nama_komoditas': nama});
+
+    for (final (label, grade) in [
+      ('grade D', <Map<String, dynamic>>[
+        {'grade': 'D', 'harga_maks': 1000.0},
+      ]),
+      ('harga negatif', <Map<String, dynamic>>[
+        {'grade': 'A', 'harga_maks': -1.0},
+      ]),
+      ('tanpa grade', <Map<String, dynamic>>[]),
+    ]) {
+      _cek(
+        'tambah $label',
+        await ctrl.tambahKomoditas(
+            namaKomoditas: nama, unitSatuan: 'kg', gradeKualitas: grade),
+        HasilSimpanKomoditas.tidakValid,
+      );
+    }
+    _cek('tulisan tidak sah', _remote.jejak.length, 0);
+    _cek('komoditas di cloud', (await diCloud()).length, 0);
+
+    _cek(
+      'tambah sah',
+      await ctrl.tambahKomoditas(
+        namaKomoditas: nama,
+        unitSatuan: 'kg',
+        gradeKualitas: [
+          {'grade': 'A', 'harga_maks': 5000.0},
+          {'grade': 'B', 'harga_maks': 0.0},
+        ],
+      ),
+      HasilSimpanKomoditas.berhasil,
+    );
+    _cetakJejak();
+    final dok = (await diCloud()).single;
+    final id = dok['_id'];
+    _cek('_id komoditas string', id is String, true);
+    _cek('grade_kualitas cloud', '${dok['grade_kualitas']}',
+        '[{grade: A, harga_maks: 5000.0}, {grade: B, harga_maks: 0.0}]');
+    _cek('diperbarui_oleh', dok['diperbarui_oleh'], 'asap-manajer-$run');
+
+    _cek(
+      'edit tidak sah',
+      await ctrl.editKomoditas(
+        id: id,
+        namaKomoditas: nama,
+        unitSatuan: 'kg',
+        gradeKualitas: [
+          {'grade': 'a', 'harga_maks': 1.0},
+        ],
+      ),
+      HasilSimpanKomoditas.tidakValid,
+    );
+    _cek(
+      'edit sah',
+      await ctrl.editKomoditas(
+        id: id,
+        namaKomoditas: nama,
+        unitSatuan: 'ton',
+        gradeKualitas: [
+          {'grade': 'C', 'harga_maks': 7000.0},
+        ],
+      ),
+      HasilSimpanKomoditas.berhasil,
+    );
+    _cetakJejak();
+    final diedit = (await diCloud()).single;
+    _cek('unit_satuan cloud', diedit['unit_satuan'], 'ton');
+    _cek('grade_kualitas cloud', '${diedit['grade_kualitas']}',
+        '[{grade: C, harga_maks: 7000.0}]');
+
+    _cek(
+      'edit komoditas yang tidak ada',
+      await ctrl.editKomoditas(
+        id: 'asap-komoditas-tidak-ada-$run',
+        namaKomoditas: nama,
+        unitSatuan: 'kg',
+        gradeKualitas: [
+          {'grade': 'A', 'harga_maks': 1.0},
+        ],
+      ),
+      HasilSimpanKomoditas.tidakDitemukan,
+    );
+    _cetakJejak();
+
+    _cek('hapus komoditas', await ctrl.hapusKomoditas(id), true);
+    _cetakJejak();
+    _cek('komoditas di cloud sesudah hapus', (await diCloud()).length, 0);
   }
 
   // ── Pembersihan ──
@@ -899,17 +1126,22 @@ class _UjiAsap {
                 {
                   '_id': {r'$regex': '^asap-.*$run'},
                 },
+                {
+                  'nama_komoditas': {r'$regex': '^asap-.*$run'},
+                },
               ],
             },
             fields: const ['_id'],
           );
 
-      for (final k in _koleksiSaldo) {
+      for (final k in _koleksiAsap) {
         final docs = await sisa(k);
         var terhapus = 0;
         for (final d in docs) {
           final id = d['_id'] as Object;
           if (id is ObjectId) _milik.catat(id);
+          // Komoditas: namanya memuat run, jadi `_id` UUID-nya milik skrip ini.
+          if (k == 'komoditas' && id is String) _milik.catatTeks(id);
           final hasil = await _remote.deleteOne(k, {'_id': id});
           terhapus += hasil.removed;
         }
@@ -918,7 +1150,7 @@ class _UjiAsap {
       _remote.jejak.clear();
 
       var tuntas = true;
-      for (final k in _koleksiSaldo) {
+      for (final k in _koleksiAsap) {
         final tertinggal = (await sisa(k)).length;
         if (tertinggal > 0) {
           tuntas = false;
