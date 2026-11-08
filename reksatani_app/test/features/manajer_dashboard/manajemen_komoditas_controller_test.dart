@@ -165,6 +165,25 @@ void main() {
     });
   });
 
+  group('hapus', () {
+    test('dokumen terhapus: berhasil', () async {
+      remote.tanam('komoditas', {'_id': 'uuid-1', 'nama_komoditas': 'Gabah'});
+
+      expect(await c.hapusKomoditas('uuid-1'), HasilSimpanKomoditas.berhasil);
+      expect(remote.dokumen('komoditas'), isEmpty);
+    });
+
+    test('tidak ada dokumen yang terhapus: tidak ditemukan, bukan berhasil', () async {
+      expect(await c.hapusKomoditas('tidak-ada'), HasilSimpanKomoditas.tidakDitemukan);
+    });
+
+    test('jaringan putus: gagal, tidak melempar', () async {
+      remote.online = false;
+
+      expect(await c.hapusKomoditas('uuid-1'), HasilSimpanKomoditas.gagal);
+    });
+  });
+
   group('layar', () {
     Future<void> bukaForm(WidgetTester tester) async {
       await tester.pumpWidget(MaterialApp(
@@ -187,6 +206,49 @@ void main() {
       await tester.tap(find.text('Simpan Komoditas'));
       await tester.pumpAndSettle();
     }
+
+    Future<void> hapusLewatMenu(WidgetTester tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: ManajemenKomoditasScreen(controller: c),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hapus'));
+      await tester.pumpAndSettle();
+    }
+
+    void tanamGabah() => remote.tanam('komoditas', {
+          '_id': 'uuid-1',
+          'nama_komoditas': 'Gabah',
+          'unit_satuan': 'kg',
+          'grade_kualitas': _gradeSah,
+        });
+
+    testWidgets('hapus gagal: pesan tampil, tidak diam-diam', (tester) async {
+      tanamGabah();
+      await hapusLewatMenu(tester);
+      remote.online = false;
+
+      await tester.tap(find.text('Ya, Hapus'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(ManajemenKomoditasController.pesanGagalHapus(HasilSimpanKomoditas.gagal)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('hapus berhasil: tidak ada pesan kegagalan', (tester) async {
+      tanamGabah();
+      await hapusLewatMenu(tester);
+
+      await tester.tap(find.text('Ya, Hapus'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SnackBar), findsNothing);
+      expect(remote.dokumen('komoditas'), isEmpty);
+    });
 
     testWidgets('grade dan harga salah tertahan di form', (tester) async {
       await bukaForm(tester);

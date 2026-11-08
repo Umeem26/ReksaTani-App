@@ -73,15 +73,19 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
               ? await _controller.tambahKomoditas(namaKomoditas: nama, unitSatuan: satuan, gradeKualitas: grades)
               : await _controller.editKomoditas(id: dataLama['_id'], namaKomoditas: nama, unitSatuan: satuan, gradeKualitas: grades);
           if (hasil != HasilSimpanKomoditas.berhasil && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(children: [const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20), const SizedBox(width: 10), Expanded(child: Text(ManajemenKomoditasController.pesanGagal(hasil), style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))]),
-                backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              ),
-            );
+            _snackGagal(ManajemenKomoditasController.pesanGagal(hasil));
           }
           await _fetchData();
         },
+      ),
+    );
+  }
+
+  void _snackGagal(String pesan) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(children: [const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20), const SizedBox(width: 10), Expanded(child: Text(pesan, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))]),
+        backgroundColor: AppTheme.merah, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       ),
     );
   }
@@ -103,7 +107,10 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
             onPressed: () async {
               Navigator.pop(context);
               setState(() => _isLoading = true);
-              await _controller.hapusKomoditas(id);
+              final hasil = await _controller.hapusKomoditas(id);
+              if (hasil != HasilSimpanKomoditas.berhasil && mounted) {
+                _snackGagal(ManajemenKomoditasController.pesanGagalHapus(hasil));
+              }
               await _fetchData();
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.merah, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),

@@ -28,6 +28,13 @@ class ManajemenKomoditasController {
         _ => 'Gagal menyimpan komoditas. Periksa koneksi lalu coba lagi.',
       };
 
+  /// Pesan untuk layar bila penghapusan tidak berhasil.
+  static String pesanGagalHapus(HasilSimpanKomoditas hasil) => switch (hasil) {
+        HasilSimpanKomoditas.tidakDitemukan =>
+          'Komoditas sudah tidak ada di server. Muat ulang daftar.',
+        _ => 'Gagal menghapus komoditas. Periksa koneksi lalu coba lagi.',
+      };
+
   static String? validasiGrade(String? teks) {
     final grade = (teks ?? '').trim().toUpperCase();
     if (grade.isEmpty) return 'Grade tidak boleh kosong';
@@ -135,13 +142,16 @@ class ManajemenKomoditasController {
     }
   }
 
-  Future<bool> hapusKomoditas(dynamic id) async {
+  Future<HasilSimpanKomoditas> hapusKomoditas(dynamic id) async {
     try {
       final hasil = await _remote.deleteOne(_koleksi, MongoId.filterId(id));
-      return hasil.ok;
+      if (!hasil.ok) return HasilSimpanKomoditas.gagal;
+      // Sama dengan edit: sukses tanpa dokumen terhapus berarti filter meleset.
+      if (hasil.removed == 0) return HasilSimpanKomoditas.tidakDitemukan;
+      return HasilSimpanKomoditas.berhasil;
     } catch (e) {
       debugPrint('Error hapusKomoditas: ${e.runtimeType}');
-      return false;
+      return HasilSimpanKomoditas.gagal;
     }
   }
 }
