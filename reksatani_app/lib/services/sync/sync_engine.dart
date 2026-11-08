@@ -1,7 +1,7 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 
 import '../../models/hive/komoditas_hive_model.dart';
@@ -339,6 +339,10 @@ class SyncEngine {
         'foto_nota': _urlAtauKosong(t.fotoNota),
         'foto_fisik_barang': _urlAtauKosong(t.fotoFisikBarang),
         'status_foto': t.statusFoto,
+        'saran_komoditas_ai': t.saranKomoditasAi,
+        'komoditas_diubah_pengguna': t.komoditasDiubahPengguna,
+        'rubrik_versi': t.rubrikVersi,
+        'rubrik_jawaban': t.rubrikJawaban == null ? null : List<String>.of(t.rubrikJawaban!),
         'status_sinkronisasi': 'synced',
         'waktu_disinkron': sekarang.toIso8601String(),
       },
@@ -876,6 +880,12 @@ class SyncEngine {
           fotoFisikBarang: _urlAtauKosong(d['foto_fisik_barang']?.toString() ?? ''),
           fotoNota: _urlAtauKosong(d['foto_nota']?.toString() ?? ''),
           statusFoto: _statusFotoDariCloud(d) ?? 'ok',
+          saranKomoditasAi: d['saran_komoditas_ai']?.toString(),
+          komoditasDiubahPengguna: d['komoditas_diubah_pengguna'] == true,
+          rubrikVersi: d['rubrik_versi']?.toString(),
+          rubrikJawaban: d['rubrik_jawaban'] is List
+              ? [for (final j in d['rubrik_jawaban'] as List) j.toString()]
+              : null,
           latitude: _angka(d['latitude']),
           longitude: _angka(d['longitude']),
           statusSinkronisasi: d['status_sinkronisasi']?.toString() ?? 'synced',
@@ -1103,6 +1113,25 @@ class SyncEngine {
       FotoTertunda.adalahUrl(nilai) ? nilai : '';
 
   static bool _isiSama(Map<String, dynamic> a, Map<String, dynamic> b) =>
-      mapEquals(a[r'$set'] as Map?, b[r'$set'] as Map?) &&
-      mapEquals(a[r'$setOnInsert'] as Map?, b[r'$setOnInsert'] as Map?);
+      _petaSama(a[r'$set'] as Map?, b[r'$set'] as Map?) &&
+      _petaSama(a[r'$setOnInsert'] as Map?, b[r'$setOnInsert'] as Map?);
+
+  /// Seperti [mapEquals], tetapi nilai `List` (misalnya `rubrik_jawaban`)
+  /// dibandingkan isinya. [mapEquals] membandingkan List lewat identitas,
+  /// sehingga baris tidak akan pernah dianggap terkirim.
+  static bool _petaSama(Map? a, Map? b) {
+    if (a == null || b == null) return a == b;
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (!b.containsKey(k)) return false;
+      final x = a[k];
+      final y = b[k];
+      if (x is List && y is List) {
+        if (!listEquals(x, y)) return false;
+      } else if (x != y) {
+        return false;
+      }
+    }
+    return true;
+  }
 }
