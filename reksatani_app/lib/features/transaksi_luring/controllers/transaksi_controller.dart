@@ -8,10 +8,24 @@ import '../../../../../services/hive_service.dart';
 import '../../../../../services/saldo/kasbon_rules.dart';
 import '../../../../../services/saldo/transaksi_ditolak.dart';
 import '../../../../../services/sync/mongo_id.dart';
+import '../../pcd_scanner/services/commodity_mapper.dart';
+import '../../pcd_scanner/services/grading_rubric.dart';
 import 'package:reksatani_app/services/master_data_service.dart';
 
 /// Mengambil koordinat saat ini, atau null bila lokasi tidak bisa didapat.
 typedef AmbilLokasi = Future<({double lat, double lng})?> Function();
+
+/// Asal grade dan komoditas sebuah transaksi: saran AI (bila ada) dan jawaban
+/// checklist rubrik. Versi rubrik dicap controller, bukan dari luar.
+class CatatanGrading {
+  /// Label router, misalnya 'kelapa_sawit'. Null bila AI tidak memberi saran.
+  final String? saranKomoditasAi;
+
+  /// Jawaban `pertanyaan=opsi`. Null berarti checklist tidak diisi.
+  final List<String>? rubrikJawaban;
+
+  const CatatanGrading({this.saranKomoditasAi, this.rubrikJawaban});
+}
 
 class TransaksiController {
   TransaksiController({AmbilLokasi? ambilLokasi})
@@ -115,6 +129,30 @@ class TransaksiController {
     }
   }
 
+  /// True bila komoditas akhir tidak cocok dengan saran AI. Tanpa saran,
+  /// tidak ada yang diubah.
+  static bool komoditasDiubah(String? saranAi, String namaKomoditas) {
+    if (saranAi == null || saranAi.isEmpty) return false;
+    return CommodityMapper.match<String>([namaKomoditas], (s) => s, saranAi) == null;
+  }
+
+  /// Bila checklist diisi, grade harus sama dengan hasil rubrik untuk komoditas
+  /// itu. Grade ditentukan jawaban, bukan dikirim terpisah.
+  void _periksaRubrik(
+    KomoditasHiveModel? komoditas,
+    String? grade,
+    List<String>? jawaban,
+  ) {
+    if (jawaban == null) return;
+    final rubrik = rubrikUntukKomoditas(komoditas?.namaKomoditas);
+    if (rubrik == null || gradeDariJawaban(rubrik, bacaJawaban(jawaban)) != grade) {
+      throw const TransaksiDitolak(
+        'grade_tidak_cocok_rubrik',
+        'Grade tidak sesuai jawaban checklist. Periksa lagi checklist kualitas.',
+      );
+    }
+  }
+
   // ─── FUNGSI BARU: MENGAMBIL KOORDINAT DENGAN TIMEOUT 7 DETIK ───
   static Future<({double lat, double lng})?> _getKoordinatGPS() async {
     bool serviceEnabled;
@@ -166,6 +204,7 @@ class TransaksiController {
     required String fotoNotaPath,
     required String fotoBarangPath,
     required bool izinkanTanpaFoto,
+    CatatanGrading grading = const CatatanGrading(),
   }) async {
     final fotoKurang = fotoNotaPath.isEmpty || fotoBarangPath.isEmpty;
     if (fotoKurang && !izinkanTanpaFoto) {
@@ -173,6 +212,7 @@ class TransaksiController {
     }
     _periksaBerat(beratText);
     _periksaHarga(komoditasTerpilih, gradeTerpilih, hargaText);
+    _periksaRubrik(komoditasTerpilih, gradeTerpilih, grading.rubrikJawaban);
 
     final totalBayar = getTotalBayar(beratText, hargaText);
     final user = _hive.usersBox.get('currentUser')!;
@@ -215,6 +255,13 @@ class TransaksiController {
       longitude: koordinat?.lng ?? _tanpaLokasi,
       statusSinkronisasi: 'pending',
       createdAt: now,
+      saranKomoditasAi: grading.saranKomoditasAi,
+      komoditasDiubahPengguna: komoditasDiubah(
+        grading.saranKomoditasAi,
+        komoditasTerpilih?.namaKomoditas ?? '',
+      ),
+      rubrikVersi: grading.rubrikJawaban == null ? null : rubrikVersi,
+      rubrikJawaban: grading.rubrikJawaban == null ? null : List.of(grading.rubrikJawaban!),
     );
 
     await _hive.saveTransaksi(trx);
@@ -248,6 +295,7 @@ class TransaksiController {
     required String hargaText,
     required String fotoNotaPath,
     required String fotoBarangPath,
+    CatatanGrading? grading,
   }) async {
     if (KasbonRules.isPencairan(existingTrx.namaKomoditas)) {
       throw const TransaksiDitolak(
@@ -271,6 +319,12 @@ class TransaksiController {
     if (aturanHargaBerlaku) {
       _periksaHarga(komoditasTerpilih, gradeTerpilih, hargaText);
     }
+    final jawabanBaru = grading?.rubrikJawaban;
+    _periksaRubrik(komoditasTerpilih, gradeTerpilih, jawabanBaru);
+    // Tanpa checklist baru, jawaban lama hanya berlaku bila komoditas dan grade tetap.
+    final rubrikLamaBasi = jawabanBaru == null &&
+        (komoditasTerpilih?.namaKomoditas != existingTrx.namaKomoditas ||
+            gradeTerpilih != existingTrx.gradeTerpilih);
 
     final totalBayar = getTotalBayar(beratText, hargaText);
     final user = _hive.usersBox.get('currentUser')!;
@@ -300,6 +354,16 @@ class TransaksiController {
     existingTrx.hargaBeliSatuan = parseAngka(hargaText) ?? 0;
     existingTrx.totalBayar      = totalBayar;
     existingTrx.nominalPotongKasbon = efek.potonganBaru;
+    // Saran AI asli dipertahankan; yang berubah hanya apakah pilihan akhir menyimpang.
+    existingTrx.komoditasDiubahPengguna =
+        komoditasDiubah(existingTrx.saranKomoditasAi, existingTrx.namaKomoditas);
+    if (jawabanBaru != null) {
+      existingTrx.rubrikVersi = rubrikVersi;
+      existingTrx.rubrikJawaban = List.of(jawabanBaru);
+    } else if (rubrikLamaBasi) {
+      existingTrx.rubrikVersi = null;
+      existingTrx.rubrikJawaban = null;
+    }
 
     existingTrx.fotoNota = notaBaru;
     existingTrx.fotoFisikBarang = barangBaru;

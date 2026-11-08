@@ -196,6 +196,7 @@ class _ControllerTanpaTulis extends TransaksiController {
     required fotoNotaPath,
     required fotoBarangPath,
     required izinkanTanpaFoto,
+    CatatanGrading grading = const CatatanGrading(),
   }) async =>
       lokasiTercatat;
 }
