@@ -1,106 +1,79 @@
-# 🌾 ReksaTani: Manajemen Transaksi & Pengepulan Komoditas Pertanian
+# ReksaTani
 
-ReksaTani adalah aplikasi Android (Flutter) untuk agen pengepul komoditas pertanian yang sering bekerja tanpa sinyal, dan untuk manajer yang memantau mereka.
+ReksaTani is a Flutter Android app for agricultural commodity collectors (*pengepul*) who often work without a mobile signal, and for the managers who oversee them.
 
-Agen mencatat pembelian di HP tanpa internet. Aplikasi menghitung potongan kasbon petani, menahan harga di atas batas per grade, dan menyimpan foto serta lokasi. Saat ada sinyal, data dikirim ke MongoDB Atlas.
+A collector records purchases from farmers on the phone while offline. The app deducts the farmer's outstanding advance (*kasbon*) automatically, rejects prices above the manager's per-grade limit, and stores a photo and the GPS location. When a signal is available, the data is sent to MongoDB Atlas.
 
-> **Status:** dalam pengembangan (Proyek 4, Semester Genap 2026). **Belum siap rilis:** pencairan kasbon belum bisa sampai ke cloud (lihat [Batasan](#batasan)).
+This is a campus project (Proyek 4, POLBAN, Kelompok C4), still in development.
 
-## Arsitektur
+## What it does
 
-Aplikasi berjalan **offline-first dengan Hive**, dan **sinkron langsung dari perangkat ke MongoDB Atlas**. **Tidak ada backend sendiri**: tidak ada server aplikasi atau API di antara HP dan database.
+- **Offline-first storage.** Transactions, farmers, commodities, and the login session live in Hive on the device. Recording a purchase needs no internet; the first login does.
+- **Idempotent sync to MongoDB Atlas.** `SyncEngine` writes each transaction with an upsert keyed on `id_lokal`, so re-sending after a retry, a crash, or a lost reply does not create duplicates. Sync runs while the app is open: after saving, when connectivity returns, and on pull-to-refresh. There is no background service and no backend server; the phone talks to Atlas directly through `mongo_dart`.
+- **Balances derived from transactions.** Advance and travel-money balances are recomputed as `base balance + sum of transaction deltas` (`lib/services/saldo/saldo_ledger.dart`) instead of being incremented, so retries and duplicates cannot make the totals drift.
+- **Advances and disbursements.** Purchases deduct the farmer's *kasbon*; disbursements (*pencairan*) are recorded as their own transactions and synced to the manager's view.
+- **Maximum price per grade.** Managers set `harga_maks` per commodity grade, and the transaction form rejects prices above it (`0` means no limit).
+- **Grade by human rubric.** Grade A/B/C is chosen by the collector through a checklist rubric (`lib/features/pcd_scanner/services/grading_rubric.dart`). An on-device TFLite model only *suggests the commodity*; the user always confirms it, and if they disagree, the user's choice is kept and both are recorded.
+- **Manager dashboard.** Purchase analytics, a map of transactions that have coordinates, and management of collectors and commodities.
+- **Receipt OCR.** Google ML Kit text recognition reads weight and price from a photographed receipt.
 
-```text
-Layar Flutter → Controller → Hive (di HP)
-                                 ↕  SyncEngine, memakai driver mongo_dart
-                           MongoDB Atlas
+## Architecture
 
-Foto: HP → Cloudinary (unggahan tanpa tanda tangan)
+```mermaid
+flowchart LR
+    subgraph Phone["Android phone (Flutter)"]
+        UI["Screens<br/>lib/features/*/screens"] --> CTRL["Controllers"]
+        CAM["Camera + ML Kit OCR"] --> CTRL
+        ROUTER["TFLite router<br/>(commodity suggestion only)"] --> CTRL
+        RUBRIC["Grade rubric checklist<br/>(human decides)"] --> CTRL
+        CTRL --> HIVE[("Hive<br/>local boxes")]
+        CTRL --> LEDGER["Saldo ledger<br/>balances from transactions"]
+        HIVE <--> SYNC["SyncEngine"]
+        LEDGER --- SYNC
+    end
+    SYNC -- "mongo_dart<br/>upsert on id_lokal" --> ATLAS[("MongoDB Atlas")]
+    SYNC -- "pending photos<br/>unsigned preset" --> CLOUD["Cloudinary"]
 ```
 
-- **Hive** menyimpan transaksi, petani, komoditas, dan sesi login. Pencatatan transaksi tidak butuh internet. Login pertama butuh internet.
-- **Sinkronisasi** berjalan selama aplikasi terbuka: sesudah menyimpan, saat sinyal kembali, dan saat layar ditarik untuk menyegarkan. Tidak ada layanan latar belakang yang berjalan saat aplikasi ditutup.
-- **Saldo** kasbon dan uang jalan di cloud dihitung ulang dari saldo dasar ditambah transaksi. Aturan koreksi manualnya ada di [tool/atlas/README.md](tool/atlas/README.md).
-- **Kode** dibagi per fitur di `lib/features/` (layar dan controller), dengan layanan bersama di `lib/services/`.
+Code is organised by feature under `lib/features/` (`auth`, `transaksi_luring`, `pcd_scanner`, `pengepul_dashboard`, `manajer_dashboard`), with shared services under `lib/services/` (`sync/`, `saldo/`, `foto/`).
 
-## Fitur
+## Screenshots
 
-- Pencatatan pembelian luring, dengan potongan kasbon otomatis dan batas harga per grade dari manajer.
-- Foto nota dan barang, serta lokasi GPS. Bila GPS gagal, transaksi tetap tersimpan dan agen diberi tahu.
-- Pemindaian nota dengan OCR dan saran grade dari model TFLite di perangkat. Agen tetap bisa mengganti grade di form.
-- Dasbor manajer: analitik, peta transaksi, serta pengelolaan agen dan komoditas.
-- Layar harga menampilkan `harga_maks` saat ini. Riwayat harga belum disimpan, jadi tidak ada grafik tren.
+Screenshots will live in [`docs/screenshots/`](docs/screenshots/).
 
-## Batasan
+## Getting started
 
-**Menahan rilis**
+Requirements: Flutter (CI uses 3.47.5, Dart SDK `^3.11.4`) and an Android device or emulator.
 
-- **Pencairan kasbon belum tersinkron.** Validator Atlas hanya menerima grade A, B, atau C, sedangkan baris pencairan memakai grade `-`, sehingga ditolak dengan kode 121. Barisnya tetap `pending` di HP, manajer tidak melihatnya, dan saldo di HP berbeda dari cloud. Mengubah validator butuh akun admin Atlas.
+1. Copy `.env.example` to `.env` and fill in `MONGO_URI`, `CLOUDINARY_CLOUD_NAME`, and `CLOUDINARY_UPLOAD_PRESET`.
+2. Generate `lib/core/env/env.g.dart` (not tracked by git):
+   `dart run build_runner build --delete-conflicting-outputs`
+3. Run the app: `flutter run`
 
-**Keamanan**
+For a release build, create `android/key.properties` with `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`; without it, the release build is signed with the debug key. Before a release, follow the [Atlas runbook](tool/atlas/README.md).
 
-- **RBAC hanya di sisi klien.** Peran pengepul dan manajer hanya menentukan layar yang tampil. Database tidak membatasi akses per peran.
-- **Kredensial database ada di dalam APK.** URI MongoDB hanya diobfuskasi, jadi siapa pun yang mengekstraknya dapat mengakses database dengan hak akun tersebut.
-- **Unggahan Cloudinary memakai preset tanpa tanda tangan.** Siapa pun yang mengetahui nama cloud dan preset dapat mengunggah.
-- **Login diverifikasi di perangkat**, dengan membaca `password_hash` dari cloud. Fallback password plaintext masih ada sampai data Atlas diperiksa.
+## Tests and CI
 
-**Data dan model**
+- `flutter test` runs **633 tests** (counted on 2026-11-09). They use an in-memory `FakeRemote`, and `test/flutter_test_config.dart` blocks real database and HTTP connections, so the suite never reaches Atlas.
+- One smoke test, `tool/atlas/uji_asap.dart`, runs the real `MongoRemote` and `SyncEngine` against Atlas on its own `asap-` documents and deletes them afterwards. It is run by hand, not in CI.
+- GitHub Actions (`.github/workflows/ci.yml`) runs `flutter pub get`, `flutter analyze` (fails on errors only), and `flutter test` on every push and pull request. CI writes an empty `env.g.dart`, so it needs no secrets.
 
-- **Model grade belum tervalidasi.** Saran grade belum teruji pada data lapangan, jadi grade sebaiknya diputuskan manusia.
-- **Lokasi yang gagal tersimpan sebagai null** di HP dan field `latitude`/`longitude` tidak dikirim ke Atlas, karena validator menolak null tetapi field itu tidak wajib. Peta manajer melewati transaksi tanpa koordinat, juga data lama yang masih bernilai 0,0.
-- **`harga_maks` 0 berarti tanpa batas harga** pada pemeriksaan transaksi.
+## Limitations
 
-## Status pengujian
+- **Database credentials ship inside the APK.** The MongoDB URI is only obfuscated by `envied`; anyone who extracts it gets that account's access to the database.
+- **RBAC is client-side only.** The collector and manager roles decide which screens appear; the database does not restrict access per role.
+- **The grade rubric is a draft (`v0.1-draf`)** and has not been reviewed by a domain expert.
+- **The AI model only suggests the commodity** and has not been validated on field data.
+- **Sync is tested with fakes plus one Atlas smoke test.** Passing with fakes is not proof of Atlas behaviour, and several paths (login, commodity management, Cloudinary upload, GPS on a real device, starting offline then going online) have not been exercised against the real services.
+- **No multi-document transactions.** Each write to Atlas is a separate operation; consistency relies on idempotent upserts and recomputed balances, not on atomic commits.
+- Cloudinary uploads use an unsigned preset, and login is checked on the device against the `password_hash` read from the cloud.
 
-Ketiga kelompok ini berbeda bobotnya. Lulus dengan fake bukan bukti perilaku Atlas.
+More detail (in Indonesian) is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
-### Terbukti di tes dengan fake
+## Team
 
-`flutter test` memakai `FakeRemote` di memori. Penjaga di `test/flutter_test_config.dart` memblokir koneksi database dan HTTP sungguhan.
+Campus project for Proyek 4, D-3 Teknik Informatika, Politeknik Negeri Bandung (POLBAN), Kelompok C4.
 
-- Saldo: potongan kasbon, edit, hapus, top-up, dan skenario beberapa HP.
-- Sinkronisasi: kirim ulang, percobaan ulang terbatas, dan penolakan server.
-- Foto yang tertunda, antrean perubahan petani, dan aturan harga serta foto di controller.
-- Angka manajer yang tidak memuat pencairan, validasi dan hasil tulis komoditas, pesan login, dan pemberitahuan GPS.
-
-### Terbukti di Atlas lewat uji asap
-
-Dijalankan sekali pada 2026-11-06 dengan `tool/atlas/uji_asap.dart`, memakai `MongoRemote` dan `SyncEngine` asli, sebelum perubahan terakhir di kode aplikasi. Skripnya berhenti merah di langkah pencairan.
-
-- Simpan pembelian dan sinkron, sinkron ulang tanpa tulisan baru, dan kirim ulang saat balasan hilang.
-- Edit, hapus, dan top-up manajer sampai ke HP agen.
-- Saldo tertulis pada `_id` ObjectId maupun string, dan pembelian tanpa petani.
-- `id_lokal` ganda ditolak dengan kode 11000, dan pull dengan projection.
-- Penolakan pencairan oleh validator (kode 121).
-
-### Belum teruji
-
-- Pencairan kasbon sampai ke cloud, serta hapus pencairan di server.
-- Login, pengelolaan komoditas, `pushPetani`, dan `tambahPengepul` terhadap Atlas.
-- Unggahan foto ke Cloudinary.
-- Mulai offline lalu online, dan koneksi yang menggantung di perangkat nyata.
-- GPS dan seluruh layar di HP sungguhan.
-- APK dengan `applicationId` baru dan penandatanganan dengan keystore rilis.
-- Akurasi model grade pada data lapangan.
-
-## Setup
-
-1. Salin `.env.example` menjadi `.env`, lalu isi nilai setiap variabel.
-2. Generate file environment: `dart run build_runner build --delete-conflicting-outputs`
-3. Jalankan aplikasi: `flutter run`
-
-Untuk build rilis, buat `android/key.properties` berisi `storeFile`, `storePassword`, `keyAlias`, dan `keyPassword`. Tanpa berkas itu, build rilis memakai kunci debug dan tidak layak dibagikan.
-
-Sebelum rilis, ikuti [runbook Atlas](tool/atlas/README.md).
-
----
-
-## 👨‍💻 Identitas Tim Pengembang (Kelompok C4)
-
-Proyek ini dikembangkan oleh tiga mahasiswa dari program studi D-3 Teknik Informatika, Politeknik Negeri Bandung, dengan pembagian fokus pengerjaan sebagai berikut:
-
-| Nama | NIM | Peran |
-| :--- | :--- | :--- |
-| **Hisyam Khaeru Umam** | 241511078 | **Project Manager & Full Stack.** |
-| **Ibnu Hilmi Athaillah** | 241511079 | **Full Stack Developer.** |
-| **Muhammad Ihsan Ramadhan** | 241511083 | **Full Stack Developer.** |
+- **Hisyam Khaeru Umam** (Umem): Project Manager, Full Stack, integrator
+- **Muhammad Ihsan Ramadhan**
+- **Ibnu Hilmi Athaillah**
