@@ -225,6 +225,39 @@ void main() {
           'grade_kualitas': _gradeSah,
         });
 
+    testWidgets('gagal memuat: state error dengan tombol coba lagi, bukan daftar kosong',
+        (tester) async {
+      tanamGabah();
+      remote.online = false;
+      await tester.pumpWidget(MaterialApp(
+        home: ManajemenKomoditasScreen(controller: c),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gagal Memuat Komoditas'), findsOneWidget);
+      expect(find.text(ManajemenKomoditasController.pesanGagalMuat), findsOneWidget);
+      expect(find.text('Belum Ada Komoditas'), findsNothing);
+
+      remote.online = true;
+      await tester.tap(find.text('Coba Lagi'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gagal Memuat Komoditas'), findsNothing);
+      expect(find.text('Gabah'), findsOneWidget);
+    });
+
+    testWidgets('sumber benar-benar kosong: empty state, tanpa pesan error',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: ManajemenKomoditasScreen(controller: c),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Belum Ada Komoditas'), findsOneWidget);
+      expect(find.text('Gagal Memuat Komoditas'), findsNothing);
+      expect(find.text('Coba Lagi'), findsNothing);
+    });
+
     testWidgets('hapus gagal: pesan tampil, tidak diam-diam', (tester) async {
       tanamGabah();
       await hapusLewatMenu(tester);

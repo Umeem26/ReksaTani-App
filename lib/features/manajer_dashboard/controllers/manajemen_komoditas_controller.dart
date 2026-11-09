@@ -63,19 +63,25 @@ class ManajemenKomoditasController {
     });
   }
 
+  /// Daftar komoditas dari server. Melempar bila gagal memuat (mis. offline),
+  /// supaya layar bisa membedakan "gagal memuat" dari "memang kosong".
   Future<List<Map<String, dynamic>>> getSemuaKomoditas() async {
+    final List<Map<String, dynamic>> docs;
     try {
-      final docs = await _remote.find(_koleksi, const {});
-      final allowedNames = {'gabah', 'kopi robusta', 'sawit'};
-      return docs.where((d) {
-        final name = (d['nama_komoditas'] ?? '').toString().toLowerCase();
-        return allowedNames.contains(name);
-      }).toList();
+      docs = await _remote.find(_koleksi, const {});
     } catch (e) {
       debugPrint('Error getSemuaKomoditas: ${e.runtimeType}');
-      return [];
+      rethrow;
     }
+    final allowedNames = {'gabah', 'kopi robusta', 'sawit'};
+    return docs.where((d) {
+      final name = (d['nama_komoditas'] ?? '').toString().toLowerCase();
+      return allowedNames.contains(name);
+    }).toList();
   }
+
+  static const String pesanGagalMuat =
+      'Daftar komoditas tidak bisa dimuat. Periksa koneksi internet, lalu coba lagi.';
 
   Future<HasilSimpanKomoditas> tambahKomoditas({
     required String namaKomoditas,

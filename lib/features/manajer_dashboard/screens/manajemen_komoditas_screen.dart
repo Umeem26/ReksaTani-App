@@ -19,6 +19,7 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
       widget.controller ?? ManajemenKomoditasController();
   List<Map<String, dynamic>> _komoditasList = [];
   bool _isLoading = true;
+  bool _gagalMuat = false;
 
   @override
   void initState() {
@@ -35,12 +36,22 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
 
   Future<void> _fetchData({bool showLoading = true}) async {
     if (showLoading && mounted) setState(() => _isLoading = true);
-    final data = await _controller.getSemuaKomoditas();
-    if (mounted) {
-      setState(() {
-        _komoditasList = data;
-        _isLoading = false;
-      });
+    try {
+      final data = await _controller.getSemuaKomoditas();
+      if (mounted) {
+        setState(() {
+          _komoditasList = data;
+          _gagalMuat = false;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _gagalMuat = true;
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -156,7 +167,35 @@ class _ManajemenKomoditasScreenState extends State<ManajemenKomoditasScreen> {
                 color: AppTheme.hijauTua,
                 backgroundColor: Colors.white,
                 // CUSTOM SCROLL VIEW AGAR TETAP BISA DI-PULL SAAT LIST KOSONG
-                child: _komoditasList.isEmpty
+                child: _gagalMuat
+                    ? CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        slivers: [
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 32),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))]), child: const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.redAccent)),
+                                  const SizedBox(height: 20),
+                                  const Text('Gagal Memuat Komoditas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+                                  const SizedBox(height: 6),
+                                  const Text(ManajemenKomoditasController.pesanGagalMuat, textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecond, fontWeight: FontWeight.w600, height: 1.4)),
+                                  const SizedBox(height: 20),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _fetchData(),
+                                    icon: const Icon(Icons.refresh_rounded),
+                                    label: const Text('Coba Lagi'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : _komoditasList.isEmpty
                     ? CustomScrollView(
                         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                         slivers: [
