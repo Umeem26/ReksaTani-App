@@ -23,6 +23,10 @@ import 'package:reksatani_app/services/saldo/kasbon_rules.dart';
 
 const String _mode = String.fromEnvironment('DEMO_MODE', defaultValue: 'pengepul');
 const Set<String> _hostDiizinkan = {'tile.openstreetmap.org'};
+const String _dirFoto = String.fromEnvironment(
+  'DEMO_FOTO_DIR',
+  defaultValue: '/storage/emulated/0/Android/data/com.reksatani.app/files/demo',
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,24 +125,43 @@ Future<void> _isi(HiveService h, DateTime now) async {
     _beli('r1', agen[1], petani[5], 'Kopi Robusta', 'A', 85, 41000, 0, jam(1, 11, 0), -6.8605, 107.5208, 'synced'),
     _beli('r2', agen[1], petani[5], 'Gabah', 'C', 380, 5900, 0, jam(3, 14, 15), -6.8650, 107.5250, 'synced'),
   ];
+  // Foto bukti lokal untuk transaksi Sawit yang pending: foto tandan dari
+  // dataset publik dan gambar nota yang bertanda DEMO / FIKTIF. Berkasnya
+  // didorong ke folder ini lewat adb sebelum aplikasi dibuka.
+  if (_dirFoto.isNotEmpty) {
+    trx[2]
+      ..fotoFisikBarang = '$_dirFoto/sawit_bukti.jpg'
+      ..fotoNota = '$_dirFoto/nota_demo.png';
+  }
   for (final t in trx.where((t) => dipakai(t.pengepulId))) {
     await h.transaksiBox.put(t.idLokal, t);
   }
 
-  final notif = [
-    NotifikasiHiveModel(
-        id: 'n1', judul: 'Sinkronisasi tertunda', tipe: 'sync', waktu: jam(0, 9, 6),
-        pesan: '2 transaksi menunggu sinyal untuk dikirim ke server.'),
-    NotifikasiHiveModel(
-        id: 'n2', judul: 'Lokasi tidak tersimpan', tipe: 'info', waktu: jam(0, 9, 5),
-        pesan: 'GPS gagal saat mencatat pembelian Sawit dari Bu Tarsih. Transaksi tetap tersimpan.'),
-    NotifikasiHiveModel(
-        id: 'n3', judul: 'Harga maksimum diperbarui', tipe: 'harga', waktu: jam(1, 7, 0), isRead: true,
-        pesan: 'Manajer memperbarui harga maksimum Gabah grade A menjadi Rp7.500/kg.'),
-    NotifikasiHiveModel(
-        id: 'n4', judul: 'Uang jalan ditambah', tipe: 'saldo', waktu: jam(2, 7, 30), isRead: true,
-        pesan: 'Saldo uang jalan Anda bertambah Rp2.000.000.'),
-  ];
+  // Judul dan pesan sama dengan yang dibuat aplikasi (HiveService.saveTransaksi
+  // dan MasterDataService), bukan teks karangan.
+  final notif = _mode == 'manajer'
+      ? [
+          NotifikasiHiveModel(
+              id: 'm1', judul: 'Transaksi Baru', tipe: 'info', waktu: jam(0, 9, 12),
+              pesan: 'Ada 4 transaksi baru masuk dari agen lapangan.'),
+          NotifikasiHiveModel(
+              id: 'm2', judul: 'Sinkronisasi Gagal', tipe: 'sync', waktu: jam(0, 8, 50),
+              pesan: 'Data belum diperbarui dari server. Aplikasi akan mencoba lagi otomatis.'),
+          NotifikasiHiveModel(
+              id: 'm3', judul: 'Transaksi Baru', tipe: 'info', waktu: jam(1, 17, 5), isRead: true,
+              pesan: 'Ada 2 transaksi baru masuk dari agen lapangan.'),
+        ]
+      : [
+          NotifikasiHiveModel(
+              id: 'n1', judul: 'Sinkronisasi Gagal', tipe: 'sync', waktu: jam(0, 9, 6),
+              pesan: '2 data belum terkirim ke server. Aplikasi akan mencoba lagi otomatis.'),
+          NotifikasiHiveModel(
+              id: 'n2', judul: 'Transaksi Tersimpan', tipe: 'sync', waktu: jam(0, 9, 5),
+              pesan: 'Data Sawit (1250 kg) tersimpan di perangkat. Jangan lupa sinkronisasi saat online.'),
+          NotifikasiHiveModel(
+              id: 'n3', judul: 'Sinkronisasi Otomatis Berhasil', tipe: 'sync', waktu: jam(0, 8, 20), isRead: true,
+              pesan: '2 transaksi telah berhasil diunggah ke server.'),
+        ];
   for (final n in notif) {
     await h.notifikasiBox.put(n.id, n);
   }
