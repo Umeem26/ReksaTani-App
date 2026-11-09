@@ -45,6 +45,8 @@ class NotifikasiScreen extends StatelessWidget {
             ],
           ),
           body: ConnectivityWrapper(
+            // Pill tidak boleh menutupi judul notifikasi pertama.
+            geserIsi: true,
             child: Consumer<NotificationService>(
               builder: (context, svc, _) {
                 final list = svc.allNotifications;

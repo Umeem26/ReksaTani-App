@@ -8,10 +8,15 @@ class ConnectivityWrapper extends StatefulWidget {
   final Widget child;
   final bool showBanner;
 
+  /// True: pill mengambil ruang di atas isi, sehingga isi bergeser ke bawah
+  /// dan tidak tertutup. False (bawaan): pill mengambang di atas isi.
+  final bool geserIsi;
+
   const ConnectivityWrapper({
     super.key,
     required this.child,
     this.showBanner = true,
+    this.geserIsi = false,
   });
 
   @override
@@ -130,6 +135,27 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> with SingleTi
 
   @override
   Widget build(BuildContext context) {
+    if (widget.geserIsi) {
+      final tampil = widget.showBanner && (_showPill || _gagalSinkron);
+      // Slot pill selalu ada, supaya posisi isi di pohon widget tidak berubah
+      // (state gulir tetap) saat pill muncul atau hilang.
+      return Column(
+        children: [
+          ClipRect(
+            child: tampil
+                ? SlideTransition(
+                    position: _offsetAnim,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                      child: Material(color: Colors.transparent, child: _buildPill()),
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+          Expanded(child: widget.child),
+        ],
+      );
+    }
     return Stack(
       children: [
         widget.child,
