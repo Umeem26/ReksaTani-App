@@ -58,6 +58,7 @@ Foto: HP → Cloudinary (unggahan tanpa tanda tangan)
   - **[Diperbarui]** Model tidak lagi menentukan grade (lihat Fitur). Saran komoditas dari model juga belum divalidasi di lapangan.
 - **Lokasi yang gagal tersimpan sebagai null** di HP dan field `latitude`/`longitude` tidak dikirim ke Atlas, karena validator menolak null tetapi field itu tidak wajib. Peta manajer melewati transaksi tanpa koordinat, juga data lama yang masih bernilai 0,0.
 - **`harga_maks` 0 berarti tanpa batas harga** pada pemeriksaan transaksi.
+- **OCR nota bisa salah membaca atau menukar berat dan harga.** Saat pengambilan screenshot (Nov 2026) teramati berat dan harga tertukar. Pemecah di `lib/features/pcd_scanner/services/ocr_regex_service.dart` mencari pasangan angka dengan berat × harga = total. Rentang berat (10–4000) dan harga (1.000–200.000) tumpang tindih di 1.000–4.000, dan perkalian tidak membedakan urutan, jadi untuk nota seperti 1250 kg × Rp1.950 pasangan yang terbaca lebih dulu yang dipakai. Logika OCR belum diubah: agen wajib memeriksa kedua kolom sebelum menyimpan. Form tidak menimpa harga OCR dengan harga maks grade, dan harga di atas batas tetap ditolak.
 
 ## Status pengujian
 
