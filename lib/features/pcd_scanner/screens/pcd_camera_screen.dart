@@ -75,7 +75,11 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     _pcdController.loadModel(); // 👈 Memuat model ML lebih awal
   }
 
+  /// Membuat controller baru. Controller yang sudah di-dispose tidak pernah
+  /// dipakai lagi: `value.isInitialized` tetap true sesudah dispose, jadi
+  /// penanda yang sah hanya `_cameraController != null`.
   Future<void> _initCamera() async {
+    CameraController? controller;
     try {
       _cameras = await availableCameras();
       if (_cameras!.isNotEmpty) {
@@ -85,16 +89,23 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
           orElse: () => _cameras!.first,
         );
 
-        _cameraController = CameraController(
+        controller = CameraController(
           selectedCamera,
-          ResolutionPreset.high, 
+          ResolutionPreset.high,
           enableAudio: false,
           imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.yuv420 : ImageFormatGroup.bgra8888,
         );
+        // Controller lama (bila ada) dilepas dulu supaya kamera tidak dibuka dua kali.
+        await _lepasKamera();
+        _cameraController = controller;
 
-        await _cameraController!.initialize();
-        
-        await _cameraController!.setFlashMode(FlashMode.off);
+        await controller.initialize();
+        // Dilepas atau diganti selagi menunggu inisialisasi: jangan dipakai.
+        if (!identical(_cameraController, controller)) {
+          await controller.dispose();
+          return;
+        }
+        await controller.setFlashMode(FlashMode.off);
         _isFlashOn = false;
 
         if (!mounted) return;
@@ -104,7 +115,38 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       }
     } catch (e) {
       debugPrint("Error inisialisasi kamera: $e");
+      if (controller != null && identical(_cameraController, controller)) {
+        _cameraController = null;
+        await controller.dispose();
+      }
     }
+  }
+
+  /// Melepas controller dan mengosongkan rujukannya, sehingga tidak ada kode
+  /// yang memanggil controller yang sudah di-dispose.
+  Future<void> _lepasKamera() async {
+    final c = _cameraController;
+    if (c == null) return;
+    _cameraController = null;
+    if (mounted) {
+      setState(() => _isCameraInitialized = false);
+    } else {
+      _isCameraInitialized = false;
+    }
+    if (c.value.isStreamingImages) {
+      try {
+        await c.stopImageStream();
+      } catch (_) {}
+    }
+    await c.dispose();
+  }
+
+  /// Memastikan ada controller yang siap, misalnya sesudah kembali dari
+  /// penyesuai sudut atau galeri ketika kamera dilepas oleh siklus hidup app.
+  Future<bool> _pastikanKamera() async {
+    if (_cameraController == null) await _initCamera();
+    final c = _cameraController;
+    return c != null && c.value.isInitialized;
   }
 
   Future<void> _toggleFlash() async {
@@ -131,8 +173,8 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
       _isBackCamera = !_isBackCamera;
     });
 
-    await _cameraController?.dispose();
-    await _initCamera(); 
+    await _lepasKamera();
+    await _initCamera();
 
     if (_showLiveCamera) {
       _startLiveStream();
@@ -140,8 +182,9 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
   }
 
   void _startLiveStream() {
-    if (_cameraController != null && !_cameraController!.value.isStreamingImages) {
-      _cameraController!.startImageStream((CameraImage image) async {
+    final c = _cameraController;
+    if (c != null && c.value.isInitialized && !c.value.isStreamingImages) {
+      c.startImageStream((CameraImage image) async {
         if (_isProcessingFrame) return;
         _isProcessingFrame = true;
 
@@ -464,40 +507,57 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
 
         await Future.delayed(const Duration(milliseconds: 100)); // Delay kecil untuk rendering overlay responsif
         _isProcessingFrame = false;
-      });
+      }).catchError((Object e) => debugPrint("Gagal memulai stream kamera: $e"));
     }
   }
 
   void _stopLiveStream() {
-    if (_cameraController != null && _cameraController!.value.isStreamingImages) {
-      _cameraController!.stopImageStream();
+    final c = _cameraController;
+    if (c != null && c.value.isStreamingImages) {
+      c.stopImageStream().catchError((Object e) => debugPrint("Gagal menghentikan stream kamera: $e"));
     }
   }
+
+  /// True bila kamera dilepas oleh siklus hidup app dan perlu dibuka lagi.
+  bool _dilepasSiklus = false;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final CameraController? cameraController = _cameraController;
-    if (cameraController == null || !cameraController.value.isInitialized) return;
 
     if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      _stopLiveStream();
-      cameraController.dispose();
-      _isCameraInitialized = false;
-    } else if (state == AppLifecycleState.resumed) {
-      _initCamera();
+      // Controller yang belum siap (mis. dialog izin kamera sedang tampil) dibiarkan.
+      if (cameraController == null || !cameraController.value.isInitialized) return;
+      _dilepasSiklus = true;
+      _lepasKamera();
+    } else if (state == AppLifecycleState.resumed && _dilepasSiklus) {
+      _dilepasSiklus = false;
+      _pulihkanKamera();
     }
+  }
+
+  /// Membuka kamera lagi; stream hanya dimulai bila layar ini yang tampil,
+  /// bukan saat penyesuai sudut masih terbuka di atasnya.
+  Future<void> _pulihkanKamera() async {
+    if (!await _pastikanKamera() || !mounted) return;
+    if (_showLiveCamera && (ModalRoute.of(context)?.isCurrent ?? true)) _startLiveStream();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _stopLiveStream();
-    _cameraController?.dispose();
+    final c = _cameraController;
+    _cameraController = null;
+    if (c != null) {
+      if (c.value.isStreamingImages) c.stopImageStream().catchError((Object _) {});
+      c.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _takePicture() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    // Kamera bisa sudah dilepas (mis. sesudah membuka galeri); buka lagi dulu.
+    if (!await _pastikanKamera()) return;
     if (_cameraController!.value.isTakingPicture) return;
 
     try {
@@ -519,6 +579,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
             ),
           ),
         );
+        if (!mounted) return;
 
         if (adjustedCorners != null) {
           setState(() {
@@ -527,7 +588,8 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
             _showLiveCamera = false;
           });
         } else {
-          _startLiveStream();
+          // Kembali dengan tombol back: kamera bisa sudah dilepas selama penyesuai terbuka.
+          await _pulihkanKamera();
         }
       } else if (_step == 1) {
         setState(() {
@@ -563,6 +625,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               ),
             ),
           );
+          if (!mounted) return;
 
           if (adjustedCorners != null) {
             setState(() {
@@ -574,7 +637,8 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
             setState(() {
               _showLiveCamera = true;
             });
-            _startLiveStream();
+            // Membuka galeri melepas kamera lewat siklus hidup app; buka lagi.
+            await _pulihkanKamera();
           }
         } else if (_step == 1) {
           setState(() {
@@ -643,8 +707,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
     SaranKomoditas? saran,
   }) {
     if (!mounted) return;
-    _stopLiveStream();
-    _cameraController?.dispose();
+    _lepasKamera();
 
     Navigator.of(context, rootNavigator: true).pushReplacement(
       MaterialPageRoute(
@@ -690,7 +753,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               imagePath: _fotoNotaPath,
               onTap: () {
                 setState(() { _step = 0; _showLiveCamera = true; });
-                _startLiveStream(); 
+                _pulihkanKamera();
               },
             ),
             const SizedBox(height: 20), 
@@ -703,7 +766,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
               imagePath: _fotoBarangPath,
               onTap: () {
                 setState(() { _step = 1; _showLiveCamera = true; });
-                _startLiveStream(); 
+                _pulihkanKamera();
               },
             ),
             
@@ -713,8 +776,7 @@ class _PcdCameraScreenState extends State<PcdCameraScreen> with WidgetsBindingOb
             const SizedBox(height: 16),
             InkWell(
               onTap: () {
-                _stopLiveStream();
-                _cameraController?.dispose();
+                _lepasKamera();
                 // Langsung lompat ke form input dengan membawa penanda Kasbon Baru
                 Navigator.of(context, rootNavigator: true).pushReplacement(
                   MaterialPageRoute(
