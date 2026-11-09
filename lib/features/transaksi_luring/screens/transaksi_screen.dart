@@ -66,6 +66,9 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
   String? _fotoNotaPath;
   String? _fotoBarangPath;
   bool _saving = false;
+  /// Potongan kasbon transaksi yang sedang disimpan, hanya untuk lembar sukses.
+  /// Dihitung dengan rumus yang sama dengan controller, sebelum kasbon petani berubah.
+  double _potonganTampil = 0;
   /// Komoditas master data yang cocok dengan label AI (bukan fallback OCR).
   KomoditasHiveModel? _komoditasDariAi;
 
@@ -109,6 +112,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       _jawabanRubrik = {..._jawabanRubrik, pertanyaan: opsi};
       _jawabanDisentuh = true;
       _gradeTerpilih = _gradeChecklist;
+      // Hanya mengisi kolom yang masih kosong, tidak menimpa isian pengguna atau OCR.
       final maks = _hargaMaksGrade.toInt();
       if (_gradeTerpilih != null && maks > 0 && _hargaCtrl.text.isEmpty) _hargaCtrl.text = '$maks';
     });
@@ -120,7 +124,8 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       _jawabanRubrik = {};
       _jawabanDisentuh = true;
       _gradeTerpilih = null;
-      _hargaCtrl.clear();
+      // Harga dari pengguna atau OCR dipertahankan. Bila melebihi batas grade
+      // nanti, form memperingatkan dan simpan ditolak; harga tidak diganti diam-diam.
     });
   }
 
@@ -265,19 +270,19 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
     final bool kasCukup;
     if (_isEditMode) {
       // Saldo yang sudah negatif tidak boleh menghalangi edit yang tidak menambah pengeluaran.
-      final kasSetelahEdit = _controller
-          .pratinjauEdit(widget.editTrx!, petaniTerpilih: _petaniTerpilih, totalBayar: _totalBayar)
-          .uangJalan;
+      final efek = _controller
+          .pratinjauEdit(widget.editTrx!, petaniTerpilih: _petaniTerpilih, totalBayar: _totalBayar);
+      final kasSetelahEdit = efek.uangJalan;
       kasCukup = kasSetelahEdit >= 0 || kasSetelahEdit >= _controller.sisaUangJalan;
+      _potonganTampil = efek.potonganBaru;
     } else {
-      final uangTunaiKeluar = KasbonRules.tunaiKeluar(
+      final potongan = KasbonRules.potongan(
+        sisaKasbon: _petaniTerpilih?.sisaHutangKasbon ?? 0,
         totalBayar: _totalBayar,
-        potongan: KasbonRules.potongan(
-          sisaKasbon: _petaniTerpilih?.sisaHutangKasbon ?? 0,
-          totalBayar: _totalBayar,
-        ),
       );
+      final uangTunaiKeluar = KasbonRules.tunaiKeluar(totalBayar: _totalBayar, potongan: potongan);
       kasCukup = _controller.sisaUangJalan >= uangTunaiKeluar;
+      _potonganTampil = potongan;
     }
 
     if (!kasCukup) {
@@ -382,6 +387,7 @@ class _TransaksiScreenState extends State<TransaksiScreen> {
       isScrollControlled: true,
       builder: (_) => _SuksesSheet(
         totalBayar: tampilNominal,
+        potonganKasbon: widget.isMurniKasbon ? 0 : _potonganTampil,
         namaPetani: _petaniTerpilih?.namaPetani ?? _namaPenjualCtrl.text,
         isKasbonTitle: widget.isMurniKasbon,
         lokasiTercatat: lokasiTercatat,
@@ -991,13 +997,25 @@ class _AddPhotoButton extends StatelessWidget {
 }
 
 class _SuksesSheet extends StatelessWidget {
+  /// Total pembelian (berat x harga), sama dengan `total_bayar` yang tersimpan.
   final double totalBayar;
+  /// Bagian total yang melunasi kasbon petani; sisanya dibayar tunai.
+  final double potonganKasbon;
   final String namaPetani;
   final bool isKasbonTitle;
   final bool lokasiTercatat;
   final VoidCallback onSelesai;
 
-  const _SuksesSheet({required this.totalBayar, required this.namaPetani, this.isKasbonTitle = false, this.lokasiTercatat = true, required this.onSelesai});
+  const _SuksesSheet({required this.totalBayar, this.potonganKasbon = 0, required this.namaPetani, this.isKasbonTitle = false, this.lokasiTercatat = true, required this.onSelesai});
+
+  Widget _baris(String label, String nilai, {Color warna = AppTheme.textPrimary, double ukuran = 14}) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Flexible(child: Text(label, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600))),
+          const SizedBox(width: 8),
+          Text(nilai, style: TextStyle(fontSize: ukuran, fontWeight: FontWeight.w900, color: warna, letterSpacing: -0.5)),
+        ],
+      );
 
   String _fmt(int angka) {
     final s = angka.toString();
@@ -1056,14 +1074,16 @@ class _SuksesSheet extends StatelessWidget {
                   ],
                 ),
                 const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: AppTheme.border)),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(child: Text(isKasbonTitle ? 'Nominal Kasbon' : 'Total Bayar', style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600))),
-                    const SizedBox(width: 8),
-                    Text('Rp ${_fmt(totalBayar.toInt())}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isKasbonTitle ? const Color(0xFFB45309) : AppTheme.hijauTua, letterSpacing: -0.5)),
-                  ],
-                ),
+                if (potonganKasbon > 0) ...[
+                  // Total tersimpan adalah bruto; kasbon dipotong dari situ, sisanya tunai.
+                  _baris('Total pembelian', 'Rp ${_fmt(totalBayar.toInt())}'),
+                  const SizedBox(height: 10),
+                  _baris('Potongan kasbon', '- Rp ${_fmt(potonganKasbon.toInt())}', warna: AppTheme.merah),
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: AppTheme.border)),
+                  _baris('Dibayar tunai', 'Rp ${_fmt((totalBayar - potonganKasbon).toInt())}', warna: AppTheme.hijauTua, ukuran: 18),
+                ] else
+                  _baris(isKasbonTitle ? 'Nominal Kasbon' : 'Total Bayar', 'Rp ${_fmt(totalBayar.toInt())}',
+                      warna: isKasbonTitle ? const Color(0xFFB45309) : AppTheme.hijauTua, ukuran: 18),
               ],
             ),
           ),
