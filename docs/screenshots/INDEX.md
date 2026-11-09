@@ -46,14 +46,14 @@ The receipt is a generated image marked "CONTOH / DEMO - FIKTIF" with a "DEMO ·
 | `25-agen-rubrik-grade.png` | Grade rubric | Collector | Checklist answered, grade A | |
 | `26-agen-harga-maks-ditolak.png` | Transaction form | Collector | Price above max reset to the limit | |
 | `27-agen-izin-lokasi.png` | Location permission | Collector | Android permission prompt | Denied on purpose |
-| `28-agen-simpan-gps-gagal.png` | Save result | Collector | Saved without GPS | Location permission denied in the emulator; stored as null |
+| `28-agen-simpan-gps-gagal.png` | Save result | Collector | Saved without GPS, kasbon deducted | Location permission denied in the emulator; stored as null. Shows total, kasbon deduction, and cash paid (1250 kg × Rp1,950 read by OCR; receipt picked from the gallery) |
 | `29-agen-kamera-kopi-poster.png` | Camera | Collector | Commodity photo | Emulator camera feed; dataset coffee photo posters |
 | `30-agen-form-saran-ai-kopi.png` | Transaction form | Collector | No commodity suggestion | Router (still): not a commodity 0.98, coffee 0.01 |
 | `31-agen-pencairan-kasbon.png` | Kasbon disbursement | Collector | Current debt shown | |
 | `32-agen-pencairan-tersimpan.png` | Disbursement result | Collector | Saved locally, queued | Debt grows from Rp1.7M to Rp2.2M |
 | `33-agen-riwayat-pending.png` | History (pending) | Collector | Disbursements and purchase waiting | Disbursements cannot be edited |
 | `34-manajer-beranda.png` | Manager home | Manager | Totals across collectors | |
-| `35-manajer-notifikasi.png` | Notifications | Manager | New transactions, sync failed | App-generated texts; the app's sync pill overlaps the first title |
+| `35-manajer-notifikasi.png` | Notifications | Manager | New transactions, sync failed | App-generated texts; the sync pill sits above the list |
 | `36-manajer-analitik.png` | Analytics | Manager | Sync ratio, stock per commodity | |
 | `37-manajer-analitik-lanjut.png` | Analytics (scrolled) | Manager | Grade breakdown | |
 | `38-manajer-peta.png` | Map | Manager | Transactions with coordinates | Fictional points; OSM tiles |
