@@ -141,17 +141,18 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> with SingleTi
       // (state gulir tetap) saat pill muncul atau hilang.
       return Column(
         children: [
-          ClipRect(
-            child: tampil
-                ? SlideTransition(
-                    position: _offsetAnim,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                      child: Material(color: Colors.transparent, child: _buildPill()),
-                    ),
-                  )
-                : const SizedBox(width: double.infinity),
-          ),
+          // Tanpa ClipRect agar bayangan pill tidak terpotong; saat bergeser
+          // masuk, pill tertutup app bar yang dilukis di atas body Scaffold.
+          if (tampil)
+            SlideTransition(
+              position: _offsetAnim,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: Material(color: Colors.transparent, child: _buildPill()),
+              ),
+            )
+          else
+            const SizedBox(width: double.infinity),
           Expanded(child: widget.child),
         ],
       );
