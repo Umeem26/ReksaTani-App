@@ -25,7 +25,7 @@ const String _mode = String.fromEnvironment('DEMO_MODE', defaultValue: 'pengepul
 const Set<String> _hostDiizinkan = {'tile.openstreetmap.org'};
 const String _dirFoto = String.fromEnvironment(
   'DEMO_FOTO_DIR',
-  defaultValue: '/storage/emulated/0/Android/data/com.reksatani.app/files/demo',
+  defaultValue: '/data/user/0/com.reksatani.app/files/demo',
 );
 
 Future<void> main() async {
@@ -127,7 +127,7 @@ Future<void> _isi(HiveService h, DateTime now) async {
   ];
   // Foto bukti lokal untuk transaksi Sawit yang pending: foto tandan dari
   // dataset publik dan gambar nota yang bertanda DEMO / FIKTIF. Berkasnya
-  // didorong ke folder ini lewat adb sebelum aplikasi dibuka.
+  // disalin ke folder ini lewat `adb shell run-as` sebelum aplikasi dibuka.
   if (_dirFoto.isNotEmpty) {
     trx[2]
       ..fotoFisikBarang = '$_dirFoto/sawit_bukti.jpg'
