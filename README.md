@@ -39,7 +39,13 @@ Code is organised by feature under `lib/features/` (`auth`, `transaksi_luring`, 
 
 ## Screenshots
 
-Screenshots will live in [`docs/screenshots/`](docs/screenshots/).
+Demo data, Nov 2026: fictional names and amounts seeded into Hive on an emulator, with no connection to Atlas. Camera screens use the emulator camera feed. The full flow (37 screens) with notes is in [`docs/screenshots/INDEX.md`](docs/screenshots/INDEX.md).
+
+| Collector home | Grade rubric | Price limit | Saved without GPS |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/07-agen-beranda.png" width="200" alt="Collector home with balance and pending count"> | <img src="docs/screenshots/23-agen-rubrik-grade.png" width="200" alt="Grade checklist resulting in grade A"> | <img src="docs/screenshots/24-agen-harga-maks-ditolak.png" width="200" alt="Price above the grade maximum reset to the limit"> | <img src="docs/screenshots/26-agen-simpan-gps-gagal.png" width="200" alt="Transaction saved with a GPS warning"> |
+| **Kasbon disbursement** | **Pending sync** | **Manager analytics** | **Manager map** |
+| <img src="docs/screenshots/28-agen-pencairan-tersimpan.png" width="200" alt="Kasbon disbursement saved locally"> | <img src="docs/screenshots/29-agen-riwayat-pending.png" width="200" alt="History filtered to pending transactions"> | <img src="docs/screenshots/31-manajer-analitik.png" width="200" alt="Manager analytics with sync ratio and stock"> | <img src="docs/screenshots/33-manajer-peta.png" width="200" alt="Map of transactions with coordinates"> |
 
 ## Getting started
 
