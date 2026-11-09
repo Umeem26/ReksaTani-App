@@ -24,18 +24,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pages = const [
     _OnboardData(
       lottieAsset: 'assets/onboard1.json',
-      title: 'Pencatatan\nLuring Handal',
-      subtitle: 'Tetap produktif di tengah kebun tanpa sinyal. Data tersimpan aman secara lokal & siap sinkron saat online.',
+      title: 'Catat Tanpa\nSinyal',
+      subtitle: 'Transaksi tersimpan di HP saat tidak ada sinyal, lalu dikirim ke server ketika koneksi kembali.',
     ),
     _OnboardData(
       lottieAsset: 'assets/onboard2.json',
-      title: 'Validasi & Mutu\nTerjamin',
-      subtitle: 'Ambil foto nota & komoditas secara presisi. Validasi harga AI menjaga integritas transaksi Anda.',
+      title: 'Harga & Grade\nyang Jelas',
+      subtitle: 'Harga dibatasi sesuai batas per komoditas dari manajer. Grade ditentukan lewat checklist; AI hanya menyarankan jenis komoditas.',
     ),
     _OnboardData(
       lottieAsset: 'assets/onboard3.json',
-      title: 'Pemetaan &\nAnalitik Cerdas',
-      subtitle: 'Pantau sebaran lokasi panen dan valuasi aset secara realtime melalui dasbor peta interaktif.',
+      title: 'Peta &\nRingkasan Manajer',
+      subtitle: 'Manajer melihat lokasi transaksi dan ringkasan pembelian dari data yang sudah tersinkron.',
     ),
   ];
 
