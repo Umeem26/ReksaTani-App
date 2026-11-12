@@ -227,7 +227,8 @@ TransaksiHiveModel _beli(String kode, UserHiveModel agen, PetaniHiveModel petani
       berat: berat,
       hargaBeliSatuan: harga,
       nominalPotongKasbon: potong,
-      totalBayar: berat * harga - potong,
+      // Sama dengan aplikasi: total_bayar bruto, potongan disimpan terpisah.
+      totalBayar: berat * harga,
       fotoFisikBarang: '',
       fotoNota: '',
       latitude: lat,
