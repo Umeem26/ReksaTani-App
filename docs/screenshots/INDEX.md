@@ -2,6 +2,8 @@
 
 **Demo data, Nov 2026.** All names, villages, amounts, and transactions are fictional and were seeded into Hive by [`tool/demo/demo_main.dart`](../../tool/demo/demo_main.dart). The app never reached MongoDB Atlas or Cloudinary while these were taken: the demo entrypoint blocks database connections and allows HTTP only to OpenStreetMap tiles. Notification texts are the ones the app itself produces.
 
+Screens showing money totals (07, 08, 09, 13, 33, 34, 36, 38, 42) were retaken on 12 Nov 2026 after the demo seeder was fixed to store `total_bayar` gross, as the app does; their dates and the home greeting reflect that day.
+
 Captured on an Android emulator (API 35, 1080x2400, light mode) with the status bar in SystemUI demo mode (9:41, full battery). The UI language is the app's own (Indonesian). Map tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
 
 The account names Asep, Dudung, and `manajer` match the team's test accounts, but no real login took place: the session was seeded locally, because logging in always checks the password against Atlas.
@@ -27,7 +29,7 @@ The receipt is a generated image marked "CONTOH / DEMO - FIKTIF" with a "DEMO ·
 | `06-login-gagal-offline.png` | Login | All | Login failed, no server | Expected: first login needs the server |
 | `07-agen-beranda.png` | Home | Collector | 7 transactions, 2 pending | |
 | `08-agen-beranda-transaksi.png` | Home (scrolled) | Collector | Max prices, latest transactions | Pending and synced badges |
-| `09-agen-detail-foto.png` | Transaction detail | Collector | Pending, kasbon deduction, proof photos | Seeded local files: dataset palm photo and the demo receipt |
+| `09-agen-detail-foto.png` | Transaction detail | Collector | Pending, kasbon deduction, proof photos | Total, kasbon deduction, and cash paid. Seeded local files: dataset palm photo (cropped from 21) and the demo receipt |
 | `10-agen-notifikasi.png` | Notifications | Collector | Sync failed, saved, synced | App-generated texts |
 | `11-agen-pasar.png` | Market prices | Collector | Max price per grade | |
 | `12-agen-tren-harga.png` | Price trend | Collector | Current max price only | Price history is not stored yet |
