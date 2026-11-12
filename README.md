@@ -60,7 +60,7 @@ For a release build, create `android/key.properties` with `storeFile`, `storePas
 
 ## Tests and CI
 
-- `flutter test` runs **633 tests** (counted on 2026-11-09). They use an in-memory `FakeRemote`, and `test/flutter_test_config.dart` blocks real database and HTTP connections, so the suite never reaches Atlas.
+- `flutter test` runs **648 tests** (counted on 2026-11-12). They use an in-memory `FakeRemote`, and `test/flutter_test_config.dart` blocks real database and HTTP connections, so the suite never reaches Atlas.
 - One smoke test, `tool/atlas/uji_asap.dart`, runs the real `MongoRemote` and `SyncEngine` against Atlas on its own `asap-` documents and deletes them afterwards. It is run by hand, not in CI.
 - GitHub Actions (`.github/workflows/ci.yml`) runs `flutter pub get`, `flutter analyze` (fails on errors only), and `flutter test` on every push and pull request. CI writes an empty `env.g.dart`, so it needs no secrets.
 
