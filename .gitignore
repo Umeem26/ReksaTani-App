@@ -73,3 +73,8 @@ ml/**/*.png
 ml/**/*.zip
 ml/**/__pycache__/
 ml/.venv/
+
+# Sisa lokal: skrip coba-coba, folder lama sebelum app pindah ke root, dan hasil audit PCD
+/scratch/
+/reksatani_app/
+/audit_pcd_tmp/
