@@ -72,6 +72,7 @@ For a release build, create `android/key.properties` with `storeFile`, `storePas
 - **The AI model only suggests the commodity** and has not been validated on field data.
 - **Sync is tested with fakes plus one Atlas smoke test.** Passing with fakes is not proof of Atlas behaviour, and several paths (login, commodity management, Cloudinary upload, GPS on a real device, starting offline then going online) have not been exercised against the real services.
 - **No multi-document transactions.** Each write to Atlas is a separate operation; consistency relies on idempotent upserts and recomputed balances, not on atomic commits.
+- **Login still has a plaintext-password fallback for old accounts.** If `password_hash` is not a bcrypt hash, it is compared as plain text; a successful login rehashes it with bcrypt and writes it back. New and edited accounts are stored with bcrypt. No bulk migration has been run, so accounts that never log in keep their plaintext value until the Atlas data is checked.
 - Cloudinary uploads use an unsigned preset, and login is checked on the device against the `password_hash` read from the cloud.
 
 More detail (in Indonesian) is in [docs/TECHNICAL.md](docs/TECHNICAL.md).

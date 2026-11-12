@@ -50,7 +50,8 @@ Foto: HP → Cloudinary (unggahan tanpa tanda tangan)
 - **RBAC hanya di sisi klien.** Peran pengepul dan manajer hanya menentukan layar yang tampil. Database tidak membatasi akses per peran.
 - **Kredensial database ada di dalam APK.** URI MongoDB hanya diobfuskasi, jadi siapa pun yang mengekstraknya dapat mengakses database dengan hak akun tersebut.
 - **Unggahan Cloudinary memakai preset tanpa tanda tangan.** Siapa pun yang mengetahui nama cloud dan preset dapat mengunggah.
-- **Login diverifikasi di perangkat**, dengan membaca `password_hash` dari cloud. Fallback password plaintext masih ada sampai data Atlas diperiksa.
+- **Login diverifikasi di perangkat**, dengan membaca `password_hash` dari cloud.
+- **Login masih punya jalur fallback password plaintext untuk akun lama.** Bila `password_hash` bukan hash bcrypt, nilainya dibandingkan sebagai teks biasa; login yang berhasil langsung meng-hash ulang dengan bcrypt dan menuliskannya kembali. Akun baru dan akun yang diedit memakai bcrypt. Migrasi massal belum dikerjakan, jadi akun yang tidak pernah login tetap berisi plaintext sampai data Atlas diperiksa (`lib/features/auth/controllers/auth_controller.dart`).
 
 **Data dan model**
 
