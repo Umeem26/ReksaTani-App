@@ -23,6 +23,7 @@ class TransaksiDetailSheet extends StatelessWidget {
     final size = MediaQuery.of(context).size;
     final bool isSynced = trx.statusSinkronisasi == 'synced';
     final bool isKasbonMurni = KasbonRules.isPencairan(trx.namaKomoditas);
+    final bool adaPotongan = !isKasbonMurni && trx.nominalPotongKasbon > 0;
 
     return Container(
       height: size.height * 0.88, 
@@ -48,7 +49,7 @@ class TransaksiDetailSheet extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Detail Transaksi', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+                      const Flexible(child: Text('Detail Transaksi', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppTheme.textPrimary, letterSpacing: -0.5))),
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
                         child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: AppTheme.bgPage, shape: BoxShape.circle), child: const Icon(Icons.close_rounded, size: 20, color: AppTheme.textSecond)),
@@ -79,7 +80,7 @@ class TransaksiDetailSheet extends StatelessWidget {
                     children: [
                       Icon(isSynced ? Icons.cloud_done_rounded : Icons.cloud_upload_rounded, color: isSynced ? AppTheme.hijauTua : const Color(0xFFB45309), size: 18),
                       const SizedBox(width: 8),
-                      Text(isSynced ? 'Data telah tersinkronisasi ke server' : 'Data pending (menunggu sinkronisasi)', style: TextStyle(color: isSynced ? AppTheme.hijauTua : const Color(0xFFB45309), fontWeight: FontWeight.w800, fontSize: 13)),
+                      Flexible(child: Text(isSynced ? 'Data telah tersinkronisasi ke server' : 'Data pending (menunggu sinkronisasi)', textAlign: TextAlign.center, style: TextStyle(color: isSynced ? AppTheme.hijauTua : const Color(0xFFB45309), fontWeight: FontWeight.w800, fontSize: 13))),
                     ],
                   ),
                 ),
@@ -138,9 +139,12 @@ class TransaksiDetailSheet extends StatelessWidget {
                               const SizedBox(height: 12),
                               _InfoRow(label: 'Harga per kg', value: _fmtRupiah(trx.hargaBeliSatuan)),
                             ],
-                            if (trx.nominalPotongKasbon > 0) ...[
+                            if (adaPotongan) ...[
+                              // Sama dengan lembar sukses: total tersimpan bruto, kasbon dipotong darinya.
                               const SizedBox(height: 12),
-                              _InfoRow(label: 'Potong Hutang Kasbon', value: '- ${_fmtRupiah(trx.nominalPotongKasbon)}', isMinus: true),
+                              _InfoRow(label: 'Total pembelian', value: _fmtRupiah(trx.totalBayar)),
+                              const SizedBox(height: 12),
+                              _InfoRow(label: 'Potongan kasbon', value: '- ${_fmtRupiah(trx.nominalPotongKasbon)}', isMinus: true),
                             ],
                           ],
                         ),
@@ -155,8 +159,9 @@ class TransaksiDetailSheet extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(isKasbonMurni ? 'Nominal Kasbon' : 'Total Pembayaran', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: isKasbonMurni ? const Color(0xFF92400E) : AppTheme.hijauTua)),
-                            Text(_fmtRupiah(trx.totalBayar), style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: isKasbonMurni ? const Color(0xFFB45309) : AppTheme.hijauTua, letterSpacing: -0.5)),
+                            Flexible(child: Text(isKasbonMurni ? 'Nominal Kasbon' : adaPotongan ? 'Dibayar tunai' : 'Total Bayar', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: isKasbonMurni ? const Color(0xFF92400E) : AppTheme.hijauTua))),
+                            const SizedBox(width: 8),
+                            Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(_fmtRupiah(adaPotongan ? trx.totalBayar - trx.nominalPotongKasbon : trx.totalBayar), style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: isKasbonMurni ? const Color(0xFFB45309) : AppTheme.hijauTua, letterSpacing: -0.5)))),
                           ],
                         ),
                       ),
@@ -211,8 +216,9 @@ class _InfoRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600)),
-        Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: isMinus ? AppTheme.merah : AppTheme.textPrimary)),
+        Flexible(child: Text(label, style: const TextStyle(fontSize: 13, color: AppTheme.textSecond, fontWeight: FontWeight.w600))),
+        const SizedBox(width: 8),
+        Flexible(child: Text(value, textAlign: TextAlign.end, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: isMinus ? AppTheme.merah : AppTheme.textPrimary))),
       ],
     );
   }
